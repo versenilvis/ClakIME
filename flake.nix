@@ -54,6 +54,7 @@
                 "-DCMAKE_BUILD_TYPE=Release"
                 "-DCMAKE_INSTALL_PREFIX=${placeholder "out"}"
                 "-DENABLE_GUI=OFF"
+                "-DENABLE_CLI=OFF"
                 "-DBUILD_TESTING=OFF"
               ];
 
