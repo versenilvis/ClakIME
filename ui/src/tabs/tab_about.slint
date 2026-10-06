@@ -310,76 +310,94 @@ export component TabAbout inherits VerticalLayout {
         show-divider: true;
     }
 
-    // section 3: nhom khoi phuc mac dinh
     HorizontalLayout {
         padding-left: 14px;
         padding-right: 14px;
-        padding-top: 10px;
-        padding-bottom: 8px;
-        min-height: 48px;
-        alignment: space-between;
+        padding-top: 6px;
+        padding-bottom: 4px;
 
-        VerticalLayout {
-            alignment: center;
-            spacing: 3px;
-            Text {
-                text: "Khôi phục mặc định";
-                color: Theme.text-primary;
-                font-size: 14px;
-                font-weight: Theme.feature-title-weight;
-            }
+        Rectangle {
+            height: 124px;
+            background: #0d0d0f;
+            border-width: 1px;
+            border-color: Theme.border;
+            border-radius: Theme.radius-sm;
 
-            Text {
-                text: "Khôi phục toàn bộ cài đặt về cấu hình ban đầu";
-                color: Theme.text-muted;
-                font-size: 12px;
-                font-weight: Theme.text-weight;
-            }
-        }
+            VerticalLayout {
+                padding: 6px;
+                spacing: 0px;
 
-        VerticalLayout {
-            alignment: center;
-            GhostButton {
-                text: "Khôi phục";
-                destructive: true;
-                clicked => { root.reset_defaults(); }
-            }
-        }
-    }
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    padding-top: 6px;
+                    padding-bottom: 6px;
+                    alignment: space-between;
 
-    // section 4: nhom go cai dat
-    HorizontalLayout {
-        padding-left: 14px;
-        padding-right: 14px;
-        padding-top: 8px;
-        padding-bottom: 10px;
-        min-height: 48px;
-        alignment: space-between;
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 2px;
+                        Text {
+                            text: "Khôi phục mặc định";
+                            color: Theme.text-primary;
+                            font-size: 14px;
+                            font-weight: Theme.feature-title-weight;
+                        }
 
-        VerticalLayout {
-            alignment: center;
-            spacing: 3px;
-            Text {
-                text: "Gỡ cài đặt Clak";
-                color: Theme.text-primary;
-                font-size: 14px;
-                font-weight: Theme.feature-title-weight;
-            }
+                        Text {
+                            text: "Khôi phục toàn bộ cài đặt về cấu hình ban đầu";
+                            color: Theme.text-muted;
+                            font-size: 12px;
+                            font-weight: Theme.text-weight;
+                        }
+                    }
 
-            Text {
-                text: "Gỡ bỏ hoàn toàn bộ gõ khỏi hệ thống";
-                color: Theme.text-muted;
-                font-size: 12px;
-                font-weight: Theme.text-weight;
-            }
-        }
+                    VerticalLayout {
+                        alignment: center;
+                        GhostButton {
+                            text: "Khôi phục";
+                            destructive: true;
+                            clicked => { root.reset_defaults(); }
+                        }
+                    }
+                }
 
-        VerticalLayout {
-            alignment: center;
-            GhostButton {
-                text: "Gỡ cài đặt";
-                destructive: true;
-                clicked => { root.uninstall_requested(); }
+                Divider { }
+
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    padding-top: 6px;
+                    padding-bottom: 6px;
+                    alignment: space-between;
+
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 2px;
+                        Text {
+                            text: "Gỡ cài đặt Clak";
+                            color: Theme.text-primary;
+                            font-size: 14px;
+                            font-weight: Theme.feature-title-weight;
+                        }
+
+                        Text {
+                            text: "Gỡ bỏ hoàn toàn bộ gõ khỏi hệ thống";
+                            color: Theme.text-muted;
+                            font-size: 12px;
+                            font-weight: Theme.text-weight;
+                        }
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+                        GhostButton {
+                            text: "Gỡ cài đặt";
+                            destructive: true;
+                            clicked => { root.uninstall_requested(); }
+                        }
+                    }
+                }
             }
         }
     }

@@ -118,7 +118,7 @@ export component TabGeneral inherits VerticalLayout {
         padding-bottom: 4px;
 
         Rectangle {
-            height: 38px;
+            height: 100px;
             background: #0d0d0d;
             border-radius: 8px;
             border-width: 1px;
@@ -129,26 +129,23 @@ export component TabGeneral inherits VerticalLayout {
             // chu chim / placeholder mo
             if input.text == "": Text {
                 x: 12px;
-                y: 0px;
+                y: 10px;
                 width: parent.width - 24px;
-                height: parent.height;
-                text: "Gõ thử tiếng Việt...";
+                text: "Gõ thử tiếng Việt tại đây (kiểm tra dấu, phím tắt, tốc độ phản hồi)...";
                 color: #555555;
                 font-size: 13px;
                 font-weight: 400;
-                vertical-alignment: center;
             }
 
             input := TextInput {
                 x: 12px;
-                y: 0px;
+                y: 10px;
                 width: parent.width - 24px;
-                height: parent.height;
+                height: parent.height - 20px;
                 text <=> root.playground_input;
                 color: Theme.text-primary;
                 font-size: 13px;
-                vertical-alignment: center;
-                single-line: true;
+                wrap: word-wrap;
             }
         }
     }
