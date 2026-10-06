@@ -52,47 +52,56 @@ export component TabDoctor inherits VerticalLayout {
                     vertical-alignment: center;
                 }
 
-                if root.has_scanned: Rectangle {
-                    height: 26px;
-                    border-radius: 13px;
-                    background: root.score_color.with-alpha(0.12);
-                    border-width: 1px;
-                    border-color: root.score_color.with-alpha(0.35);
+                if root.has_scanned: VerticalLayout {
+                    alignment: center;
 
-                    HorizontalLayout {
-                        padding-left: 8px;
-                        padding-right: 10px;
-                        spacing: 6px;
-                        alignment: center;
+                    Rectangle {
+                        height: 24px;
+                        border-radius: 12px;
+                        background: root.score_color.with-alpha(0.12);
+                        border-width: 1px;
+                        border-color: root.score_color.with-alpha(0.35);
 
-                        if root.score_level == 0: Image {
-                            source: @image-url("../../assets/icons/smile.svg");
-                            width: 15px;
-                            height: 15px;
-                            colorize: root.score_color;
-                            vertical-alignment: center;
-                        }
-                        if root.score_level == 1: Image {
-                            source: @image-url("../../assets/icons/meh.svg");
-                            width: 15px;
-                            height: 15px;
-                            colorize: root.score_color;
-                            vertical-alignment: center;
-                        }
-                        if root.score_level == 2: Image {
-                            source: @image-url("../../assets/icons/frown.svg");
-                            width: 15px;
-                            height: 15px;
-                            colorize: root.score_color;
-                            vertical-alignment: center;
-                        }
+                        HorizontalLayout {
+                            padding-left: 8px;
+                            padding-right: 10px;
+                            spacing: 6px;
+                            alignment: center;
 
-                        Text {
-                            text: root.score_text + "/100 · " + root.score_label;
-                            color: root.score_color;
-                            font-size: 12px;
-                            font-weight: 600;
-                            vertical-alignment: center;
+                            VerticalLayout {
+                                alignment: center;
+
+                                if root.score_level == 0: Image {
+                                    source: @image-url("../../assets/icons/smile.svg");
+                                    width: 14px;
+                                    height: 14px;
+                                    colorize: root.score_color;
+                                }
+                                if root.score_level == 1: Image {
+                                    source: @image-url("../../assets/icons/meh.svg");
+                                    width: 14px;
+                                    height: 14px;
+                                    colorize: root.score_color;
+                                }
+                                if root.score_level == 2: Image {
+                                    source: @image-url("../../assets/icons/frown.svg");
+                                    width: 14px;
+                                    height: 14px;
+                                    colorize: root.score_color;
+                                }
+                            }
+
+                            VerticalLayout {
+                                alignment: center;
+
+                                Text {
+                                    text: root.score_text + "/100 · " + root.score_label;
+                                    color: root.score_color;
+                                    font-size: 12px;
+                                    font-weight: 600;
+                                    vertical-alignment: center;
+                                }
+                            }
                         }
                     }
                 }
