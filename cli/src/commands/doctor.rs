@@ -18,7 +18,7 @@ pub fn execute(markdown: bool, json: bool) {
 
     println!("=== CLAK DOCTOR: HỆ THỐNG CHẨN ĐOÁN MÔI TRƯỜNG ===");
 
-    println!("\n[1/5] Môi trường hệ thống:");
+    println!("\n[1/7] Môi trường hệ thống:");
     println!(
         "  • Hệ điều hành: {} ({})",
         report.system.os_name, report.system.architecture
@@ -29,7 +29,7 @@ pub fn execute(markdown: bool, json: bool) {
         report.system.session_type, report.system.desktop_environment
     );
 
-    println!("\n[2/5] Thiết bị ảo và Quyền hạn:");
+    println!("\n[2/7] Thiết bị ảo và Quyền hạn:");
     if report.permissions.uinput_writable {
         println!("  • /dev/uinput: \x1b[32m[OK]\x1b[0m Khả dụng và có quyền ghi");
     } else {
@@ -44,7 +44,7 @@ pub fn execute(markdown: bool, json: bool) {
         println!("  • /dev/input (Mouse Tracking): \x1b[33m[CẢNH BÁO]\x1b[0m Không đọc được thiết bị input");
     }
 
-    println!("\n[3/5] Trạng thái Daemon Fcitx5:");
+    println!("\n[3/7] Trạng thái Daemon Fcitx5:");
     if report.daemon.fcitx5_running {
         let pids_str = report
             .daemon
@@ -66,7 +66,7 @@ pub fn execute(markdown: bool, json: bool) {
         println!("  • fcitx5-remote: Không thể kết nối tới Fcitx5");
     }
 
-    println!("\n[4/5] Kiểm tra Binary & Nạp bộ nhớ (RAM):");
+    println!("\n[4/7] Kiểm tra Binary & Nạp bộ nhớ (RAM):");
     if report.memory.clak_loaded {
         let path = report.memory.mapped_path.as_deref().unwrap_or("libclak.so");
         if report.memory.is_deleted_inode {
@@ -81,7 +81,7 @@ pub fn execute(markdown: bool, json: bool) {
         println!("  • Bộ nhớ: \x1b[31m[LỖI]\x1b[0m libclak.so chưa được Fcitx5 nạp vào tiến trình");
     }
 
-    println!("\n[5/5] Cấu hình và Nhật ký (Log):");
+    println!("\n[5/7] Cấu hình và Nhật ký (Log):");
     if report.config.config_file_exists {
         println!(
             "  • File cấu hình: \x1b[32m[OK]\x1b[0m {}",
@@ -108,10 +108,46 @@ pub fn execute(markdown: bool, json: bool) {
         println!("  • Khởi động cùng hệ thống: \x1b[33m[CẢNH BÁO]\x1b[0m Chưa kích hoạt tự động chạy khi đăng nhập");
     }
 
+    println!("\n[6/7] Biến Môi Trường Input Method:");
+    let gtk_str = report.environment.gtk_im_module.as_deref().unwrap_or("(chưa đặt)");
+    let qt_str = report.environment.qt_im_module.as_deref().unwrap_or("(chưa đặt)");
+    let xmod_str = report.environment.xmodifiers.as_deref().unwrap_or("(chưa đặt)");
+    println!("  • GTK_IM_MODULE: {}", gtk_str);
+    println!("  • QT_IM_MODULE: {}", qt_str);
+    println!("  • XMODIFIERS: {}", xmod_str);
+    if report.environment.env_file_exists {
+        println!("  • File 99-clak-im.conf: \x1b[32m[OK]\x1b[0m Đã cấu hình");
+    } else {
+        println!("  • File 99-clak-im.conf: \x1b[33m[LƯU Ý]\x1b[0m Chưa có file môi trường");
+    }
+
+    println!("\n[7/7] Thư Viện Frontend Fcitx5:");
+    if let Some(ref p) = report.frontends.gtk3_path {
+        println!("  • GTK 3: \x1b[32m[OK]\x1b[0m {}", p);
+    } else {
+        println!("  • GTK 3: \x1b[33m[CHƯA CÓ]\x1b[0m Chưa tìm thấy module frontend");
+    }
+    if let Some(ref p) = report.frontends.gtk4_path {
+        println!("  • GTK 4: \x1b[32m[OK]\x1b[0m {}", p);
+    } else {
+        println!("  • GTK 4: \x1b[33m[CHƯA CÓ]\x1b[0m Chưa tìm thấy module frontend");
+    }
+    if let Some(ref p) = report.frontends.qt5_path {
+        println!("  • Qt 5: \x1b[32m[OK]\x1b[0m {}", p);
+    } else {
+        println!("  • Qt 5: \x1b[33m[CHƯA CÓ]\x1b[0m Chưa tìm thấy plugin frontend");
+    }
+    if let Some(ref p) = report.frontends.qt6_path {
+        println!("  • Qt 6: \x1b[32m[OK]\x1b[0m {}", p);
+    } else {
+        println!("  • Qt 6: \x1b[33m[CHƯA CÓ]\x1b[0m Chưa tìm thấy plugin frontend");
+    }
+
     if !report.conflicts.is_empty() {
         println!("\nỨng dụng xung đột:");
         for conf in &report.conflicts {
             println!("  • {} (PID {}): {}", conf.app_name, conf.pid, conf.description);
+            println!("    Khắc phục: {}", conf.resolution_hint);
         }
     }
 

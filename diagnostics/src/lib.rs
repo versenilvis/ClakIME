@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 pub use checks::autostart::{check_autostart, AutostartStatus};
 pub use checks::conflicts::{check_conflicts, AppConflict};
 pub use checks::daemon::{check_daemon, DaemonStatus};
+pub use checks::environment::{check_environment, EnvironmentStatus};
+pub use checks::frontends::{check_frontends, FrontendStatus};
 pub use checks::memory::{check_memory, MemoryInspection};
 pub use checks::permissions::{check_permissions, PermissionChecks};
 pub use checks::system::{check_system, SystemInfo};
@@ -33,6 +35,8 @@ pub struct DiagnosticReport {
     pub memory: MemoryInspection,
     pub config: ConfigStatus,
     pub autostart: AutostartStatus,
+    pub environment: EnvironmentStatus,
+    pub frontends: FrontendStatus,
     pub conflicts: Vec<AppConflict>,
     pub issues: Vec<DiagnosticIssue>,
     pub warnings: Vec<DiagnosticWarning>,
@@ -56,6 +60,8 @@ pub fn run_diagnostics() -> DiagnosticReport {
     let memory = check_memory(&daemon.fcitx5_pids);
     let config = check_config();
     let autostart = check_autostart();
+    let environment = check_environment();
+    let frontends = check_frontends();
     let conflicts = check_conflicts();
 
     let mut issues = Vec::new();
@@ -117,6 +123,59 @@ pub fn run_diagnostics() -> DiagnosticReport {
         });
     }
 
+    // validate environment variables
+    if let Some(ref gtk_im) = environment.gtk_im_module {
+        if gtk_im == "ibus" {
+            issues.push(DiagnosticIssue {
+                title: "GTK_IM_MODULE xung đột với IBus".to_string(),
+                message: "GTK_IM_MODULE đang được đặt là 'ibus', khiến ứng dụng GTK bỏ qua Fcitx5 và gây nuốt chữ".to_string(),
+                fix_command: Some("Xóa hoặc đổi GTK_IM_MODULE=fcitx trong ~/.config/environment.d/99-clak-im.conf hoặc ~/.profile".to_string()),
+            });
+        }
+    }
+    if let Some(ref qt_im) = environment.qt_im_module {
+        if qt_im == "ibus" {
+            issues.push(DiagnosticIssue {
+                title: "QT_IM_MODULE xung đột với IBus".to_string(),
+                message: "QT_IM_MODULE đang được đặt là 'ibus', khiến ứng dụng Qt bỏ qua Fcitx5".to_string(),
+                fix_command: Some("Đổi QT_IM_MODULE=fcitx trong ~/.config/environment.d/99-clak-im.conf".to_string()),
+            });
+        }
+    }
+    if let Some(ref xmod) = environment.xmodifiers {
+        if xmod.contains("ibus") {
+            warnings.push(DiagnosticWarning {
+                title: "XMODIFIERS xung đột với IBus".to_string(),
+                message: format!("XMODIFIERS đang là '{}', cần đổi thành '@im=fcitx'", xmod),
+                fix_command: Some("export XMODIFIERS=@im=fcitx".to_string()),
+            });
+        }
+    }
+
+    if !environment.env_file_exists {
+        warnings.push(DiagnosticWarning {
+            title: "Chưa cấu hình 99-clak-im.conf".to_string(),
+            message: "Chưa tìm thấy file ~/.config/environment.d/99-clak-im.conf được sinh bởi trình cài đặt".to_string(),
+            fix_command: Some("Chạy bash scripts/install.sh để cấu hình biến môi trường tự động".to_string()),
+        });
+    }
+
+    // check frontend packages
+    if !frontends.gtk3 && !frontends.gtk4 {
+        warnings.push(DiagnosticWarning {
+            title: "Thiếu module Fcitx5 Frontend GTK".to_string(),
+            message: "Chưa tìm thấy thư viện im-fcitx5 cho GTK3/GTK4. Các ứng dụng GTK có thể fallback về XIM và nuốt chữ khi gõ nhanh".to_string(),
+            fix_command: Some("Cài đặt frontend GTK: Ubuntu/Debian: sudo apt install fcitx5-frontend-gtk3 fcitx5-frontend-gtk4 | Arch: sudo pacman -S fcitx5-gtk".to_string()),
+        });
+    }
+    if !frontends.qt5 && !frontends.qt6 {
+        warnings.push(DiagnosticWarning {
+            title: "Thiếu module Fcitx5 Frontend Qt".to_string(),
+            message: "Chưa tìm thấy plugin fcitx5platforminputcontext cho Qt5/Qt6".to_string(),
+            fix_command: Some("Cài đặt frontend Qt: Ubuntu/Debian: sudo apt install fcitx5-frontend-qt5 fcitx5-frontend-qt6 | Arch: sudo pacman -S fcitx5-qt".to_string()),
+        });
+    }
+
     for conf in &conflicts {
         warnings.push(DiagnosticWarning {
             title: format!("Xung đột ứng dụng: {}", conf.app_name),
@@ -132,6 +191,8 @@ pub fn run_diagnostics() -> DiagnosticReport {
         memory,
         config,
         autostart,
+        environment,
+        frontends,
         conflicts,
         issues,
         warnings,
@@ -156,5 +217,7 @@ mod tests {
         let json = serde_json::to_string(&report).expect("failed to serialize report");
         assert!(json.contains("system"));
         assert!(json.contains("permissions"));
+        assert!(json.contains("environment"));
+        assert!(json.contains("frontends"));
     }
 }

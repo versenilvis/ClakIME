@@ -117,6 +117,36 @@ fn format_doctor_lines(report: &DiagnosticReport, time_tag: &str) -> Vec<DoctorL
         });
     }
 
+    let gtk_im = report.environment.gtk_im_module.as_deref().unwrap_or("");
+    if gtk_im == "ibus" {
+        lines.push(DoctorLineData {
+            text: format!("[{}] FAILED  | GTK_IM_MODULE=ibus (Xung đột với IBus)", time_tag).into(),
+            color: error_color,
+            bold: true,
+        });
+    } else {
+        lines.push(DoctorLineData {
+            text: format!("[{}] SUCCESS | GTK_IM_MODULE ({})", time_tag, if gtk_im.is_empty() { "Mặc định Wayland" } else { gtk_im }).into(),
+            color: ok_color,
+            bold: false,
+        });
+    }
+
+    let has_gtk = report.frontends.gtk3 || report.frontends.gtk4;
+    if has_gtk {
+        lines.push(DoctorLineData {
+            text: format!("[{}] SUCCESS | Frontend GTK Fcitx5 (Khả dụng)", time_tag).into(),
+            color: ok_color,
+            bold: false,
+        });
+    } else {
+        lines.push(DoctorLineData {
+            text: format!("[{}] FAILED  | Frontend GTK Fcitx5 (Thiếu module GTK3/4)", time_tag).into(),
+            color: warn_color,
+            bold: true,
+        });
+    }
+
     if report.conflicts.is_empty() {
         lines.push(DoctorLineData {
             text: format!("[{}] SUCCESS | Kiểm tra xung đột (Không phát hiện xung đột)", time_tag).into(),
@@ -125,7 +155,7 @@ fn format_doctor_lines(report: &DiagnosticReport, time_tag: &str) -> Vec<DoctorL
         });
     } else {
         lines.push(DoctorLineData {
-            text: format!("[{}] FAILED  | Kiểm tra xung đột (Phát hiện {} ứng dụng)", time_tag, report.conflicts.len()).into(),
+            text: format!("[{}] FAILED  | Kiểm tra xung đột (Phát hiện {} ứng dụng/daemon)", time_tag, report.conflicts.len()).into(),
             color: error_color,
             bold: true,
         });
@@ -143,7 +173,7 @@ fn format_doctor_lines(report: &DiagnosticReport, time_tag: &str) -> Vec<DoctorL
     });
 
     lines.push(DoctorLineData {
-        text: "[1/5] Môi trường hệ thống:".into(),
+        text: "[1/7] Môi trường hệ thống:".into(),
         color: header_color,
         bold: true,
     });
@@ -169,7 +199,7 @@ fn format_doctor_lines(report: &DiagnosticReport, time_tag: &str) -> Vec<DoctorL
     });
 
     lines.push(DoctorLineData {
-        text: "[2/5] Thiết bị ảo và Quyền hạn:".into(),
+        text: "[2/7] Thiết bị ảo và Quyền hạn:".into(),
         color: header_color,
         bold: true,
     });
@@ -206,7 +236,7 @@ fn format_doctor_lines(report: &DiagnosticReport, time_tag: &str) -> Vec<DoctorL
     });
 
     lines.push(DoctorLineData {
-        text: "[3/5] Trạng thái Daemon Fcitx5:".into(),
+        text: "[3/7] Trạng thái Daemon Fcitx5:".into(),
         color: header_color,
         bold: true,
     });
@@ -245,7 +275,7 @@ fn format_doctor_lines(report: &DiagnosticReport, time_tag: &str) -> Vec<DoctorL
     });
 
     lines.push(DoctorLineData {
-        text: "[4/5] Kiểm tra Binary & Nạp bộ nhớ (RAM):".into(),
+        text: "[4/7] Kiểm tra Binary & Nạp bộ nhớ (RAM):".into(),
         color: header_color,
         bold: true,
     });
@@ -278,7 +308,7 @@ fn format_doctor_lines(report: &DiagnosticReport, time_tag: &str) -> Vec<DoctorL
     });
 
     lines.push(DoctorLineData {
-        text: "[5/5] Cấu hình và Nhật ký (Log):".into(),
+        text: "[5/7] Cấu hình và Nhật ký (Log):".into(),
         color: header_color,
         bold: true,
     });
@@ -319,6 +349,114 @@ fn format_doctor_lines(report: &DiagnosticReport, time_tag: &str) -> Vec<DoctorL
             text: "  • Khởi động cùng hệ thống: [CẢNH BÁO] Chưa kích hoạt tự động chạy khi đăng nhập".into(),
             color: warn_color,
             bold: true,
+        });
+    }
+
+    lines.push(DoctorLineData {
+        text: "".into(),
+        color: normal_color,
+        bold: false,
+    });
+    lines.push(DoctorLineData {
+        text: "[6/7] Biến Môi Trường Input Method:".into(),
+        color: header_color,
+        bold: true,
+    });
+    let gtk_str = report.environment.gtk_im_module.as_deref().unwrap_or("(chưa đặt)");
+    let is_gtk_bad = gtk_str == "ibus";
+    lines.push(DoctorLineData {
+        text: format!("  • GTK_IM_MODULE: [{}] {}", if is_gtk_bad { "XUNG ĐỘT" } else { "OK" }, gtk_str).into(),
+        color: if is_gtk_bad { error_color } else { ok_color },
+        bold: is_gtk_bad,
+    });
+    let qt_str = report.environment.qt_im_module.as_deref().unwrap_or("(chưa đặt)");
+    let is_qt_bad = qt_str == "ibus";
+    lines.push(DoctorLineData {
+        text: format!("  • QT_IM_MODULE: [{}] {}", if is_qt_bad { "XUNG ĐỘT" } else { "OK" }, qt_str).into(),
+        color: if is_qt_bad { error_color } else { ok_color },
+        bold: is_qt_bad,
+    });
+    let xmod_str = report.environment.xmodifiers.as_deref().unwrap_or("(chưa đặt)");
+    let is_xmod_bad = xmod_str.contains("ibus");
+    lines.push(DoctorLineData {
+        text: format!("  • XMODIFIERS: [{}] {}", if is_xmod_bad { "CẢNH BÁO" } else { "OK" }, xmod_str).into(),
+        color: if is_xmod_bad { warn_color } else { ok_color },
+        bold: is_xmod_bad,
+    });
+    if report.environment.env_file_exists {
+        lines.push(DoctorLineData {
+            text: "  • File 99-clak-im.conf: [OK] Đã cấu hình".into(),
+            color: ok_color,
+            bold: false,
+        });
+    } else {
+        lines.push(DoctorLineData {
+            text: "  • File 99-clak-im.conf: [LƯU Ý] Chưa tạo file ~/.config/environment.d/99-clak-im.conf".into(),
+            color: warn_color,
+            bold: true,
+        });
+    }
+
+    lines.push(DoctorLineData {
+        text: "".into(),
+        color: normal_color,
+        bold: false,
+    });
+    lines.push(DoctorLineData {
+        text: "[7/7] Thư Viện Frontend Fcitx5:".into(),
+        color: header_color,
+        bold: true,
+    });
+    if let Some(ref p) = report.frontends.gtk3_path {
+        lines.push(DoctorLineData {
+            text: format!("  • GTK 3: [OK] {}", p).into(),
+            color: ok_color,
+            bold: false,
+        });
+    } else {
+        lines.push(DoctorLineData {
+            text: "  • GTK 3: [CHƯA CÓ] Chưa tìm thấy module frontend GTK3".into(),
+            color: warn_color,
+            bold: false,
+        });
+    }
+    if let Some(ref p) = report.frontends.gtk4_path {
+        lines.push(DoctorLineData {
+            text: format!("  • GTK 4: [OK] {}", p).into(),
+            color: ok_color,
+            bold: false,
+        });
+    } else {
+        lines.push(DoctorLineData {
+            text: "  • GTK 4: [CHƯA CÓ] Chưa tìm thấy module frontend GTK4".into(),
+            color: warn_color,
+            bold: false,
+        });
+    }
+    if let Some(ref p) = report.frontends.qt5_path {
+        lines.push(DoctorLineData {
+            text: format!("  • Qt 5: [OK] {}", p).into(),
+            color: ok_color,
+            bold: false,
+        });
+    } else {
+        lines.push(DoctorLineData {
+            text: "  • Qt 5: [CHƯA CÓ] Chưa tìm thấy plugin frontend Qt5".into(),
+            color: warn_color,
+            bold: false,
+        });
+    }
+    if let Some(ref p) = report.frontends.qt6_path {
+        lines.push(DoctorLineData {
+            text: format!("  • Qt 6: [OK] {}", p).into(),
+            color: ok_color,
+            bold: false,
+        });
+    } else {
+        lines.push(DoctorLineData {
+            text: "  • Qt 6: [CHƯA CÓ] Chưa tìm thấy plugin frontend Qt6".into(),
+            color: warn_color,
+            bold: false,
         });
     }
 

@@ -89,6 +89,46 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
         }
     ));
 
+    out.push_str("## 6. Biến Môi Trường Input Method\n");
+    out.push_str(&format!(
+        "- GTK_IM_MODULE: `{}`\n",
+        report.environment.gtk_im_module.as_deref().unwrap_or("(không đặt)")
+    ));
+    out.push_str(&format!(
+        "- QT_IM_MODULE: `{}`\n",
+        report.environment.qt_im_module.as_deref().unwrap_or("(không đặt)")
+    ));
+    out.push_str(&format!(
+        "- XMODIFIERS: `{}`\n",
+        report.environment.xmodifiers.as_deref().unwrap_or("(không đặt)")
+    ));
+    out.push_str(&format!(
+        "- File 99-clak-im.conf: {}\n\n",
+        if report.environment.env_file_exists {
+            "Đã có"
+        } else {
+            "Chưa có"
+        }
+    ));
+
+    out.push_str("## 7. Thư Viện Frontend Fcitx5\n");
+    out.push_str(&format!(
+        "- GTK 3: {}\n",
+        report.frontends.gtk3_path.as_deref().unwrap_or("Không tìm thấy")
+    ));
+    out.push_str(&format!(
+        "- GTK 4: {}\n",
+        report.frontends.gtk4_path.as_deref().unwrap_or("Không tìm thấy")
+    ));
+    out.push_str(&format!(
+        "- Qt 5: {}\n",
+        report.frontends.qt5_path.as_deref().unwrap_or("Không tìm thấy")
+    ));
+    out.push_str(&format!(
+        "- Qt 6: {}\n\n",
+        report.frontends.qt6_path.as_deref().unwrap_or("Không tìm thấy")
+    ));
+
     if !report.conflicts.is_empty() {
         out.push_str("## Ứng Dụng Xung Đột\n");
         for conf in &report.conflicts {
