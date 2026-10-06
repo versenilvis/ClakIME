@@ -12,6 +12,10 @@ export component TabDoctor inherits VerticalLayout {
     in property <string> summary_text: "";
     in property <bool> is_healthy: true;
     in property <bool> copied_toast: false;
+    in property <string> score_face: "^_^";
+    in property <string> score_text: "100";
+    in property <string> score_label: "Khỏe mạnh";
+    in property <color> score_color: #10b981;
 
     callback scan_requested();
     callback copy_requested();
@@ -31,22 +35,62 @@ export component TabDoctor inherits VerticalLayout {
         alignment: space-between;
         spacing: 10px;
 
-        VerticalLayout {
-            alignment: center;
-            spacing: 3px;
+        HorizontalLayout {
+            alignment: start;
+            spacing: 12px;
 
-            Text {
-                text: "Kiểm tra toàn diện môi trường gõ phím";
-                color: Theme.text-primary;
-                font-size: 14px;
-                font-weight: Theme.feature-title-weight;
+            VerticalLayout {
+                alignment: center;
+                spacing: 3px;
+
+                Text {
+                    text: "Kiểm tra môi trường gõ";
+                    color: Theme.text-primary;
+                    font-size: 14px;
+                    font-weight: Theme.feature-title-weight;
+                }
+
+                Text {
+                    text: root.has_scanned ? ("Lần quét gần nhất: " + root.last_scanned) : "Chưa thực hiện chẩn đoán trong phiên làm việc này";
+                    color: Theme.text-muted;
+                    font-size: 12px;
+                    font-weight: Theme.text-weight;
+                }
             }
 
-            Text {
-                text: root.has_scanned ? ("Lần quét gần nhất: " + root.last_scanned) : "Chưa thực hiện chẩn đoán trong phiên làm việc này";
-                color: Theme.text-muted;
-                font-size: 12px;
-                font-weight: Theme.text-weight;
+            // huy hieu diem so suc khoe he thong
+            if root.has_scanned: VerticalLayout {
+                alignment: center;
+                Rectangle {
+                    height: 28px;
+                    border-radius: 14px;
+                    background: root.score_color.with-alpha(0.12);
+                    border-width: 1px;
+                    border-color: root.score_color.with-alpha(0.35);
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 12px;
+                        spacing: 6px;
+                        alignment: center;
+
+                        Text {
+                            text: root.score_face;
+                            color: root.score_color;
+                            font-size: 13px;
+                            font-weight: 700;
+                            vertical-alignment: center;
+                        }
+
+                        Text {
+                            text: root.score_text + "/100 · " + root.score_label;
+                            color: root.score_color;
+                            font-size: 12px;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
             }
         }
 
@@ -57,7 +101,7 @@ export component TabDoctor inherits VerticalLayout {
                 spacing: 8px;
 
                 if root.has_scanned: ActionButton {
-                    text: root.copied_toast ? "Đã sao chép!" : "Sao chép báo cáo";
+                    text: root.copied_toast ? "Đã sao chép!" : "Sao chép";
                     enabled: !root.is_scanning;
                     clicked => { root.copy_requested(); }
                 }
@@ -72,7 +116,7 @@ export component TabDoctor inherits VerticalLayout {
         }
     }
 
-    // noi dung chinh: man hinh trong (khi chua scan) hoac terminal console
+    // noi dung chinh: man hinh trong (khi chua scan)
     if !root.has_scanned && !root.is_scanning: Rectangle {
         height: 545px;
         background: #09090b;
@@ -83,18 +127,23 @@ export component TabDoctor inherits VerticalLayout {
         VerticalLayout {
             alignment: center;
             spacing: 16px;
+            padding-left: 40px;
+            padding-right: 40px;
 
-            Image {
-                source: @image-url("../../assets/icons/activity.svg");
-                width: 48px;
-                height: 48px;
-                colorize: #3f3f46;
-                horizontal-alignment: center;
+            HorizontalLayout {
+                alignment: center;
+
+                Image {
+                    source: @image-url("../../assets/icons/activity.svg");
+                    width: 48px;
+                    height: 48px;
+                    colorize: #3f3f46;
+                }
             }
 
             VerticalLayout {
                 alignment: center;
-                spacing: 6px;
+                spacing: 8px;
 
                 Text {
                     text: "Sẵn sàng chẩn đoán hệ thống";
@@ -109,6 +158,7 @@ export component TabDoctor inherits VerticalLayout {
                     color: Theme.text-muted;
                     font-size: 13px;
                     horizontal-alignment: center;
+                    wrap: word-wrap;
                 }
             }
 
@@ -124,6 +174,7 @@ export component TabDoctor inherits VerticalLayout {
         }
     }
 
+    // noi dung console log khong can topbar macos
     if root.has_scanned || root.is_scanning: Rectangle {
         height: 545px;
         background: #08080a;
@@ -131,129 +182,46 @@ export component TabDoctor inherits VerticalLayout {
         border-width: 1px;
         border-color: #1c1c21;
 
-        VerticalLayout {
-            padding: 0px;
-            spacing: 0px;
+        ScrollView {
+            vertical-stretch: 1;
 
-            // thanh tieu de console gia lap terminal
-            Rectangle {
-                height: 36px;
-                background: #0d0d11;
-                border-top-left-radius: Theme.radius-md;
-                border-top-right-radius: Theme.radius-md;
+            VerticalLayout {
+                padding: 14px;
+                padding-left: 16px;
+                padding-right: 16px;
+                spacing: 4px;
+                alignment: start;
 
-                Rectangle {
-                    y: parent.height - 1px;
-                    height: 1px;
-                    width: parent.width;
-                    background: #1a1a20;
+                if root.is_scanning: VerticalLayout {
+                    spacing: 8px;
+                    Text {
+                        text: "> Đang truy vấn kernel và thông tin session...";
+                        color: #60a5fa;
+                        font-size: 13px;
+                    }
+                    Text {
+                        text: "> Kiểm tra quyền hạn thiết bị /dev/uinput và /dev/input...";
+                        color: #71717a;
+                        font-size: 13px;
+                    }
+                    Text {
+                        text: "> Phân tích bảng ánh xạ bộ nhớ /proc/*/maps của Fcitx5...";
+                        color: #71717a;
+                        font-size: 13px;
+                    }
                 }
 
-                HorizontalLayout {
-                    padding-left: 14px;
-                    padding-right: 14px;
-                    alignment: space-between;
-
-                    // nut 3 cham mau phong cach terminal
-                    HorizontalLayout {
-                        alignment: start;
+                if !root.is_scanning: VerticalLayout {
+                    spacing: 2px;
+                    for line in root.lines: HorizontalLayout {
                         spacing: 6px;
+                        alignment: start;
 
-                        VerticalLayout {
-                            alignment: center;
-                            Rectangle {
-                                width: 9px;
-                                height: 9px;
-                                border-radius: 4.5px;
-                                background: #ef4444;
-                            }
-                        }
-
-                        VerticalLayout {
-                            alignment: center;
-                            Rectangle {
-                                width: 9px;
-                                height: 9px;
-                                border-radius: 4.5px;
-                                background: #f59e0b;
-                            }
-                        }
-
-                        VerticalLayout {
-                            alignment: center;
-                            Rectangle {
-                                width: 9px;
-                                height: 9px;
-                                border-radius: 4.5px;
-                                background: #10b981;
-                            }
-                        }
-                    }
-
-                    VerticalLayout {
-                        alignment: center;
                         Text {
-                            text: "clak-doctor.log";
-                            color: #71717a;
-                            font-size: 12px;
-                            font-weight: 500;
-                        }
-                    }
-
-                    VerticalLayout {
-                        alignment: center;
-                        Text {
-                            text: root.is_scanning ? "● Đang quét..." : (root.is_healthy ? "● Khỏe mạnh" : "● Cần lưu ý");
-                            color: root.is_scanning ? #60a5fa : (root.is_healthy ? #10b981 : #f59e0b);
-                            font-size: 12px;
-                            font-weight: 600;
-                        }
-                    }
-                }
-            }
-
-            // noi dung cac dong log co mau
-            ScrollView {
-                vertical-stretch: 1;
-
-                VerticalLayout {
-                    padding: 14px;
-                    padding-left: 16px;
-                    padding-right: 16px;
-                    spacing: 4px;
-                    alignment: start;
-
-                    if root.is_scanning: VerticalLayout {
-                        spacing: 8px;
-                        Text {
-                            text: "> Đang truy vấn kernel và thông tin session...";
-                            color: #60a5fa;
+                            text: line.text;
+                            color: line.color;
                             font-size: 13px;
-                        }
-                        Text {
-                            text: "> Kiểm tra quyền hạn thiết bị /dev/uinput và /dev/input...";
-                            color: #71717a;
-                            font-size: 13px;
-                        }
-                        Text {
-                            text: "> Phân tích bảng ánh xạ bộ nhớ /proc/*/maps của Fcitx5...";
-                            color: #71717a;
-                            font-size: 13px;
-                        }
-                    }
-
-                    if !root.is_scanning: VerticalLayout {
-                        spacing: 2px;
-                        for line in root.lines: HorizontalLayout {
-                            spacing: 6px;
-                            alignment: start;
-
-                            Text {
-                                text: line.text;
-                                color: line.color;
-                                font-size: 13px;
-                                font-weight: line.bold ? 600 : 400;
-                            }
+                            font-weight: line.bold ? 600 : 400;
                         }
                     }
                 }

@@ -87,6 +87,10 @@ export component MainWindow inherits Window {
     in-out property <string> doctor_summary_text: "";
     in-out property <bool> doctor_is_healthy: true;
     in-out property <bool> doctor_copied_toast: false;
+    in-out property <string> doctor_score_face: "^_^";
+    in-out property <string> doctor_score_text: "100";
+    in-out property <string> doctor_score_label: "Khỏe mạnh";
+    in-out property <color> doctor_score_color: #10b981;
 
     callback doctor_scan_requested();
     callback doctor_copy_requested();
@@ -188,6 +192,10 @@ export component MainWindow inherits Window {
                             summary_text: root.doctor_summary_text;
                             is_healthy: root.doctor_is_healthy;
                             copied_toast: root.doctor_copied_toast;
+                            score_face: root.doctor_score_face;
+                            score_text: root.doctor_score_text;
+                            score_label: root.doctor_score_label;
+                            score_color: root.doctor_score_color;
                             scan_requested => { root.doctor_scan_requested(); }
                             copy_requested => { root.doctor_copy_requested(); }
                         }

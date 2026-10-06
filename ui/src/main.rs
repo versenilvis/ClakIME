@@ -7,7 +7,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 // build colorized doctor log lines for slint terminal console
-fn format_doctor_lines(report: &DiagnosticReport) -> Vec<DoctorLineData> {
+fn format_doctor_lines(report: &DiagnosticReport, time_tag: &str) -> Vec<DoctorLineData> {
     let mut lines = Vec::new();
     let header_color = slint::Color::from_argb_u8(255, 56, 189, 248);
     let normal_color = slint::Color::from_argb_u8(255, 212, 212, 216);
@@ -16,6 +16,131 @@ fn format_doctor_lines(report: &DiagnosticReport) -> Vec<DoctorLineData> {
     let error_color = slint::Color::from_argb_u8(255, 248, 113, 113);
     let code_color = slint::Color::from_argb_u8(255, 167, 139, 250);
     let dim_color = slint::Color::from_argb_u8(255, 113, 113, 122);
+
+    // danh sach cac file va checkpoint kiem tra theo thu tu
+    if report.permissions.uinput_writable {
+        lines.push(DoctorLineData {
+            text: format!("[{}] SUCCESS | /dev/uinput (Quyền ghi khả dụng)", time_tag).into(),
+            color: ok_color,
+            bold: false,
+        });
+    } else {
+        lines.push(DoctorLineData {
+            text: format!("[{}] FAILED  | /dev/uinput (Không có quyền ghi)", time_tag).into(),
+            color: error_color,
+            bold: true,
+        });
+    }
+
+    if report.permissions.input_readable_count > 0 {
+        lines.push(DoctorLineData {
+            text: format!("[{}] SUCCESS | /dev/input (Đọc được {}/{} thiết bị)", time_tag, report.permissions.input_readable_count, report.permissions.input_total_count).into(),
+            color: ok_color,
+            bold: false,
+        });
+    } else {
+        lines.push(DoctorLineData {
+            text: format!("[{}] FAILED  | /dev/input (Không đọc được thiết bị input)", time_tag).into(),
+            color: error_color,
+            bold: true,
+        });
+    }
+
+    if report.daemon.fcitx5_running && report.memory.clak_loaded && !report.memory.is_deleted_inode {
+        let pids = report.daemon.fcitx5_pids.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", ");
+        lines.push(DoctorLineData {
+            text: format!("[{}] SUCCESS | /proc/{}/maps (Fcitx5 nạp libclak.so)", time_tag, pids).into(),
+            color: ok_color,
+            bold: false,
+        });
+    } else if report.daemon.fcitx5_running && report.memory.clak_loaded && report.memory.is_deleted_inode {
+        let pids = report.daemon.fcitx5_pids.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", ");
+        lines.push(DoctorLineData {
+            text: format!("[{}] FAILED  | /proc/{}/maps (Inode cũ trong RAM)", time_tag, pids).into(),
+            color: error_color,
+            bold: true,
+        });
+    } else if report.daemon.fcitx5_running {
+        let pids = report.daemon.fcitx5_pids.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", ");
+        lines.push(DoctorLineData {
+            text: format!("[{}] FAILED  | /proc/{}/maps (Chưa nạp libclak.so)", time_tag, pids).into(),
+            color: error_color,
+            bold: true,
+        });
+    } else {
+        lines.push(DoctorLineData {
+            text: format!("[{}] FAILED  | fcitx5 daemon (Không tìm thấy tiến trình)", time_tag).into(),
+            color: error_color,
+            bold: true,
+        });
+    }
+
+    if report.config.config_file_exists {
+        lines.push(DoctorLineData {
+            text: format!("[{}] SUCCESS | {}", time_tag, report.config.config_path.display()).into(),
+            color: ok_color,
+            bold: false,
+        });
+    } else {
+        lines.push(DoctorLineData {
+            text: format!("[{}] SUCCESS | {} (Mặc định)", time_tag, report.config.config_path.display()).into(),
+            color: ok_color,
+            bold: false,
+        });
+    }
+
+    if report.config.log_file_exists {
+        lines.push(DoctorLineData {
+            text: format!("[{}] SUCCESS | {} ({:.1} KB)", time_tag, report.config.log_path.display(), report.config.log_size_kb.unwrap_or(0.0)).into(),
+            color: ok_color,
+            bold: false,
+        });
+    } else {
+        lines.push(DoctorLineData {
+            text: format!("[{}] SUCCESS | {} (Chưa bật debug)", time_tag, report.config.log_path.display()).into(),
+            color: ok_color,
+            bold: false,
+        });
+    }
+
+    if report.autostart.is_enabled {
+        lines.push(DoctorLineData {
+            text: format!("[{}] SUCCESS | ~/.config/autostart/org.fcitx.Fcitx5.desktop", time_tag).into(),
+            color: ok_color,
+            bold: false,
+        });
+    } else {
+        lines.push(DoctorLineData {
+            text: format!("[{}] FAILED  | ~/.config/autostart/org.fcitx.Fcitx5.desktop (Chưa kích hoạt)", time_tag).into(),
+            color: error_color,
+            bold: true,
+        });
+    }
+
+    if report.conflicts.is_empty() {
+        lines.push(DoctorLineData {
+            text: format!("[{}] SUCCESS | Kiểm tra xung đột (Không phát hiện xung đột)", time_tag).into(),
+            color: ok_color,
+            bold: false,
+        });
+    } else {
+        lines.push(DoctorLineData {
+            text: format!("[{}] FAILED  | Kiểm tra xung đột (Phát hiện {} ứng dụng)", time_tag, report.conflicts.len()).into(),
+            color: error_color,
+            bold: true,
+        });
+    }
+
+    lines.push(DoctorLineData {
+        text: "Đã quét xong!".into(),
+        color: ok_color,
+        bold: true,
+    });
+    lines.push(DoctorLineData {
+        text: "".into(),
+        color: normal_color,
+        bold: false,
+    });
 
     lines.push(DoctorLineData {
         text: "[1/5] Môi trường hệ thống:".into(),
@@ -525,8 +650,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::thread::spawn(move || {
             let report = clak_diagnostics::run_diagnostics();
             let is_healthy = report.is_healthy();
+            let time_tag = chrono::Local::now().format("%H:%M:%S").to_string();
             let now = chrono::Local::now().format("%H:%M:%S · %d/%m/%Y").to_string();
-            let lines = format_doctor_lines(&report);
+            let lines = format_doctor_lines(&report, &time_tag);
+
+            let mut score: i32 = 100;
+            score -= (report.issues.len() as i32) * 25;
+            score -= (report.warnings.len() as i32) * 10;
+            let score = score.clamp(0, 100);
+
+            let (score_face, score_label, score_color) = if score >= 90 {
+                ("^_^", "Khỏe mạnh", slint::Color::from_argb_u8(255, 16, 185, 129))
+            } else if score >= 60 {
+                ("(~_~)", "Cần lưu ý", slint::Color::from_argb_u8(255, 245, 158, 11))
+            } else {
+                ("(>_<)", "Nguy hiểm", slint::Color::from_argb_u8(255, 239, 68, 68))
+            };
 
             let summary = if report.issues.is_empty() && report.warnings.is_empty() {
                 "Tất cả kiểm tra đều hoàn hảo. Clak sẵn sàng hoạt động tối ưu.".to_string()
@@ -542,6 +681,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     w.set_doctor_last_scanned(now.into());
                     w.set_doctor_summary_text(summary.into());
                     w.set_doctor_is_healthy(is_healthy);
+                    w.set_doctor_score_face(score_face.into());
+                    w.set_doctor_score_text(score.to_string().into());
+                    w.set_doctor_score_label(score_label.into());
+                    w.set_doctor_score_color(score_color);
                     w.set_doctor_has_scanned(true);
                     w.set_doctor_is_scanning(false);
                     if let Ok(mut guard) = last_report_async.lock() {
@@ -791,6 +934,49 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         std::process::exit(0);
     });
+
+    // run diagnostics immediately if preview flag is passed
+    if std::env::args().any(|a| a == "--preview-doctor") {
+        let report = clak_diagnostics::run_diagnostics();
+        let is_healthy = report.is_healthy();
+        let time_tag = chrono::Local::now().format("%H:%M:%S").to_string();
+        let now = chrono::Local::now().format("%H:%M:%S · %d/%m/%Y").to_string();
+        let lines = format_doctor_lines(&report, &time_tag);
+
+        let mut score: i32 = 100;
+        score -= (report.issues.len() as i32) * 25;
+        score -= (report.warnings.len() as i32) * 10;
+        let score = score.clamp(0, 100);
+
+        let (score_face, score_label, score_color) = if score >= 90 {
+            ("^_^", "Khỏe mạnh", slint::Color::from_argb_u8(255, 16, 185, 129))
+        } else if score >= 60 {
+            ("(~_~)", "Cần lưu ý", slint::Color::from_argb_u8(255, 245, 158, 11))
+        } else {
+            ("(>_<)", "Nguy hiểm", slint::Color::from_argb_u8(255, 239, 68, 68))
+        };
+
+        let summary = if report.issues.is_empty() && report.warnings.is_empty() {
+            "Tất cả kiểm tra đều hoàn hảo. Clak sẵn sàng hoạt động tối ưu.".to_string()
+        } else {
+            format!("Phát hiện {} vấn đề cần xử lý, {} khuyến nghị lưu ý.", report.issues.len(), report.warnings.len())
+        };
+
+        let lines_rc = std::rc::Rc::new(slint::VecModel::from(lines));
+        main_window.set_doctor_lines(lines_rc.into());
+        main_window.set_doctor_last_scanned(now.into());
+        main_window.set_doctor_summary_text(summary.into());
+        main_window.set_doctor_is_healthy(is_healthy);
+        main_window.set_doctor_score_face(score_face.into());
+        main_window.set_doctor_score_text(score.to_string().into());
+        main_window.set_doctor_score_label(score_label.into());
+        main_window.set_doctor_score_color(score_color);
+        main_window.set_doctor_has_scanned(true);
+        main_window.set_doctor_is_scanning(false);
+        if let Ok(mut guard) = last_report.lock() {
+            *guard = Some(report);
+        }
+    }
 
     main_window.run()?;
     Ok(())
