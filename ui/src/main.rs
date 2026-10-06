@@ -659,12 +659,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             score -= (report.warnings.len() as i32) * 10;
             let score = score.clamp(0, 100);
 
-            let (score_face, score_label, score_color) = if score >= 90 {
-                ("^_^", "Khỏe mạnh", slint::Color::from_argb_u8(255, 16, 185, 129))
+            let (score_level, score_label, score_color) = if score >= 90 {
+                (0, "Khỏe mạnh", slint::Color::from_argb_u8(255, 16, 185, 129))
             } else if score >= 60 {
-                ("(~_~)", "Cần lưu ý", slint::Color::from_argb_u8(255, 245, 158, 11))
+                (1, "Cần lưu ý", slint::Color::from_argb_u8(255, 245, 158, 11))
             } else {
-                ("(>_<)", "Nguy hiểm", slint::Color::from_argb_u8(255, 239, 68, 68))
+                (2, "Nguy hiểm", slint::Color::from_argb_u8(255, 239, 68, 68))
             };
 
             let summary = if report.issues.is_empty() && report.warnings.is_empty() {
@@ -681,7 +681,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     w.set_doctor_last_scanned(now.into());
                     w.set_doctor_summary_text(summary.into());
                     w.set_doctor_is_healthy(is_healthy);
-                    w.set_doctor_score_face(score_face.into());
+                    w.set_doctor_score_level(score_level);
                     w.set_doctor_score_text(score.to_string().into());
                     w.set_doctor_score_label(score_label.into());
                     w.set_doctor_score_color(score_color);
@@ -948,12 +948,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         score -= (report.warnings.len() as i32) * 10;
         let score = score.clamp(0, 100);
 
-        let (score_face, score_label, score_color) = if score >= 90 {
-            ("^_^", "Khỏe mạnh", slint::Color::from_argb_u8(255, 16, 185, 129))
+        let (score_level, score_label, score_color) = if score >= 90 {
+            (0, "Khỏe mạnh", slint::Color::from_argb_u8(255, 16, 185, 129))
         } else if score >= 60 {
-            ("(~_~)", "Cần lưu ý", slint::Color::from_argb_u8(255, 245, 158, 11))
+            (1, "Cần lưu ý", slint::Color::from_argb_u8(255, 245, 158, 11))
         } else {
-            ("(>_<)", "Nguy hiểm", slint::Color::from_argb_u8(255, 239, 68, 68))
+            (2, "Nguy hiểm", slint::Color::from_argb_u8(255, 239, 68, 68))
         };
 
         let summary = if report.issues.is_empty() && report.warnings.is_empty() {
@@ -967,12 +967,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         main_window.set_doctor_last_scanned(now.into());
         main_window.set_doctor_summary_text(summary.into());
         main_window.set_doctor_is_healthy(is_healthy);
-        main_window.set_doctor_score_face(score_face.into());
+        main_window.set_doctor_score_level(score_level);
         main_window.set_doctor_score_text(score.to_string().into());
         main_window.set_doctor_score_label(score_label.into());
         main_window.set_doctor_score_color(score_color);
         main_window.set_doctor_has_scanned(true);
         main_window.set_doctor_is_scanning(false);
+        main_window.set_selected_tab(3);
         if let Ok(mut guard) = last_report.lock() {
             *guard = Some(report);
         }

@@ -48,7 +48,7 @@ export component ActionButton inherits Rectangle {
     callback clicked();
 
     height: 32px;
-    min-width: 78px;
+    horizontal-stretch: 0;
     border-radius: 7px;
     background: !root.enabled ? #1a1a1a : (
         root.destructive ? (btn_ta.has-hover ? #c5585830 : #c558581a)
@@ -66,8 +66,9 @@ export component ActionButton inherits Rectangle {
         clicked => { if root.enabled { root.clicked(); } }
     }
 
-    HorizontalLayout {
+    hl := HorizontalLayout {
         alignment: center;
+        min-width: 78px;
         padding-left: 16px;
         padding-right: 16px;
         padding-top: 1px;

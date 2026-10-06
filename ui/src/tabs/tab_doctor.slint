@@ -12,7 +12,7 @@ export component TabDoctor inherits VerticalLayout {
     in property <string> summary_text: "";
     in property <bool> is_healthy: true;
     in property <bool> copied_toast: false;
-    in property <string> score_face: "^_^";
+    in property <int> score_level: 0;
     in property <string> score_text: "100";
     in property <string> score_label: "Khỏe mạnh";
     in property <color> score_color: #10b981;
@@ -33,52 +33,57 @@ export component TabDoctor inherits VerticalLayout {
         padding-left: 14px;
         padding-right: 14px;
         alignment: space-between;
-        spacing: 10px;
+        spacing: 12px;
 
-        HorizontalLayout {
-            alignment: start;
-            spacing: 12px;
+        VerticalLayout {
+            alignment: center;
+            spacing: 4px;
+            horizontal-stretch: 1;
 
-            VerticalLayout {
-                alignment: center;
-                spacing: 3px;
+            HorizontalLayout {
+                spacing: 10px;
+                alignment: start;
 
                 Text {
-                    text: "Kiểm tra môi trường gõ";
+                    text: "Môi trường gõ phím";
                     color: Theme.text-primary;
-                    font-size: 14px;
-                    font-weight: Theme.feature-title-weight;
+                    font-size: 15px;
+                    font-weight: 600;
+                    vertical-alignment: center;
                 }
 
-                Text {
-                    text: root.has_scanned ? ("Lần quét gần nhất: " + root.last_scanned) : "Chưa thực hiện chẩn đoán trong phiên làm việc này";
-                    color: Theme.text-muted;
-                    font-size: 12px;
-                    font-weight: Theme.text-weight;
-                }
-            }
-
-            // huy hieu diem so suc khoe he thong
-            if root.has_scanned: VerticalLayout {
-                alignment: center;
-                Rectangle {
-                    height: 28px;
-                    border-radius: 14px;
+                if root.has_scanned: Rectangle {
+                    height: 26px;
+                    border-radius: 13px;
                     background: root.score_color.with-alpha(0.12);
                     border-width: 1px;
                     border-color: root.score_color.with-alpha(0.35);
 
                     HorizontalLayout {
-                        padding-left: 10px;
-                        padding-right: 12px;
+                        padding-left: 8px;
+                        padding-right: 10px;
                         spacing: 6px;
                         alignment: center;
 
-                        Text {
-                            text: root.score_face;
-                            color: root.score_color;
-                            font-size: 13px;
-                            font-weight: 700;
+                        if root.score_level == 0: Image {
+                            source: @image-url("../../assets/icons/smile.svg");
+                            width: 15px;
+                            height: 15px;
+                            colorize: root.score_color;
+                            vertical-alignment: center;
+                        }
+                        if root.score_level == 1: Image {
+                            source: @image-url("../../assets/icons/meh.svg");
+                            width: 15px;
+                            height: 15px;
+                            colorize: root.score_color;
+                            vertical-alignment: center;
+                        }
+                        if root.score_level == 2: Image {
+                            source: @image-url("../../assets/icons/frown.svg");
+                            width: 15px;
+                            height: 15px;
+                            colorize: root.score_color;
                             vertical-alignment: center;
                         }
 
@@ -92,16 +97,25 @@ export component TabDoctor inherits VerticalLayout {
                     }
                 }
             }
+
+            Text {
+                text: root.has_scanned ? ("Lần quét gần nhất: " + root.last_scanned) : "Chưa thực hiện chẩn đoán trong phiên làm việc này";
+                color: Theme.text-muted;
+                font-size: 12px;
+                font-weight: Theme.text-weight;
+            }
         }
 
         VerticalLayout {
             alignment: center;
+            horizontal-stretch: 0;
 
             HorizontalLayout {
                 spacing: 8px;
+                alignment: end;
 
                 if root.has_scanned: ActionButton {
-                    text: root.copied_toast ? "Đã sao chép!" : "Sao chép";
+                    text: root.copied_toast ? "Đã sao chép!" : "Sao chép báo cáo";
                     enabled: !root.is_scanning;
                     clicked => { root.copy_requested(); }
                 }
