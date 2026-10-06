@@ -95,8 +95,8 @@ private:
   uint64_t last_editor_check_us_{0};
   uint64_t last_site_check_us_{0};
   std::string cached_site_;
-  bool ctrl_shift_down_{false};
-  bool ctrl_shift_other_key_{false};
+  bool ctrl_pressed_first_{false};
+  bool ctrl_shift_armed_{false};
   uint64_t last_selection_time_us_{0};
 };
 

@@ -656,29 +656,30 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
     bool is_alt = key.states().test(fcitx::KeyState::Alt);
     bool is_ctrl = key.states().test(fcitx::KeyState::Ctrl);
     bool is_shift = key.states().test(fcitx::KeyState::Shift);
+    bool is_super = key.states().test(fcitx::KeyState::Super);
+    bool is_ctrl_sym = (key.sym() == FcitxKey_Control_L || key.sym() == FcitxKey_Control_R);
+    bool is_shift_sym = (key.sym() == FcitxKey_Shift_L || key.sym() == FcitxKey_Shift_R);
     char* sc_c = engine_->config() ? clak_config_get_toggle_shortcut(engine_->config()) : nullptr;
     std::string shortcut = sc_c ? sc_c : "ctrl_shift";
     if (sc_c) clak_free_string(sc_c);
 
     if (keyEvent.isRelease()) {
-        if (shortcut == "ctrl_shift" && ctrl_shift_down_) {
-            bool is_mod_release = (key.sym() == FcitxKey_Shift_L || key.sym() == FcitxKey_Shift_R ||
-                                   key.sym() == FcitxKey_Control_L || key.sym() == FcitxKey_Control_R);
-            if (is_mod_release) {
-                if (!ctrl_shift_other_key_) {
-                    engine_->toggleAppEnabled(app);
-                    reset(/*force=*/true);
-                    ic_->updateUserInterface(fcitx::UserInterfaceComponent::StatusArea, true);
-                    if (engine_->instance() && std::string(ic_->frontend()) != "mock") {
+        if (shortcut == "ctrl_shift") {
+            if (ctrl_shift_armed_ && (is_shift_sym || is_ctrl_sym)) {
+                engine_->toggleAppEnabled(app);
+                reset(/*force=*/true);
+                ic_->updateUserInterface(fcitx::UserInterfaceComponent::StatusArea, true);
+                if (engine_->instance() && std::string(ic_->frontend()) != "mock") {
 #ifdef FCITX5_HAVE_SHOW_CUSTOM_IM_INFO
-                        engine_->instance()->showCustomInputMethodInformation(ic_, engine_->isAppEnabled(app) ? "VI" : "EN");
+                    engine_->instance()->showCustomInputMethodInformation(ic_, engine_->isAppEnabled(app) ? "VI" : "EN");
 #else
-                        engine_->instance()->showInputMethodInformation(ic_);
+                    engine_->instance()->showInputMethodInformation(ic_);
 #endif
-                    }
                 }
-                ctrl_shift_down_ = false;
-                ctrl_shift_other_key_ = false;
+                ctrl_shift_armed_ = false;
+                ctrl_pressed_first_ = false;
+            } else if (is_ctrl_sym) {
+                ctrl_pressed_first_ = false;
             }
         }
         return;
@@ -707,17 +708,24 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
     }
 
     if (shortcut == "ctrl_shift") {
-        bool is_shift_press = (key.sym() == FcitxKey_Shift_L || key.sym() == FcitxKey_Shift_R) && is_ctrl;
-        bool is_ctrl_press = (key.sym() == FcitxKey_Control_L || key.sym() == FcitxKey_Control_R) && is_shift;
-        if (is_shift_press || is_ctrl_press) {
-            ctrl_shift_down_ = true;
-            // defer toggle to key release to avoid intercepting shortcuts like ctrl+shift+arrow
-        } else if (ctrl_shift_down_ && !key.isModifier()) {
-            ctrl_shift_other_key_ = true;
+        if (ctrl_shift_armed_) {
+            // any key other than ctrl or shift cancels armed toggle
+            if (!is_ctrl_sym && !is_shift_sym) {
+                ctrl_shift_armed_ = false;
+            }
+        } else if (is_ctrl_sym && !is_shift && !is_alt && !is_super) {
+            // phase 1: ctrl pressed first cleanly without other modifiers held
+            ctrl_pressed_first_ = true;
+        } else if (is_shift_sym && ctrl_pressed_first_ && is_ctrl) {
+            // phase 2: shift pressed strictly after clean ctrl
+            ctrl_shift_armed_ = true;
+            ctrl_pressed_first_ = false;
+        } else {
+            // any intervening key cancels phase 1
+            ctrl_pressed_first_ = false;
         }
     }
 
-    bool is_super = key.states().test(fcitx::KeyState::Super);
     bool has_ctrl_alt = is_ctrl || is_alt || is_super;
     uint32_t sym = key.sym();
 

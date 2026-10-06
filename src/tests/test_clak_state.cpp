@@ -215,20 +215,42 @@ TEST_F(ClakStateTest, GivenCtrlShift_TogglesEnabledState) {
     ime::ClakState state(engine_.get(), &ic);
     EXPECT_TRUE(engine_->isAppEnabled("test-app"));
 
-    // press Control_L
+    // strict ctrl then shift toggles off
     ic.sendKey(FcitxKey_Control_L, fcitx::KeyStates(), false, &state);
-    // press Shift_L (Ctrl is held)
     ic.sendKey(FcitxKey_Shift_L, fcitx::KeyState::Ctrl, false, &state);
-    // release Shift_L
     ic.sendKey(FcitxKey_Shift_L, fcitx::KeyState::Ctrl, true, &state);
-
     EXPECT_FALSE(engine_->isAppEnabled("test-app"));
 
-    // toggle back: press Shift_L, press Control_L, release Control_L
+    // reverse order shift then ctrl must not toggle
     ic.sendKey(FcitxKey_Shift_L, fcitx::KeyStates(), false, &state);
     ic.sendKey(FcitxKey_Control_L, fcitx::KeyState::Shift, false, &state);
-    ic.sendKey(FcitxKey_Control_L, fcitx::KeyState::Shift, true, &state);
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyState::Ctrl, true, &state);
+    ic.sendKey(FcitxKey_Control_L, fcitx::KeyStates(), true, &state);
+    EXPECT_FALSE(engine_->isAppEnabled("test-app"));
 
+    // shift+enter followed by ctrl+v must not toggle
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyStates(), false, &state);
+    ic.sendKey(FcitxKey_Return, fcitx::KeyState::Shift, false, &state);
+    ic.sendKey(FcitxKey_Return, fcitx::KeyState::Shift, true, &state);
+    ic.sendKey(FcitxKey_Control_L, fcitx::KeyState::Shift, false, &state);
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyState::Ctrl, true, &state);
+    ic.sendKey(FcitxKey_v, fcitx::KeyState::Ctrl, false, &state);
+    ic.sendKey(FcitxKey_v, fcitx::KeyState::Ctrl, true, &state);
+    ic.sendKey(FcitxKey_Control_L, fcitx::KeyStates(), true, &state);
+    EXPECT_FALSE(engine_->isAppEnabled("test-app"));
+
+    // ctrl then shift toggles back on
+    ic.sendKey(FcitxKey_Control_L, fcitx::KeyStates(), false, &state);
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyState::Ctrl, false, &state);
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyState::Ctrl, true, &state);
+    EXPECT_TRUE(engine_->isAppEnabled("test-app"));
+
+    // combo with other key (ctrl+shift+t) must not toggle
+    ic.sendKey(FcitxKey_Control_L, fcitx::KeyStates(), false, &state);
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyState::Ctrl, false, &state);
+    ic.sendKey(FcitxKey_t, fcitx::KeyStates(fcitx::KeyState::Ctrl) | fcitx::KeyState::Shift, false, &state);
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyState::Ctrl, true, &state);
+    ic.sendKey(FcitxKey_Control_L, fcitx::KeyStates(), true, &state);
     EXPECT_TRUE(engine_->isAppEnabled("test-app"));
 }
 
