@@ -5,6 +5,9 @@ edition = "2021"
 
 [dependencies]
 clak-engine = { path = "../engine" }
+clak-diagnostics = { path = "../diagnostics" }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+arboard = "3"
 slint = { version = "1.9", default-features = false, features = ["backend-winit", "renderer-skia-opengl", "compat-1-2", "accessibility"] }
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"

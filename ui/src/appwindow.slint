@@ -5,23 +5,24 @@ import "../assets/fonts/SF-Pro-Text-Bold.otf";
 import "../assets/fonts/SF-Pro-Text-Heavy.otf";
 import "../assets/fonts/SF-Pro-Text-Black.otf";
 import { ScrollView } from "std-widgets.slint";
-import { Theme, MacroItemData } from "theme.slint";
+import { Theme, MacroItemData, DoctorLineData } from "theme.slint";
 import { Card, Divider, StatusIndicator } from "components/controls.slint";
 import { ActionButton } from "components/buttons.slint";
 import { Sidebar } from "components/sidebar.slint";
 import { TabGeneral } from "tabs/tab_general.slint";
 import { TabTyping } from "tabs/tab_typing.slint";
 import { TabAdvanced } from "tabs/tab_advanced.slint";
+import { TabDoctor } from "tabs/tab_doctor.slint";
 import { TabAbout } from "tabs/tab_about.slint";
 
-export { MacroItemData }
+export { MacroItemData, DoctorLineData }
 
 // cua so chinh cua ung dung cai dat clak
 export component MainWindow inherits Window {
     title: "Clak Settings";
     icon: @image-url("../assets/icons/clak-logo.svg");
     width: 950px;
-    height: 700px;
+    height: 760px;
     background: Theme.bg;
     default-font-family: "SF Pro Text";
     default-font-size: 14px;
@@ -77,6 +78,18 @@ export component MainWindow inherits Window {
 
     // playground
     in-out property <string> playground_input: "";
+
+    // doctor chan doan
+    in-out property <[DoctorLineData]> doctor_lines: [];
+    in-out property <bool> doctor_has_scanned: false;
+    in-out property <bool> doctor_is_scanning: false;
+    in-out property <string> doctor_last_scanned: "";
+    in-out property <string> doctor_summary_text: "";
+    in-out property <bool> doctor_is_healthy: true;
+    in-out property <bool> doctor_copied_toast: false;
+
+    callback doctor_scan_requested();
+    callback doctor_copy_requested();
 
     callback ok_requested();
     callback apply_requested();
@@ -166,7 +179,20 @@ export component MainWindow inherits Window {
                             remove_excluded_app(idx) => { root.remove_excluded_app(idx); }
                         }
 
-                        if root.selected_tab == 3: TabAbout {
+                        if root.selected_tab == 3: TabDoctor {
+                            vertical-stretch: 0;
+                            lines: root.doctor_lines;
+                            has_scanned: root.doctor_has_scanned;
+                            is_scanning: root.doctor_is_scanning;
+                            last_scanned: root.doctor_last_scanned;
+                            summary_text: root.doctor_summary_text;
+                            is_healthy: root.doctor_is_healthy;
+                            copied_toast: root.doctor_copied_toast;
+                            scan_requested => { root.doctor_scan_requested(); }
+                            copy_requested => { root.doctor_copy_requested(); }
+                        }
+
+                        if root.selected_tab == 4: TabAbout {
                             vertical-stretch: 0;
                             app_version: root.app_version;
                             auto_update_enabled <=> root.auto_update_enabled;

@@ -183,13 +183,14 @@ export component Sidebar inherits Rectangle {
 
             // vung chua cac tab kem hop active truot muot ma
             tabs_box := Rectangle {
-                height: 4 * 42px;
+                height: 5 * 42px;
 
                 property <int> hovered-tab:
                     tab0.has-hover ? 0 :
                     tab1.has-hover ? 1 :
                     tab2.has-hover ? 2 :
-                    tab3.has-hover ? 3 : -1;
+                    tab3.has-hover ? 3 :
+                    tab4.has-hover ? 4 : -1;
 
                 property <int> indicator-tab: (hovered-tab >= 0) ? hovered-tab : root.selected-tab;
 
@@ -245,13 +246,24 @@ export component Sidebar inherits Rectangle {
                     }
 
                     tab3 := NavTab {
-                        icon: @image-url("../../assets/icons/info.svg");
-                        label: "Giới thiệu";
+                        icon: @image-url("../../assets/icons/activity.svg");
+                        label: "Chẩn đoán";
                         active: root.selected-tab == 3;
                         has-indicator: tabs_box.indicator-tab == 3;
                         clicked => {
                             root.selected-tab = 3;
                             root.tab-selected(3);
+                        }
+                    }
+
+                    tab4 := NavTab {
+                        icon: @image-url("../../assets/icons/info.svg");
+                        label: "Giới thiệu";
+                        active: root.selected-tab == 4;
+                        has-indicator: tabs_box.indicator-tab == 4;
+                        clicked => {
+                            root.selected-tab = 4;
+                            root.tab-selected(4);
                         }
                     }
                 }
