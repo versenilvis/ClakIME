@@ -95,6 +95,34 @@ if(ENABLE_GUI AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ui/Cargo.toml")
     add_custom_target(clak_gui_build ALL DEPENDS ${CLAK_UI_BIN})
 endif()
 
+option(ENABLE_CLI "Build CLI utility app" ON)
+
+if(ENABLE_CLI AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cli/Cargo.toml")
+    set(CLAK_CLI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cli")
+    set(CLAK_CLI_BIN "${CARGO_TARGET_DIR}/release/clak")
+
+    file(GLOB_RECURSE CLAK_CLI_SOURCES CONFIGURE_DEPENDS
+        "${CLAK_CLI_DIR}/src/*"
+        "${CLAK_CLI_DIR}/Cargo.toml"
+    )
+
+    file(GLOB_RECURSE CLAK_DIAG_SOURCES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/diagnostics/src/*"
+        "${CMAKE_CURRENT_SOURCE_DIR}/diagnostics/Cargo.toml"
+    )
+
+    add_custom_command(
+        OUTPUT ${CLAK_CLI_BIN}
+        COMMAND cargo build --release
+            --manifest-path "${CLAK_CLI_DIR}/Cargo.toml"
+            --target-dir "${CARGO_TARGET_DIR}"
+        WORKING_DIRECTORY ${CLAK_CLI_DIR}
+        DEPENDS ${CLAK_CLI_SOURCES} ${CLAK_DIAG_SOURCES}
+        VERBATIM
+    )
+    add_custom_target(clak_cli_build ALL DEPENDS ${CLAK_CLI_BIN})
+endif()
+
 add_library(clak_rust_engine INTERFACE)
 target_link_libraries(clak_rust_engine INTERFACE "${CLAK_ENGINE_LIB}")
 add_dependencies(clak_rust_engine clak_engine_build)
@@ -168,6 +196,9 @@ if(TARGET clak_gui_build)
     install(PROGRAMS "${CLAK_UI_BIN}" DESTINATION "${CMAKE_INSTALL_BINDIR}")
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/data/clak-gui.desktop" DESTINATION "${CMAKE_INSTALL_DATADIR}/applications")
 endif()
+if(TARGET clak_cli_build)
+    install(PROGRAMS "${CLAK_CLI_BIN}" DESTINATION "${CMAKE_INSTALL_BINDIR}")
+endif()
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/clak.conf" DESTINATION "${FCITX_INSTALL_PKGDATADIR}/addon")
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/data/clak.conf" DESTINATION "${FCITX_INSTALL_PKGDATADIR}/inputmethod")
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/data/icons/" DESTINATION "${CMAKE_INSTALL_DATADIR}/icons")
@@ -191,6 +222,13 @@ if(TARGET clak_gui_build)
         COMMAND update-desktop-database "$ENV{HOME}/.local/share/applications" || true
     )
     add_dependencies(install-user clak_gui_build)
+endif()
+if(TARGET clak_cli_build)
+    add_custom_command(TARGET install-user POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$ENV{HOME}/.local/bin"
+        COMMAND ${CMAKE_COMMAND} -E copy "${CLAK_CLI_BIN}" "$ENV{HOME}/.local/bin/clak"
+    )
+    add_dependencies(install-user clak_cli_build)
 endif()
 
 include(CTest)

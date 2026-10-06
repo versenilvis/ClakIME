@@ -644,6 +644,7 @@ run_update() {
     local addon_src="${tmp_dir}/usr/share/fcitx5/addon/clak.conf"
     local im_src="${tmp_dir}/usr/share/fcitx5/inputmethod/clak.conf"
     local gui_src="${tmp_dir}/usr/bin/clak-gui"
+    local cli_src="${tmp_dir}/usr/bin/clak"
     local desktop_src="${tmp_dir}/usr/share/applications/clak-gui.desktop"
     local icons_src="${tmp_dir}/usr/share/icons"
 
@@ -673,6 +674,11 @@ run_update() {
         run_sudo mkdir -p "/usr/lib/x86_64-linux-gnu/fcitx5"
         run_sudo ln -sf "${lib_dest}/libclak.so" "/usr/lib/x86_64-linux-gnu/fcitx5/libclak.so" 2>/dev/null || true
 
+        if [ -f "$cli_src" ]; then
+            run_sudo mkdir -p "/usr/bin"
+            run_sudo cp "$cli_src" "/usr/bin/clak"
+            run_sudo chmod 755 "/usr/bin/clak"
+        fi
         if [ -f "$gui_src" ]; then
             run_sudo mkdir -p "/usr/bin"
             run_sudo cp "$gui_src" "/usr/bin/clak-gui"
@@ -707,6 +713,11 @@ run_update() {
         mkdir -p "${HOME}/.local/lib/x86_64-linux-gnu/fcitx5"
         ln -sf "${lib_dest}/libclak.so" "${HOME}/.local/lib/x86_64-linux-gnu/fcitx5/libclak.so" 2>/dev/null || true
 
+        if [ -f "$cli_src" ]; then
+            mkdir -p "${HOME}/.local/bin"
+            cp "$cli_src" "${HOME}/.local/bin/clak"
+            chmod 755 "${HOME}/.local/bin/clak"
+        fi
         if [ -f "$gui_src" ]; then
             mkdir -p "${HOME}/.local/bin"
             cp "$gui_src" "${HOME}/.local/bin/clak-gui"

@@ -101,6 +101,8 @@ check:
     cargo fmt --manifest-path engine/Cargo.toml -- --check
     cargo clippy --manifest-path engine/Cargo.toml -- -D warnings
     cargo test --manifest-path engine/Cargo.toml
+    cargo test --manifest-path diagnostics/Cargo.toml
+    cargo test --manifest-path cli/Cargo.toml
     cargo test --manifest-path ui/Cargo.toml
     cmake --build build --target clak_cpp_tests
     ./build/src/tests/clak_cpp_tests
@@ -118,12 +120,12 @@ install-hooks:
 # run latency benchmark analysis and regression assertion
 [group("quality")]
 bench *args:
-    ./cli/clak bench {{args}}
+    cargo run --manifest-path cli/Cargo.toml --release -- bench {{args}}
 
 # run environment diagnostics
 [group("quality")]
-doctor:
-    ./cli/clak doctor
+doctor *args:
+    cargo run --manifest-path cli/Cargo.toml --release -- doctor {{args}}
 
 # tail debug log
 [group("debug")]

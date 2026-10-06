@@ -148,12 +148,14 @@ run_simulation() {
     [ -f "${HOME}/.local/lib/fcitx5/libclak.so" ] && has_user=1
     [ -f "${HOME}/.local/share/fcitx5/addon/clak.conf" ] && has_user=1
     [ -f "${HOME}/.local/share/fcitx5/inputmethod/clak.conf" ] && has_user=1
+    [ -f "${HOME}/.local/bin/clak" ] && has_user=1
     [ -f "${HOME}/.local/bin/clak-gui" ] && has_user=1
     [ -f "${HOME}/.local/share/applications/clak-gui.desktop" ] && has_user=1
     [ -d "${HOME}/.local/share/clak" ] && has_user=1
     [ -n "$(find "${HOME}/.local/share/icons" -name '*clak*' -print -quit 2>/dev/null)" ] && has_user=1
 
     [ -f "/usr/lib/fcitx5/libclak.so" ] && has_system=1
+    [ -f "/usr/bin/clak" ] && has_system=1
     [ -f "/usr/bin/clak-gui" ] && has_system=1
     [ -f "/usr/share/applications/clak-gui.desktop" ] && has_system=1
     [ -f "/usr/share/fcitx5/addon/clak.conf" ] && has_system=1
@@ -178,14 +180,14 @@ run_simulation() {
     echo ""
     echo -e "  ${c_bold}Các mục sẽ được gỡ bỏ:${c_reset}"
     if [ "$has_user" -eq 1 ]; then
-        echo -e "  • Thư viện và ứng dụng cá nhân:     ${c_accent}~/.local/lib/fcitx5/libclak.so, ~/.local/bin/clak-gui${c_reset}"
+        echo -e "  • Thư viện và ứng dụng cá nhân:     ${c_accent}~/.local/lib/fcitx5/libclak.so, ~/.local/bin/clak, ~/.local/bin/clak-gui${c_reset}"
         echo -e "  • Khai báo addon & bộ gõ cá nhân:   ${c_accent}~/.local/share/fcitx5/{addon,inputmethod}/clak.conf${c_reset}"
         echo -e "  • Menu ứng dụng cá nhân:            ${c_accent}~/.local/share/applications/clak-gui.desktop${c_reset}"
         echo -e "  • Dữ liệu phiên bản & icon cá nhân: ${c_accent}~/.local/share/clak/, ~/.local/share/icons/**/clak*${c_reset}"
     fi
 
     if [ "$has_system" -eq 1 ]; then
-        echo -e "  • File hệ thống (/usr):             ${c_accent}/usr/lib/fcitx5/libclak.so, /usr/bin/clak-gui${c_reset}"
+        echo -e "  • File hệ thống (/usr):             ${c_accent}/usr/lib/fcitx5/libclak.so, /usr/bin/clak, /usr/bin/clak-gui${c_reset}"
         echo -e "  • Khai báo addon & bộ gõ hệ thống:  ${c_accent}/usr/share/fcitx5/{addon,inputmethod}/clak.conf${c_reset}"
         echo -e "  • Menu ứng dụng hệ thống:           ${c_accent}/usr/share/applications/clak-gui.desktop${c_reset}"
         echo -e "  • Biểu tượng hệ thống:              ${c_accent}/usr/share/icons/hicolor/**/clak*${c_reset}"
@@ -234,12 +236,14 @@ run_uninstall() {
     [ -f "${HOME}/.local/lib/fcitx5/libclak.so" ] && has_user_files=1
     [ -f "${HOME}/.local/share/fcitx5/addon/clak.conf" ] && has_user_files=1
     [ -f "${HOME}/.local/share/fcitx5/inputmethod/clak.conf" ] && has_user_files=1
+    [ -f "${HOME}/.local/bin/clak" ] && has_user_files=1
     [ -f "${HOME}/.local/bin/clak-gui" ] && has_user_files=1
     [ -f "${HOME}/.local/share/applications/clak-gui.desktop" ] && has_user_files=1
     [ -d "${HOME}/.local/share/clak" ] && has_user_files=1
     [ -n "$(find "${HOME}/.local/share/icons" -name '*clak*' -print -quit 2>/dev/null)" ] && has_user_files=1
 
     [ -f "/usr/lib/fcitx5/libclak.so" ] && has_sys_files=1
+    [ -f "/usr/bin/clak" ] && has_sys_files=1
     [ -f "/usr/bin/clak-gui" ] && has_sys_files=1
     [ -f "/usr/share/applications/clak-gui.desktop" ] && has_sys_files=1
     [ -f "/usr/share/fcitx5/addon/clak.conf" ] && has_sys_files=1
@@ -277,6 +281,7 @@ run_uninstall() {
     # 3. remove user-space binaries, addons, and shortcuts
     if [ "$has_user_files" -eq 1 ] && [ "$target_mode" != "system" ]; then
         spin_step "Đang xóa thư viện và cấu hình cá nhân (~/.local)..."
+        rm -f "${HOME}/.local/bin/clak"
         rm -f "${HOME}/.local/bin/clak-gui"
         rm -f "${HOME}/.local/share/applications/clak-gui.desktop"
         rm -f "${HOME}/.local/lib/fcitx5/libclak.so"
@@ -293,6 +298,7 @@ run_uninstall() {
     # 4. remove system binaries if requested or detected
     if [ "$has_sys_files" -eq 1 ] && ([ "$target_mode" = "system" ] || [ "$target_mode" = "auto" ]); then
         spin_step "Đang xóa file Clak toàn hệ thống (/usr)..."
+        run_sudo rm -f "/usr/bin/clak"
         run_sudo rm -f "/usr/bin/clak-gui"
         run_sudo rm -f "/usr/share/applications/clak-gui.desktop"
         run_sudo rm -f "/usr/lib/fcitx5/libclak.so"

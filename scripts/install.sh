@@ -1274,6 +1274,7 @@ run_install() {
     local addon_src="${tmp_dir}/usr/share/fcitx5/addon/clak.conf"
     local im_src="${tmp_dir}/usr/share/fcitx5/inputmethod/clak.conf"
     local gui_src="${tmp_dir}/usr/bin/clak-gui"
+    local cli_src="${tmp_dir}/usr/bin/clak"
     local desktop_src="${tmp_dir}/usr/share/applications/clak-gui.desktop"
     local icons_src="${tmp_dir}/usr/share/icons"
 
@@ -1314,6 +1315,11 @@ run_install() {
         run_sudo mkdir -p "/usr/lib/x86_64-linux-gnu/fcitx5"
         run_sudo ln -sf "${lib_dest}/libclak.so" "/usr/lib/x86_64-linux-gnu/fcitx5/libclak.so" 2>/dev/null || true
 
+        if [ -f "$cli_src" ]; then
+            run_sudo mkdir -p "/usr/bin"
+            run_sudo cp "$cli_src" "/usr/bin/clak"
+            run_sudo chmod 755 "/usr/bin/clak"
+        fi
         if [ -f "$gui_src" ]; then
             run_sudo mkdir -p "/usr/bin"
             run_sudo cp "$gui_src" "/usr/bin/clak-gui"
@@ -1352,6 +1358,11 @@ run_install() {
         mkdir -p "${HOME}/.local/lib/x86_64-linux-gnu/fcitx5"
         ln -sf "${lib_dest}/libclak.so" "${HOME}/.local/lib/x86_64-linux-gnu/fcitx5/libclak.so" 2>/dev/null || true
 
+        if [ -f "$cli_src" ]; then
+            mkdir -p "${HOME}/.local/bin"
+            cp "$cli_src" "${HOME}/.local/bin/clak"
+            chmod 755 "${HOME}/.local/bin/clak"
+        fi
         if [ -f "$gui_src" ]; then
             mkdir -p "${HOME}/.local/bin"
             cp "$gui_src" "${HOME}/.local/bin/clak-gui"
@@ -1385,6 +1396,7 @@ run_install() {
     log_step "$lbl_install" "Đã chép ${c_accent}${lib_dest}/libclak.so${c_reset}"
     log_step "$lbl_install" "Đã chép ${c_accent}${addon_dest}/clak.conf${c_reset}"
     log_step "$lbl_install" "Đã chép ${c_accent}${im_dest}/clak.conf${c_reset}"
+    [ -f "$cli_src" ] && log_step "$lbl_install" "Đã cài đặt công cụ dòng lệnh clak"
     [ -f "$gui_src" ] && log_step "$lbl_install" "Đã cài đặt giao diện điều khiển cấu hình clak-gui"
 
     # save installed version for updater
