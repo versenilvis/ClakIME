@@ -77,6 +77,7 @@ jobs:
             cp -a /tmp/clak-dist/usr/lib/fcitx5/libclak.so /tmp/clak-dist/usr/lib/x86_64-linux-gnu/fcitx5/libclak.so
           fi
           mkdir -p dist
+          XZ_OPT="-9e -T0" tar -C /tmp/clak-dist -cJf dist/clak-${VERSION}-linux-x86_64.tar.xz usr/
           tar -C /tmp/clak-dist -czf dist/clak-${VERSION}-linux-x86_64.tar.gz usr/
 
           # Build .deb package for Debian/Ubuntu

@@ -1197,15 +1197,20 @@ run_install() {
 
     local tag_name
     tag_name=$(echo "$releases_json" | grep '"tag_name":' | head -1 | cut -d '"' -f 4 || echo "$release_tag")
-    local download_url
-    download_url=$(echo "$releases_json" | grep "browser_download_url" | grep "${arch}\.tar\.gz" | head -1 | cut -d '"' -f 4 || true)
+    local download_url=""
+    local archive_pat="${arch}\.tar\.xz"
+    download_url=$(echo "$releases_json" | grep "browser_download_url" | grep "${arch}\.tar\.xz" | head -1 | cut -d '"' -f 4 || true)
+    if [ -z "$download_url" ]; then
+        download_url=$(echo "$releases_json" | grep "browser_download_url" | grep "${arch}\.tar\.gz" | head -1 | cut -d '"' -f 4 || true)
+        archive_pat="${arch}\.tar\.gz"
+    fi
 
     if [ -z "$download_url" ]; then
-        err "Không tìm thấy file nén '${arch}.tar.gz' trong bản phát hành ${tag_name}"
+        err "Không tìm thấy file nén '${arch}.tar.xz' hoặc '${arch}.tar.gz' trong bản phát hành ${tag_name}"
     fi
 
     local archive_size_bytes=0
-    archive_size_bytes=$(echo "$releases_json" | awk -v pat="${arch}.tar.gz" 'index($0, pat) {flag=1} flag && /"size":/ {gsub(/[^0-9]/, "", $0); print; exit}' || echo 0)
+    archive_size_bytes=$(echo "$releases_json" | awk -v pat="${archive_pat}" 'index($0, pat) {flag=1} flag && /"size":/ {gsub(/[^0-9]/, "", $0); print; exit}' || echo 0)
     local archive_kb=0
     if [ -n "$archive_size_bytes" ] && [ "$archive_size_bytes" -gt 0 ] 2>/dev/null; then
         archive_kb=$((archive_size_bytes / 1024))
@@ -1260,7 +1265,7 @@ run_install() {
     fi
 
     # 5. extract archive
-    tar -xzf "${tmp_dir}/${archive_name}" -C "$tmp_dir"
+    tar -xf "${tmp_dir}/${archive_name}" -C "$tmp_dir"
 
     local lib_src=""
     if [ -f "${tmp_dir}/usr/lib/fcitx5/libclak.so" ]; then
