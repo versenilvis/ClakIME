@@ -84,6 +84,9 @@ nix profile install github:versenilvis/clak
 
 <img src="assets/proof/jetbrains.webp" width="100%" alt="Jetbrains" />
 
+> [!IMPORTANT]
+> Những thứ trên được test trên môi trường Arch + Wayland, chưa chắc trên môi trường máy bạn sẽ không bị lỗi
+
 ## Menu cài đặt 
 
 <div align="center" >
