@@ -15,7 +15,6 @@ export component TabTyping inherits VerticalLayout {
     callback add_macro(string, string);
     callback remove_macro(int);
 
-    alignment: start;
     spacing: 0px;
 
     SectionHeader {
@@ -83,18 +82,20 @@ export component TabTyping inherits VerticalLayout {
         }
     }
 
-    // khung bang cuon doc doc lap
+    // khung bang cuon doc doc lap keo dai xuong chan trang
     HorizontalLayout {
+        vertical-stretch: 1;
         padding-left: 14px;
         padding-right: 14px;
         padding-top: 2px;
-        padding-bottom: 4px;
+        padding-bottom: 2px;
 
         Rectangle {
-            height: 365px;
+            vertical-stretch: 1;
+            min-height: 180px;
             background: #0d0d0f;
-            border-width: 1px;
-            border-color: Theme.border;
+            border-width: 0px;
+            border-color: transparent;
             border-radius: Theme.radius-sm;
             clip: true;
 

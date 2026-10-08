@@ -18,14 +18,7 @@ export component ToggleSwitch {
             easing: ease-out;
         }
 
-        // vien inside mau toi chi hien thi khi bat tren nen xanh
-        if root.checked: Rectangle {
-            width: parent.width;
-            height: parent.height;
-            border-radius: 11px;
-            border-width: 1px;
-            border-color: #124d3a;
-        }
+
 
         ta := TouchArea {
             mouse-cursor: pointer;
@@ -58,17 +51,10 @@ export component ToggleSwitch {
 
 // duong phan cach giua cac section kem khoang dem
 export component Divider inherits Rectangle {
-    in property <length> pad-y: 8px;
+    in property <length> pad-y: 0px;
 
-    height: 1px + 2 * root.pad-y;
+    height: 0px;
     background: transparent;
-
-    Rectangle {
-        y: root.pad-y;
-        width: parent.width;
-        height: 1px;
-        background: Theme.divider;
-    }
 }
 
 // tieu de section: chu nho hon, day hon va mau gray
@@ -79,15 +65,11 @@ export component SectionHeader inherits VerticalLayout {
     spacing: 0px;
     padding: 0px;
 
-    if root.show-divider: Divider {
-        pad-y: 8px;
-    }
-
     HorizontalLayout {
         padding-left: 14px;
         padding-right: 14px;
-        padding-top: root.show-divider ? 6px : 2px;
-        padding-bottom: 4px;
+        padding-top: 5px;
+        padding-bottom: 2px;
 
         Text {
             text: root.title;
@@ -123,7 +105,7 @@ export component SettingItem {
     callback toggled();
 
     Rectangle {
-        min-height: 48px;
+        min-height: 38px;
         background: area.has-hover ? #ffffff0a : transparent;
         border-radius: Theme.radius-sm;
 
@@ -138,8 +120,8 @@ export component SettingItem {
         HorizontalLayout {
             padding-left: 14px;
             padding-right: 14px;
-            padding-top: 7px;
-            padding-bottom: 7px;
+            padding-top: 4px;
+            padding-bottom: 4px;
             alignment: space-between;
             spacing: 14px;
 
@@ -183,11 +165,11 @@ export component FieldRow {
     in property <string> subtitle: "";
 
     HorizontalLayout {
-        min-height: 48px;
+        min-height: 38px;
         padding-left: 14px;
         padding-right: 14px;
-        padding-top: 7px;
-        padding-bottom: 7px;
+        padding-top: 4px;
+        padding-bottom: 4px;
         alignment: space-between;
         spacing: 14px;
 
@@ -396,8 +378,8 @@ export component Dropdown inherits Rectangle {
 
         Rectangle {
             background: #141414;
-            border-width: 1px;
-            border-color: #2b2b2b;
+            border-width: 0px;
+            border-color: transparent;
             border-radius: 8px;
             drop-shadow-blur: 16px;
             drop-shadow-color: #000000d0;

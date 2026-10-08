@@ -19,8 +19,8 @@ export { MacroItemData, DoctorLineData }
 export component MainWindow inherits Window {
     title: "Clak Settings";
     icon: @image-url("../assets/icons/clak-logo.svg");
-    width: 950px;
-    height: 760px;
+    width: 920px;
+    height: 680px;
     background: Theme.bg;
     default-font-family: "SF Pro Text";
     default-font-size: 14px;
@@ -148,8 +148,8 @@ export component MainWindow inherits Window {
                 if root.profile_needs_setup: Rectangle {
                     border-radius: Theme.radius-md;
                     background: #3b82f6.with-alpha(0.12);
-                    border-width: 1px;
-                    border-color: #3b82f6.with-alpha(0.35);
+                    border-width: 0px;
+                    border-color: transparent;
 
                     HorizontalLayout {
                         padding-left: 14px;
@@ -215,8 +215,8 @@ export component MainWindow inherits Window {
                 if !root.profile_needs_setup && (root.wps_needs_fix || root.jetbrains_needs_fix) && root.selected_tab != 3: Rectangle {
                     border-radius: Theme.radius-md;
                     background: #8b5cf6.with-alpha(0.12);
-                    border-width: 1px;
-                    border-color: #8b5cf6.with-alpha(0.35);
+                    border-width: 0px;
+                    border-color: transparent;
 
                     HorizontalLayout {
                         padding-left: 14px;
@@ -269,54 +269,54 @@ export component MainWindow inherits Window {
                     }
                 }
 
-                if root.selected_tab != 3: ScrollView {
+                if root.selected_tab == 0: TabGeneral {
+                    vertical-stretch: 1;
+                    toggle_shortcut_index <=> root.toggle_shortcut_index;
+                    method_index <=> root.method_index;
+                    charset_index <=> root.charset_index;
+                    startup_mode_index <=> root.startup_mode_index;
+                    short_w <=> root.short_w;
+                    bracket_brackets <=> root.bracket_brackets;
+                    spelling_enabled <=> root.spelling_enabled;
+                    auto_restore <=> root.auto_restore;
+                    modern_tone <=> root.modern_tone;
+                    playground_input <=> root.playground_input;
+                    changed => { root.has_changes = true; }
+                }
+
+                if root.selected_tab == 1: TabTyping {
+                    vertical-stretch: 1;
+                    double_space_period <=> root.double_space_period;
+                    auto_capitalize <=> root.auto_capitalize;
+                    macros_enabled <=> root.macros_enabled;
+                    macro_items <=> root.macro_items;
+                    new_macro_trigger <=> root.new_macro_trigger;
+                    new_macro_replace <=> root.new_macro_replace;
+                    changed => { root.has_changes = true; }
+                    add_macro(trigger, replace) => { root.add_macro(trigger, replace); }
+                    remove_macro(idx) => { root.remove_macro(idx); }
+                }
+
+                if root.selected_tab == 2: TabAdvanced {
+                    vertical-stretch: 1;
+                    autostart_system <=> root.autostart_system;
+                    remember_app_state <=> root.remember_app_state;
+                    excluded_apps <=> root.excluded_apps;
+                    new_app_name <=> root.new_app_name;
+                    uinput_ack <=> root.uinput_ack;
+                    debug_log <=> root.debug_log;
+                    changed => { root.has_changes = true; }
+                    add_excluded_app(name) => { root.add_excluded_app(name); }
+                    remove_excluded_app(idx) => { root.remove_excluded_app(idx); }
+                }
+
+                if root.selected_tab == 4: ScrollView {
                     vertical-stretch: 1;
 
                     VerticalLayout {
                         alignment: start;
 
-                        if root.selected_tab == 0: TabGeneral {
-                            vertical-stretch: 0;
-                            toggle_shortcut_index <=> root.toggle_shortcut_index;
-                            method_index <=> root.method_index;
-                            charset_index <=> root.charset_index;
-                            startup_mode_index <=> root.startup_mode_index;
-                            short_w <=> root.short_w;
-                            bracket_brackets <=> root.bracket_brackets;
-                            spelling_enabled <=> root.spelling_enabled;
-                            auto_restore <=> root.auto_restore;
-                            modern_tone <=> root.modern_tone;
-                            playground_input <=> root.playground_input;
-                            changed => { root.has_changes = true; }
-                        }
-
-                        if root.selected_tab == 1: TabTyping {
-                            vertical-stretch: 0;
-                            double_space_period <=> root.double_space_period;
-                            auto_capitalize <=> root.auto_capitalize;
-                            macros_enabled <=> root.macros_enabled;
-                            macro_items <=> root.macro_items;
-                            new_macro_trigger <=> root.new_macro_trigger;
-                            new_macro_replace <=> root.new_macro_replace;
-                            changed => { root.has_changes = true; }
-                            add_macro(trigger, replace) => { root.add_macro(trigger, replace); }
-                            remove_macro(idx) => { root.remove_macro(idx); }
-                        }
-
-                        if root.selected_tab == 2: TabAdvanced {
-                            vertical-stretch: 0;
-                            autostart_system <=> root.autostart_system;
-                            remember_app_state <=> root.remember_app_state;
-                            excluded_apps <=> root.excluded_apps;
-                            new_app_name <=> root.new_app_name;
-                            uinput_ack <=> root.uinput_ack;
-                            debug_log <=> root.debug_log;
-                            changed => { root.has_changes = true; }
-                            add_excluded_app(name) => { root.add_excluded_app(name); }
-                            remove_excluded_app(idx) => { root.remove_excluded_app(idx); }
-                        }
-
-                        if root.selected_tab == 4: TabAbout {
+                        TabAbout {
                             vertical-stretch: 0;
                             app_version: root.app_version;
                             auto_update_enabled <=> root.auto_update_enabled;
@@ -369,6 +369,8 @@ export component MainWindow inherits Window {
                 Divider { }
 
                 HorizontalLayout {
+                    padding-left: 14px;
+                    padding-right: 14px;
                     height: 44px;
                     alignment: space-between;
                     spacing: 10px;

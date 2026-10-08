@@ -21,7 +21,6 @@ export component TabGeneral inherits VerticalLayout {
     in-out property <string> playground_input: "";
     callback changed();
 
-    alignment: start;
     spacing: 0px;
 
     SectionHeader {
@@ -107,30 +106,29 @@ export component TabGeneral inherits VerticalLayout {
 
     SectionHeader {
         title: "THỬ NGHIỆM";
-        show-divider: true;
+        show-divider: false;
     }
 
-    // o go thu nghiem
+    // o go thu nghiem keo dai xuong chan trang
     HorizontalLayout {
+        vertical-stretch: 1;
         padding-left: 14px;
         padding-right: 14px;
-        padding-top: 6px;
-        padding-bottom: 4px;
+        padding-top: 4px;
+        padding-bottom: 2px;
 
         Rectangle {
-            height: 100px;
-            background: #0d0d0d;
+            vertical-stretch: 1;
+            min-height: 48px;
+            background: #121214;
             border-radius: 8px;
-            border-width: 1px;
-            border-color: input.has-focus ? #2c2c2c : #191919;
-
-            animate border-color { duration: 150ms; }
+            border-width: 0px;
 
             // chu chim / placeholder mo
             if input.text == "": Text {
-                x: 12px;
-                y: 10px;
-                width: parent.width - 24px;
+                x: 14px;
+                y: 12px;
+                width: parent.width - 28px;
                 text: "Gõ thử tiếng Việt tại đây (kiểm tra dấu, phím tắt, tốc độ phản hồi)...";
                 color: #555555;
                 font-size: 13px;
@@ -138,13 +136,14 @@ export component TabGeneral inherits VerticalLayout {
             }
 
             input := TextInput {
-                x: 12px;
-                y: 10px;
-                width: parent.width - 24px;
-                height: parent.height - 20px;
+                x: 14px;
+                y: 12px;
+                width: parent.width - 28px;
+                height: parent.height - 24px;
                 text <=> root.playground_input;
                 color: Theme.text-primary;
                 font-size: 13px;
+                single-line: false;
                 wrap: word-wrap;
             }
         }

@@ -66,8 +66,8 @@ export component TabDoctor inherits VerticalLayout {
                         height: 24px;
                         border-radius: 12px;
                         background: root.score_color.with-alpha(0.12);
-                        border-width: 1px;
-                        border-color: root.score_color.with-alpha(0.35);
+                        border-width: 0px;
+                        border-color: transparent;
 
                         HorizontalLayout {
                             padding-left: 8px;
@@ -149,8 +149,8 @@ export component TabDoctor inherits VerticalLayout {
     if root.has_scanned && root.reload_needed: Rectangle {
         border-radius: Theme.radius-md;
         background: #f59e0b.with-alpha(0.12);
-        border-width: 1px;
-        border-color: #f59e0b.with-alpha(0.35);
+        border-width: 0px;
+        border-color: transparent;
 
         HorizontalLayout {
             padding-left: 14px;
@@ -215,8 +215,8 @@ export component TabDoctor inherits VerticalLayout {
     if root.has_scanned && root.profile_needs_setup: Rectangle {
         border-radius: Theme.radius-md;
         background: #3b82f6.with-alpha(0.12);
-        border-width: 1px;
-        border-color: #3b82f6.with-alpha(0.35);
+        border-width: 0px;
+        border-color: transparent;
 
         HorizontalLayout {
             padding-left: 14px;
@@ -274,8 +274,8 @@ export component TabDoctor inherits VerticalLayout {
     if root.has_scanned && root.wps_needs_fix: Rectangle {
         border-radius: Theme.radius-md;
         background: #06b6d4.with-alpha(0.12);
-        border-width: 1px;
-        border-color: #06b6d4.with-alpha(0.35);
+        border-width: 0px;
+        border-color: transparent;
 
         HorizontalLayout {
             padding-left: 14px;
@@ -333,8 +333,8 @@ export component TabDoctor inherits VerticalLayout {
     if root.has_scanned && root.jetbrains_needs_fix: Rectangle {
         border-radius: Theme.radius-md;
         background: #8b5cf6.with-alpha(0.12);
-        border-width: 1px;
-        border-color: #8b5cf6.with-alpha(0.35);
+        border-width: 0px;
+        border-color: transparent;
 
         HorizontalLayout {
             padding-left: 14px;
@@ -394,8 +394,8 @@ export component TabDoctor inherits VerticalLayout {
         min-height: 240px;
         background: #09090b;
         border-radius: Theme.radius-lg;
-        border-width: 1px;
-        border-color: #18181b;
+        border-width: 0px;
+        border-color: transparent;
 
         VerticalLayout {
             alignment: center;
@@ -453,8 +453,8 @@ export component TabDoctor inherits VerticalLayout {
         min-height: 240px;
         background: #08080a;
         border-radius: Theme.radius-md;
-        border-width: 1px;
-        border-color: #1c1c21;
+        border-width: 0px;
+        border-color: transparent;
         clip: true;
 
         ScrollView {
