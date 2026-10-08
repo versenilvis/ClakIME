@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.4.5](https://github.com/versenilvis/clak/releases/tag/v0.4.5) - 2026-10-08
+
+### Documentation
+
+- Small note about testing environment ([03a1a2](https://github.com/versenilvis/clak/commit/03a1a2beb6c7fb8194d1a397a9b0caeb9ad86661))
+
+### Performance
+
+- Trim down to retain only Vietnamese and necessary characters ([1a72ee](https://github.com/versenilvis/clak/commit/1a72eefa77368f5f706778388e179d77028298cc))
+- Compress release archives with xz and auto-extract in installer ([05a03b](https://github.com/versenilvis/clak/commit/05a03bc7ff16983fde5e4395756e658fcd10410a))
+
 ## [v0.4.4](https://github.com/versenilvis/clak/releases/tag/v0.4.4) - 2026-10-07
 
 ### Bug fixes
