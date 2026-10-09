@@ -257,5 +257,40 @@ TEST_F(ClakStateTest, GivenCtrlShift_TogglesEnabledState) {
     EXPECT_TRUE(engine_->isAppEnabled("test-app"));
 }
 
+TEST_F(ClakStateTest, GivenVowelAndHoldingToneKey_RepeatsCharacter) {
+    MockInputContext ic(instance_->inputContextManager(), "test-app");
+    ic.setSurrounding("", 0, 0);
+    ic.auto_update_surrounding = true;
+    ime::ClakState state(engine_.get(), &ic);
+    state.setEnableRepeatForMock(true);
+
+    // type a then press s
+    ic.sendKey(FcitxKey_a, fcitx::KeyStates(), false, &state);
+    ic.sendKey(FcitxKey_a, fcitx::KeyStates(), true, &state);
+    ic.sendKey(FcitxKey_s, fcitx::KeyStates(), false, &state);
+
+    // initial press of s produces á and arms repeat timer
+    EXPECT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "á");
+    EXPECT_EQ(state.heldKey().sym(), FcitxKey_s);
+
+    // first repeat tick untoggles á to as
+    state.onRepeatTimer();
+    EXPECT_EQ(ic.commits.back(), "as");
+    EXPECT_TRUE(state.isRepeating());
+
+    // subsequent repeat ticks append repeating s
+    state.onRepeatTimer();
+    EXPECT_EQ(ic.commits.back(), "s");
+
+    state.onRepeatTimer();
+    EXPECT_EQ(ic.commits.back(), "s");
+
+    // release s cancels repeat
+    ic.sendKey(FcitxKey_s, fcitx::KeyStates(), true, &state);
+    EXPECT_EQ(state.heldKey().sym(), 0);
+    EXPECT_FALSE(state.isRepeating());
+}
+
 } // namespace test
 } // namespace clak

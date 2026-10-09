@@ -47,9 +47,17 @@ public:
   void observeTransactionLatency(uint64_t elapsed_us);
   bool isBackspaceHoldArmed() const { return backspace_hold_armed_; }
   bool isBackspaceSuppressing() const { return backspace_suppress_repeats_; }
+  void onRepeatTimer();
+  bool isRepeating() const { return is_repeating_; }
+  fcitx::Key heldKey() const { return held_key_; }
+  void setEnableRepeatForMock(bool enable) { enable_repeat_for_mock_ = enable; }
 
 private:
   void arm_safety_timer();
+  void armRepeatTimer(const fcitx::Key& key);
+  void cancelRepeatTimer();
+  uint64_t repeatDelayUs();
+  uint64_t repeatIntervalUs();
   bool handleKey(const fcitx::Key& key);
   void replayBufferedKeys();
   bool isCursorNearWord(const fcitx::SurroundingText& surr);
@@ -112,6 +120,10 @@ private:
   bool backspace_down_{false};
   bool backspace_hold_armed_{false};
   bool backspace_suppress_repeats_{false};
+  std::unique_ptr<fcitx::EventSourceTime> repeat_timer_;
+  fcitx::Key held_key_;
+  bool is_repeating_{false};
+  bool enable_repeat_for_mock_{false};
 };
 
 } // namespace ime

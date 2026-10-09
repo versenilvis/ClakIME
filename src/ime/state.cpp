@@ -65,6 +65,7 @@ void ClakState::reset(bool force) {
     if (safety_timer_) {
         safety_timer_.reset();
     }
+    cancelRepeatTimer();
     if (!buffered_keys_.empty() || !pending_commit_string_.empty()) {
         utils::clakLog("reset: clearing state (buf_len=" + std::to_string(buffered_keys_.size()) + ") app=" + app + " site='" + site + "'");
     }
@@ -330,7 +331,7 @@ void ClakState::arm_safety_timer() {
     safety_timer_ = engine_->instance()->eventLoop().addTimeEvent(
         CLOCK_MONOTONIC,
         now_us + timeout_us,
-        0,
+        1000,
         [this, timeout_us](fcitx::EventSourceTime*, uint64_t) {
             if (is_deleting_) {
                 // system lag caused timeout, increase adaptive wait
@@ -363,6 +364,116 @@ void ClakState::arm_safety_timer() {
             return true;
         }
     );
+}
+
+uint64_t ClakState::repeatDelayUs() {
+    static uint64_t cached_delay = 0;
+    if (cached_delay > 0) return cached_delay;
+    if (getenv("HYPRLAND_INSTANCE_SIGNATURE")) {
+        FILE* fp = popen("hyprctl getoption input:repeat_delay 2>/dev/null", "r");
+        if (fp) {
+            char buf[128];
+            while (fgets(buf, sizeof(buf), fp)) {
+                int val = 0;
+                if (sscanf(buf, "int: %d", &val) == 1 && val > 0) {
+                    cached_delay = static_cast<uint64_t>(val) * 1000;
+                    break;
+                }
+            }
+            pclose(fp);
+        }
+    }
+    if (cached_delay == 0) {
+        cached_delay = 200000;
+    }
+    utils::clakLog("repeat delay initialized: " + std::to_string(cached_delay) + "us");
+    return cached_delay;
+}
+
+uint64_t ClakState::repeatIntervalUs() {
+    static uint64_t cached_interval = 0;
+    if (cached_interval > 0) return cached_interval;
+    if (getenv("HYPRLAND_INSTANCE_SIGNATURE")) {
+        FILE* fp = popen("hyprctl getoption input:repeat_rate 2>/dev/null", "r");
+        if (fp) {
+            char buf[128];
+            while (fgets(buf, sizeof(buf), fp)) {
+                int val = 0;
+                if (sscanf(buf, "int: %d", &val) == 1 && val > 0) {
+                    cached_interval = 1000000 / val;
+                    break;
+                }
+            }
+            pclose(fp);
+        }
+    }
+    if (cached_interval == 0) {
+        cached_interval = 25000;
+    }
+    utils::clakLog("repeat interval initialized: " + std::to_string(cached_interval) + "us");
+    return cached_interval;
+}
+
+void ClakState::armRepeatTimer(const fcitx::Key& key) {
+    if (is_repeating_ && held_key_.sym() == key.sym()) {
+        return;
+    }
+    held_key_ = key;
+    is_repeating_ = false;
+    uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
+    uint64_t delay_us = repeatDelayUs();
+    // use 1000us accuracy to prevent sd-event default 250ms slack coalescing
+    repeat_timer_ = engine_->instance()->eventLoop().addTimeEvent(
+        CLOCK_MONOTONIC,
+        now_us + delay_us,
+        1000,
+        [this](fcitx::EventSourceTime*, uint64_t) {
+            onRepeatTimer();
+            return true;
+        }
+    );
+}
+
+void ClakState::cancelRepeatTimer() {
+    if (repeat_timer_) {
+        repeat_timer_.reset();
+    }
+    held_key_ = fcitx::Key();
+    is_repeating_ = false;
+}
+
+void ClakState::onRepeatTimer() {
+    if (held_key_.sym() == 0) return;
+    if (is_deleting_) {
+        // defer if deletion is in flight
+        if (repeat_timer_) {
+            uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
+            repeat_timer_->setTime(now_us + 10000);
+            repeat_timer_->setAccuracy(1000);
+            repeat_timer_->setOneShot();
+        }
+        return;
+    }
+
+    if (!is_repeating_) {
+        utils::clakLog("onRepeatTimer: start repeat sym=" + std::to_string(held_key_.sym()));
+        is_repeating_ = true;
+    }
+
+    if (!handleKey(held_key_)) {
+        // engine forwarded raw key, commit directly in timer repeat
+        std::string str = fcitx::Key::keySymToUTF8(held_key_.sym());
+        if (!str.empty()) {
+            doCommitString(str);
+        }
+    }
+
+    if (repeat_timer_ && held_key_.sym() != 0) {
+        uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
+        repeat_timer_->setTime(now_us + repeatIntervalUs());
+        repeat_timer_->setAccuracy(1000);
+        repeat_timer_->setOneShot();
+    }
 }
 
 void ClakState::finishUinputDeletion() {
@@ -723,6 +834,9 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
     if (sc_c) clak_free_string(sc_c);
 
     if (keyEvent.isRelease()) {
+        if (held_key_.sym() != 0 && (key.sym() == held_key_.sym() || key.isModifier())) {
+            cancelRepeatTimer();
+        }
         if (key.sym() == FcitxKey_BackSpace) {
             backspace_down_ = false;
             backspace_hold_armed_ = false;
@@ -835,6 +949,7 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
 
     // abort deletion and reset state if user pressed a modifier shortcut or navigation key
     if (has_ctrl_alt || is_cursor_move || is_special_nav) {
+        cancelRepeatTimer();
         if (is_deleting_) {
             if (safety_timer_) {
                 safety_timer_.reset();
@@ -870,6 +985,7 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
     }
 
     if (key.isModifier()) {
+        cancelRepeatTimer();
         return;
     }
 
@@ -896,12 +1012,25 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
         }
     }
 
+    if (held_key_.sym() != 0 && key.sym() != held_key_.sym()) {
+        cancelRepeatTimer();
+    }
+
     if (!is_deleting_) {
         op_start_us_ = fcitx::now(CLOCK_MONOTONIC);
     }
 
     if (handleKey(key)) {
         keyEvent.filterAndAccept();
+        // arm repeat timer when printable key is swallowed by ime
+        if (sym >= 0x20 && sym < 0xff00 && !has_ctrl_alt && sym != FcitxKey_BackSpace &&
+            ((!ic_ || std::string(ic_->frontend()) != "mock") || enable_repeat_for_mock_)) {
+            armRepeatTimer(key);
+        } else {
+            cancelRepeatTimer();
+        }
+    } else {
+        cancelRepeatTimer();
     }
 
     if (sym == FcitxKey_BackSpace && !has_ctrl_alt && backspace_hold_armed_) {

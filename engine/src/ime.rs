@@ -1118,6 +1118,7 @@ mod tests {
             "chào bạn tôi là người việt nam"
         );
         assert_eq!(simulate_typing("test"), "tét");
+        assert_eq!(simulate_typing("assssssssss"), "asssssssss");
     }
 
     #[test]
@@ -1138,6 +1139,11 @@ mod tests {
         );
         assert_eq!(simulate_typing_fallback("test"), "tét");
         assert_eq!(simulate_typing_fallback("tesst"), "test");
+        assert_eq!(simulate_typing_fallback("as"), "á");
+        assert_eq!(simulate_typing_fallback("ass"), "as");
+        assert_eq!(simulate_typing_fallback("asss"), "ass");
+        assert_eq!(simulate_typing_fallback("assss"), "asss");
+        assert_eq!(simulate_typing_fallback("assssssssss"), "asssssssss");
     }
 
     #[test]
