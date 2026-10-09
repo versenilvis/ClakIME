@@ -294,11 +294,11 @@ impl ClakContext {
             let sel_start = std::cmp::min(cur, anch);
             let sel_end = std::cmp::max(cur, anch);
 
-            // address bar url autocomplete only applies to single-token urls without spaces or newlines
-            let is_single_token = !text.is_empty() && !text.contains(' ') && !text.contains('\n');
+            // address bar autocomplete applies to single-line fields without newlines
+            let is_single_line = !text.is_empty() && !text.contains('\n');
 
             // browser address bar autocomplete detection
-            if is_single_token
+            if is_single_line
                 && !self.raw_buffer.is_empty()
                 && sel_start < sel_end
                 && sel_end == chars.len()
@@ -309,7 +309,7 @@ impl ClakContext {
                 }
             }
 
-            if is_single_token && self.typed_over_selection && sel_start < sel_end {
+            if is_single_line && self.typed_over_selection && sel_start < sel_end {
                 has_autocomplete = true;
             }
 
@@ -333,7 +333,7 @@ impl ClakContext {
                 }
             } else if !has_autocomplete {
                 self.reset();
-                if is_single_token && sel_start == 0 && sel_end == chars.len() {
+                if is_single_line && sel_start == 0 && sel_end == chars.len() {
                     self.typed_over_selection = true;
                 }
             }
@@ -963,6 +963,45 @@ mod tests {
         let act3 = ctx.process_key(b'd' as u32, "d", false, Some(""), 0, 0);
         // must forward 'd', not become 'đ'
         assert_eq!(act3.action_type, ACTION_FORWARD);
+    }
+
+    #[test]
+    fn test_address_bar_autocomplete_with_spaces_query() {
+        let mut ctx = ClakContext::new(Method::Telex);
+        // user types 'c'
+        let a1 = ctx.process_key(b'c' as u32, "c", false, Some(""), 0, 0);
+        assert_eq!(a1.action_type, ACTION_FORWARD);
+
+        // browser autocompletes 'claude.ai'(1..9), user types 'a'
+        let a2 = ctx.process_key(b'a' as u32, "a", false, Some("claude.ai"), 1, 9);
+        assert_eq!(a2.action_type, ACTION_FORWARD);
+
+        // browser autocompletes search suggestion 'cach check hạn gg pro'(2..21), user types 'n'
+        let a3 = ctx.process_key(b'n' as u32, "n", false, Some("cach check hạn gg pro"), 2, 21);
+        assert_eq!(a3.action_type, ACTION_FORWARD);
+        assert_eq!(ctx.raw_buffer, "can");
+
+        // browser replaced selection with 'can', user types 'h'
+        let a4 = ctx.process_key(b'h' as u32, "h", false, Some("can"), 3, 3);
+        assert_eq!(a4.action_type, ACTION_FORWARD);
+        assert_eq!(ctx.raw_buffer, "canh");
+
+        // browser autocompletes 'canh chua ca loc'(4..17), user types 's'
+        let a5 = ctx.process_key(b's' as u32, "s", false, Some("canh chua ca loc"), 4, 17);
+        assert_eq!(a5.action_type, ACTION_ADDRESS_BAR_FIX);
+        let commit5 = unsafe { CStr::from_ptr(a5.commit_str).to_str().unwrap() };
+        assert_eq!(commit5, "ánh");
+
+        // also verify without autocomplete on 's'
+        let mut ctx2 = ClakContext::new(Method::Telex);
+        ctx2.process_key(b'c' as u32, "c", false, Some(""), 0, 0);
+        ctx2.process_key(b'a' as u32, "a", false, Some("claude.ai"), 1, 9);
+        ctx2.process_key(b'n' as u32, "n", false, Some("cach check hạn gg pro"), 2, 21);
+        ctx2.process_key(b'h' as u32, "h", false, Some("can"), 3, 3);
+        let a5_no_auto = ctx2.process_key(b's' as u32, "s", false, Some("canh"), 4, 4);
+        assert_eq!(a5_no_auto.action_type, ACTION_REPLACE);
+        let commit_no_auto = unsafe { CStr::from_ptr(a5_no_auto.commit_str).to_str().unwrap() };
+        assert_eq!(commit_no_auto, "ánh");
     }
 
     #[test]

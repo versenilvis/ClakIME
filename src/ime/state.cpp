@@ -213,8 +213,8 @@ bool ClakState::isAutofillCertain(const fcitx::SurroundingText& surr) {
         return false;
     }
     const std::string& text = surr.text();
-    // address bar url autofill does not contain spaces or newlines
-    if (text.empty() || text.find('\n') != std::string::npos || text.find(' ') != std::string::npos) return false;
+    // address bar autofill happens in single-line context without newlines
+    if (text.empty() || text.find('\n') != std::string::npos) return false;
 
     unsigned int cursor = surr.cursor();
     unsigned int anchor = surr.anchor();

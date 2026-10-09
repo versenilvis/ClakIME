@@ -91,6 +91,10 @@ TEST_F(RegressionCorpusTest, test_regression_hyprland_stale_selection_during_ret
     // reverse direction autocomplete extending to end is valid
     ic.setSurrounding("google", 6, 2);
     EXPECT_TRUE(state.isAutofillCertain(ic.surroundingText()));
+
+    // autocomplete extending to end with spaces in query suggestion is valid
+    ic.setSurrounding("cach check hang", 2, 15);
+    EXPECT_TRUE(state.isAutofillCertain(ic.surroundingText()));
 }
 
 TEST_F(RegressionCorpusTest, test_regression_docs_cascading_chars) {
