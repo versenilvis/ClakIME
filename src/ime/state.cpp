@@ -85,9 +85,6 @@ void ClakState::reset(bool force) {
     mismatch_count_ = 0;
     cached_site_.clear();
     last_site_check_us_ = 0;
-    backspace_down_ = false;
-    backspace_hold_armed_ = false;
-    backspace_suppress_repeats_ = false;
     if (rust_ctx_) {
         clak_context_reset(rust_ctx_);
     }
@@ -837,11 +834,6 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
         if (held_key_.sym() != 0 && (key.sym() == held_key_.sym() || key.isModifier())) {
             cancelRepeatTimer();
         }
-        if (key.sym() == FcitxKey_BackSpace) {
-            backspace_down_ = false;
-            backspace_hold_armed_ = false;
-            backspace_suppress_repeats_ = false;
-        }
         if (shortcut == "ctrl_shift") {
             if (ctrl_shift_armed_ && (is_shift_sym || is_ctrl_sym)) {
                 engine_->toggleAppEnabled(app);
@@ -861,12 +853,6 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
             }
         }
         return;
-    }
-
-    if (key.sym() != FcitxKey_BackSpace) {
-        backspace_down_ = false;
-        backspace_hold_armed_ = false;
-        backspace_suppress_repeats_ = false;
     }
 
     syncConfig();
@@ -999,17 +985,6 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
 
     if (sym == FcitxKey_BackSpace) {
         last_selection_time_us_ = 0;
-        if (!has_ctrl_alt) {
-            if (backspace_suppress_repeats_) {
-                // swallow backspace repeats after composing buffer is emptied
-                keyEvent.filterAndAccept();
-                return;
-            }
-            if (!backspace_down_) {
-                backspace_down_ = true;
-                backspace_hold_armed_ = rust_ctx_ && clak_is_composing(rust_ctx_);
-            }
-        }
     }
 
     if (held_key_.sym() != 0 && key.sym() != held_key_.sym()) {
@@ -1031,12 +1006,6 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
         }
     } else {
         cancelRepeatTimer();
-    }
-
-    if (sym == FcitxKey_BackSpace && !has_ctrl_alt && backspace_hold_armed_) {
-        if (!rust_ctx_ || !clak_is_composing(rust_ctx_)) {
-            backspace_suppress_repeats_ = true;
-        }
     }
 }
 

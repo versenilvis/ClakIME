@@ -591,47 +591,40 @@ TEST_F(RegressionCorpusTest, test_regression_unknown_site_draftjs_auto_detect) {
     EXPECT_EQ(last_gap_ms, 1);
 }
 
-TEST_F(RegressionCorpusTest, test_regression_backspace_hold_policy_swallows_repeats_when_composing_empties) {
+TEST_F(RegressionCorpusTest, test_regression_backspace_hold_continues_deleting_when_composing_empties) {
     platform::setMockActiveWindow(platform::WindowInfo{"gedit", "Untitled Document", 4567});
     MockInputContext ic(instance_->inputContextManager(), "gedit");
     auto* state = ic.propertyFor(&engine_->factory());
 
-    // type "tieng" (in-flight composition without tone replacement)
+    // type "tieng"
     ic.typeString("tieng", state);
-    EXPECT_FALSE(state->isBackspaceHoldArmed());
-    EXPECT_FALSE(state->isBackspaceSuppressing());
 
     // initial backspace down press while composing (deletes 'g')
     bool filtered = ic.sendKey(FcitxKey_BackSpace, fcitx::KeyStates(), false, state);
     EXPECT_FALSE(filtered);
-    EXPECT_TRUE(state->isBackspaceHoldArmed());
-    EXPECT_FALSE(state->isBackspaceSuppressing());
 
     // key-repeats delete 'n', 'e', 'i'
     for (int i = 0; i < 3; ++i) {
-        ic.sendKey(FcitxKey_BackSpace, fcitx::KeyStates(), false, state);
-        EXPECT_FALSE(state->isBackspaceSuppressing());
+        bool rep_filtered = ic.sendKey(FcitxKey_BackSpace, fcitx::KeyStates(), false, state);
+        EXPECT_FALSE(rep_filtered);
     }
 
-    // next repeat deletes final character 't' and empties the composing buffer
-    ic.sendKey(FcitxKey_BackSpace, fcitx::KeyStates(), false, state);
-    EXPECT_TRUE(state->isBackspaceSuppressing());
+    // next repeat deletes final character 't' and empties composing buffer
+    bool empty_filtered = ic.sendKey(FcitxKey_BackSpace, fcitx::KeyStates(), false, state);
+    EXPECT_FALSE(empty_filtered);
 
-    // subsequent key-repeat events while still held down must be swallowed
+    // subsequent key-repeats while still held down must continue to forward freely
     bool repeat_filtered1 = ic.sendKey(FcitxKey_BackSpace, fcitx::KeyStates(), false, state);
-    EXPECT_TRUE(repeat_filtered1);
+    EXPECT_FALSE(repeat_filtered1);
     bool repeat_filtered2 = ic.sendKey(FcitxKey_BackSpace, fcitx::KeyStates(), false, state);
-    EXPECT_TRUE(repeat_filtered2);
+    EXPECT_FALSE(repeat_filtered2);
 
-    // key release clears suppression
+    // key release
     ic.sendKey(FcitxKey_BackSpace, fcitx::KeyStates(), true, state);
-    EXPECT_FALSE(state->isBackspaceHoldArmed());
-    EXPECT_FALSE(state->isBackspaceSuppressing());
 
     // subsequent new backspace press is forwarded normally
     bool new_press_filtered = ic.sendKey(FcitxKey_BackSpace, fcitx::KeyStates(), false, state);
     EXPECT_FALSE(new_press_filtered);
-    EXPECT_FALSE(state->isBackspaceHoldArmed());
 }
 
 TEST_F(RegressionCorpusTest, test_regression_backspace_hold_does_not_suppress_non_composing_text) {
@@ -644,14 +637,11 @@ TEST_F(RegressionCorpusTest, test_regression_backspace_hold_does_not_suppress_no
     // hold backspace without composing
     bool filtered1 = ic.sendKey(FcitxKey_BackSpace, fcitx::KeyStates(), false, state);
     EXPECT_FALSE(filtered1);
-    EXPECT_FALSE(state->isBackspaceHoldArmed());
-    EXPECT_FALSE(state->isBackspaceSuppressing());
 
     // repeat events must not be suppressed
     for (int i = 0; i < 5; ++i) {
         bool repeat_filtered = ic.sendKey(FcitxKey_BackSpace, fcitx::KeyStates(), false, state);
         EXPECT_FALSE(repeat_filtered);
-        EXPECT_FALSE(state->isBackspaceSuppressing());
     }
 }
 
