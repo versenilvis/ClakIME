@@ -668,4 +668,87 @@ mod tests {
             assert!(w[0] < w[1], "dict not sorted at {:?}", w);
         }
     }
+
+    #[test]
+    fn test_speedtest_and_different() {
+        let mut cfg = crate::config::ClakConfig::default();
+        cfg.spelling.auto_restore = true;
+        cfg.spelling.modern_tone = false;
+
+        let mut ctx = crate::ime::ClakContext::new(crate::Method::Telex);
+        ctx.apply_config(&cfg);
+        let mut sim_text = String::new();
+        for ch in "speedtest".chars() {
+            let s = ch.to_string();
+            let act = ctx.process_key(ch as u32, &s, false, None, 0, 0);
+            if act.action_type == 4 {
+                let del = act.delete_count;
+                for _ in 0..del {
+                    sim_text.pop();
+                }
+                let commit = unsafe {
+                    if act.commit_str.is_null() {
+                        ""
+                    } else {
+                        std::ffi::CStr::from_ptr(act.commit_str).to_str().unwrap()
+                    }
+                };
+                sim_text.push_str(commit);
+            } else if act.action_type == 0 {
+                sim_text.push(ch);
+            }
+        }
+        assert_eq!(sim_text, "speedtest");
+
+        let mut ctx2 = crate::ime::ClakContext::new(crate::Method::Telex);
+        ctx2.apply_config(&cfg);
+        let mut sim_text2 = String::new();
+        for ch in "different".chars() {
+            let s = ch.to_string();
+            let act = ctx2.process_key(ch as u32, &s, false, None, 0, 0);
+            if act.action_type == 4 {
+                let del = act.delete_count;
+                for _ in 0..del {
+                    sim_text2.pop();
+                }
+                let commit = unsafe {
+                    if act.commit_str.is_null() {
+                        ""
+                    } else {
+                        std::ffi::CStr::from_ptr(act.commit_str).to_str().unwrap()
+                    }
+                };
+                sim_text2.push_str(commit);
+            } else if act.action_type == 0 {
+                sim_text2.push(ch);
+            }
+        }
+        assert_eq!(sim_text2, "diferent");
+
+        let mut ctx3 = crate::ime::ClakContext::new(crate::Method::Telex);
+        ctx3.apply_config(&cfg);
+        let mut sim_text3 = String::new();
+        for ch in "diffferent".chars() {
+            let s = ch.to_string();
+            let act = ctx3.process_key(ch as u32, &s, false, None, 0, 0);
+            if act.action_type == 4 {
+                let del = act.delete_count;
+                for _ in 0..del {
+                    sim_text3.pop();
+                }
+                let commit = unsafe {
+                    if act.commit_str.is_null() {
+                        ""
+                    } else {
+                        std::ffi::CStr::from_ptr(act.commit_str).to_str().unwrap()
+                    }
+                };
+                sim_text3.push_str(commit);
+            } else if act.action_type == 0 {
+                sim_text3.push(ch);
+            }
+        }
+        assert_eq!(sim_text3, "different");
+    }
 }
+

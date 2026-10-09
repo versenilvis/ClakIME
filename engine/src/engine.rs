@@ -301,6 +301,13 @@ fn convert_telex_impl(input: &str, modern: bool, short_w: bool) -> String {
                                     break;
                                 }
                                 if ls[i].variant == 1 {
+                                    if i + 1 < ls.len() {
+                                        let mut trial = ls.to_vec();
+                                        trial[i].variant = 0;
+                                        if !crate::spelling::is_valid_cvc(&emit(&trial)) {
+                                            break;
+                                        }
+                                    }
                                     ls[i].variant = 0;
                                     ls[i].circ_toggled = true;
                                     reverted = true;
