@@ -129,7 +129,12 @@ impl ClakCore {
         } else {
             Self::is_valid(&composed)
         };
-        if self.auto_restore && !all_ascii && composed != input && !known && !has_vn_markers(input)
+        let swallowed_char = !has_consecutive_modifiers(input) && input.len() > composed.len();
+        if self.auto_restore
+            && (!all_ascii || swallowed_char)
+            && composed != input
+            && !known
+            && !has_vn_markers(input)
         {
             input.to_string()
         } else {
@@ -140,6 +145,16 @@ impl ClakCore {
     pub fn is_valid(s: &str) -> bool {
         spelling::is_valid_cvc(s)
     }
+}
+
+pub(crate) fn has_consecutive_modifiers(input: &str) -> bool {
+    let lower = input.to_ascii_lowercase();
+    lower.contains("ss")
+        || lower.contains("ff")
+        || lower.contains("rr")
+        || lower.contains("xx")
+        || lower.contains("jj")
+        || lower.contains("ww")
 }
 
 pub(crate) fn has_vn_markers(input: &str) -> bool {
@@ -677,6 +692,27 @@ mod tests {
 
         let mut ctx = crate::ime::ClakContext::new(crate::Method::Telex);
         ctx.apply_config(&cfg);
+        let mut ctx_closes = crate::ime::ClakContext::new(crate::Method::Telex);
+        ctx_closes.apply_config(&cfg);
+        let mut sim_closes = String::new();
+        for ch in "closes".chars() {
+            let s = ch.to_string();
+            let act = ctx_closes.process_key(ch as u32, &s, false, None, 0, 0);
+            if act.action_type == 4 {
+                let del = act.delete_count;
+                for _ in 0..del {
+                    sim_closes.pop();
+                }
+                let commit = unsafe {
+                    if act.commit_str.is_null() { "" } else { std::ffi::CStr::from_ptr(act.commit_str).to_str().unwrap() }
+                };
+                sim_closes.push_str(commit);
+            } else if act.action_type == 0 {
+                sim_closes.push(ch);
+            }
+        }
+        assert_eq!(sim_closes, "closes");
+
         let mut sim_text = String::new();
         for ch in "speedtest".chars() {
             let s = ch.to_string();

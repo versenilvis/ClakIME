@@ -222,8 +222,9 @@ pub fn convert_telex(input: &str, modern: bool, short_w: bool) -> String {
 pub fn convert_telex_auto_restore(input: &str, modern: bool, short_w: bool) -> String {
     let composed = convert_telex_impl(input, modern, short_w);
     let all_ascii = composed.is_ascii();
+    let swallowed_char = !crate::has_consecutive_modifiers(input) && input.len() > composed.len();
     if composed != input
-        && !all_ascii
+        && (!all_ascii || swallowed_char)
         && !crate::spelling::is_valid_cvc(&composed)
         && !crate::has_vn_markers(input)
     {
