@@ -94,20 +94,11 @@ nix profile install github:versenilvis/clak
 ## Menu cài đặt
 
 <div align="center" >
-  <img width="943" height="695" alt="image" src="https://github.com/user-attachments/assets/fb428eef-a26b-4b3a-8412-9b367c26f648" />
+  <img width="909" height="670" alt="image" src="https://github.com/user-attachments/assets/b2600b2b-0426-4674-be38-30a4e3ad6d6c" />
+  
   <i><b>Clak có cả menu UI độc lập</b></i>
 </div>
 
-
-> [!NOTE]
-> **Một số lí do như sau khiến binary size của Menu UI Clak khá lớn (khoảng gần 50MB):**\
-> Clak load và sử dụng font `SF Pro` vì sở thích cá nhân của maintainer (vì thấy đẹp)\
-> Clak dùng `renderer-skia-opengl` thay vì `renderer-femtovg` liên quan tới font-rendering, subpixel anti-aliasing, text-sharping, font fallback, ...\
-> Clak có 1 banner nhỏ (vẫn là vì đẹp)\
-> Ngoài ra có 1 số SVG nữa\
-> Nhìn chung là tính thẩm mỹ cao hơn rất nhiều, cũng như nhờ vậy mà tích hợp nhiều tính năng như **Chẩn đoán hệ thống**, **Cập nhật hệ thống**, ...
-
-> *Nếu bạn thấy nặng thì hãy mở 1 Issue, mình sẽ tạo 1 UI độc lập tích hợp trong Fcitx 5 cho nhẹ kèm option chỉ cài đặt UI này thay vì UI chính (nhưng chắc chắn sẽ không đầy đủ chức năng như menu chính)*
 
 ## Gỡ cài đặt
 
