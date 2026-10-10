@@ -173,7 +173,7 @@ pub fn run_diagnostics() -> DiagnosticReport {
             issues.push(DiagnosticIssue {
                 title: "GTK_IM_MODULE xung đột với IBus".to_string(),
                 message: "GTK_IM_MODULE đang được đặt là 'ibus', khiến ứng dụng GTK bỏ qua Fcitx5 và gây nuốt chữ".to_string(),
-                fix_command: Some("Xóa hoặc đổi GTK_IM_MODULE=fcitx trong ~/.config/environment.d/99-clak-im.conf hoặc ~/.profile".to_string()),
+                fix_command: Some("Xóa dòng GTK_IM_MODULE trong ~/.config/environment.d/99-clak-im.conf hoặc ~/.profile".to_string()),
             });
         }
     }

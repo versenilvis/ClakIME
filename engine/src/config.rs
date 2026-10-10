@@ -270,7 +270,7 @@ pub fn apply_autostart(enabled: bool, startup_mode: &str) -> std::io::Result<()>
         let env_dir = home.join(".config").join("environment.d");
         let _ = fs::create_dir_all(&env_dir);
         let env_file = env_dir.join("99-clak-im.conf");
-        let env_content = "GTK_IM_MODULE=fcitx\nQT_IM_MODULE=fcitx\nXMODIFIERS=@im=fcitx\nINPUT_METHOD=fcitx5\nSDL_IM_MODULE=fcitx\n";
+        let env_content = "QT_IM_MODULE=fcitx\nXMODIFIERS=@im=fcitx\nINPUT_METHOD=fcitx5\nSDL_IM_MODULE=fcitx\n";
         let _ = fs::write(&env_file, env_content);
 
         configure_fcitx5_profile(&home, startup_mode);

@@ -206,7 +206,7 @@ pub fn fix_fcitx5_profile() -> Result<(), String> {
     let env_file = env_dir.join("99-clak-im.conf");
     if !env_file.exists() {
         if fs::create_dir_all(&env_dir).is_ok() {
-            let env_content = "GTK_IM_MODULE=fcitx\nQT_IM_MODULE=fcitx\nXMODIFIERS=@im=fcitx\nINPUT_METHOD=fcitx5\nSDL_IM_MODULE=fcitx\n";
+            let env_content = "QT_IM_MODULE=fcitx\nXMODIFIERS=@im=fcitx\nINPUT_METHOD=fcitx5\nSDL_IM_MODULE=fcitx\n";
             let _ = fs::write(&env_file, env_content);
         }
     }

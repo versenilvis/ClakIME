@@ -30,8 +30,7 @@ X-KDE-autostart-after=panel\n";
     fs::create_dir_all(&env_dir).map_err(|e| e.to_string())?;
     let env_file = env_dir.join("99-clak-im.conf");
 
-    let env_content = "GTK_IM_MODULE=fcitx\n\
-QT_IM_MODULE=fcitx\n\
+    let env_content = "QT_IM_MODULE=fcitx\n\
 XMODIFIERS=@im=fcitx\n\
 INPUT_METHOD=fcitx5\n\
 SDL_IM_MODULE=fcitx\n";

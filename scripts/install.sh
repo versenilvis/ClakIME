@@ -491,7 +491,6 @@ EOF
     local env_dir="${HOME}/.config/environment.d"
     mkdir -p "$env_dir"
     cat << 'EOF' > "${env_dir}/99-clak-im.conf"
-GTK_IM_MODULE=fcitx
 QT_IM_MODULE=fcitx
 XMODIFIERS=@im=fcitx
 INPUT_METHOD=fcitx5
@@ -645,14 +644,12 @@ apply_live_environment() {
         return
     fi
 
-    export GTK_IM_MODULE=fcitx
     export QT_IM_MODULE=fcitx
     export XMODIFIERS=@im=fcitx
     export SDL_IM_MODULE=fcitx
 
     if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
         systemctl --user set-environment \
-            GTK_IM_MODULE=fcitx \
             QT_IM_MODULE=fcitx \
             XMODIFIERS=@im=fcitx \
             SDL_IM_MODULE=fcitx 2>/dev/null || true
@@ -660,7 +657,6 @@ apply_live_environment() {
 
     if command -v dbus-update-activation-environment >/dev/null 2>&1; then
         dbus-update-activation-environment --systemd \
-            GTK_IM_MODULE=fcitx \
             QT_IM_MODULE=fcitx \
             XMODIFIERS=@im=fcitx \
             SDL_IM_MODULE=fcitx 2>/dev/null || true
