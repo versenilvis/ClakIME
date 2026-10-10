@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(clak VERSION 0.4.5 LANGUAGES C CXX)
+project(clak VERSION 0.5.0 LANGUAGES C CXX)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build." FORCE)
