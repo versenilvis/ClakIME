@@ -17,7 +17,7 @@ export { MacroItemData, DoctorLineData }
 
 // cua so chinh cua ung dung cai dat clak
 export component MainWindow inherits Window {
-    title: "Clak Settings";
+    title: "Cài đặt Clak";
     icon: @image-url("../assets/icons/clak-logo.svg");
     width: 920px;
     height: 680px;
@@ -402,20 +402,20 @@ export component MainWindow inherits Window {
                             alignment: end;
 
                             ActionButton {
-                                text: "Cancel";
+                                text: "Hủy";
                                 destructive: true;
                                 enabled: true;
                                 clicked => { root.cancel_requested(); }
                             }
 
                             ActionButton {
-                                text: "Apply";
+                                text: "Áp dụng";
                                 enabled: root.has_changes;
                                 clicked => { root.apply_requested(); }
                             }
 
                             ActionButton {
-                                text: "OK";
+                                text: "Đồng ý";
                                 primary: true;
                                 enabled: root.has_changes;
                                 clicked => { root.ok_requested(); }
