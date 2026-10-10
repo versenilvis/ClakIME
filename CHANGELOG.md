@@ -2,6 +2,29 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.5.0](https://github.com/versenilvis/clak/releases/tag/v0.5.0) - 2026-10-10
+
+### Bug fixes
+
+- Synthetic repeat for held transform keys on wayland ([6f3369](https://github.com/versenilvis/clak/commit/6f33696a2a6ad72cb45b5a1f90d7162ba962b7e0))
+- Holding backspace not working ([ec5af4](https://github.com/versenilvis/clak/commit/ec5af4201e22914c183d25daa74efb127f05d4cb))
+- Typing "speedtest" missing "e" ([b98a74](https://github.com/versenilvis/clak/commit/b98a7424ca680f9d318372dac54cb182e26e6e47))
+- Closes typed as cloes ([f8d6fa](https://github.com/versenilvis/clak/commit/f8d6fa1096f5e9ba02f74e2a97b231f677490b0c))
+- Address bar autocomplete with spaces ([c6c337](https://github.com/versenilvis/clak/commit/c6c33765a03baf0e8e64d53146191e5f9192d57d))
+
+### Documentation
+
+- Update docs ([2e6bb3](https://github.com/versenilvis/clak/commit/2e6bb3562dabef3613ae5289a1b84139289f18c3))
+- Update menu section ([41012b](https://github.com/versenilvis/clak/commit/41012bfd083b0608fb14557006a1fbcbfa872ef1))
+
+### Features
+
+- Support steam client ([14bf58](https://github.com/versenilvis/clak/commit/14bf589c7b4dde21e47a906b7e316bc4908865ee))
+
+### Refactors
+
+- Seperate state into small modules ([23640f](https://github.com/versenilvis/clak/commit/23640f0b783a57bef65a8b6bd2ebfac9e6e85ae2))
+
 ## [v0.4.5](https://github.com/versenilvis/clak/releases/tag/v0.4.5) - 2026-10-08
 
 ### Documentation
