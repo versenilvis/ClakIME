@@ -977,7 +977,14 @@ mod tests {
         assert_eq!(a2.action_type, ACTION_FORWARD);
 
         // browser autocompletes search suggestion 'cach check hạn gg pro'(2..21), user types 'n'
-        let a3 = ctx.process_key(b'n' as u32, "n", false, Some("cach check hạn gg pro"), 2, 21);
+        let a3 = ctx.process_key(
+            b'n' as u32,
+            "n",
+            false,
+            Some("cach check hạn gg pro"),
+            2,
+            21,
+        );
         assert_eq!(a3.action_type, ACTION_FORWARD);
         assert_eq!(ctx.raw_buffer, "can");
 
@@ -996,7 +1003,14 @@ mod tests {
         let mut ctx2 = ClakContext::new(Method::Telex);
         ctx2.process_key(b'c' as u32, "c", false, Some(""), 0, 0);
         ctx2.process_key(b'a' as u32, "a", false, Some("claude.ai"), 1, 9);
-        ctx2.process_key(b'n' as u32, "n", false, Some("cach check hạn gg pro"), 2, 21);
+        ctx2.process_key(
+            b'n' as u32,
+            "n",
+            false,
+            Some("cach check hạn gg pro"),
+            2,
+            21,
+        );
         ctx2.process_key(b'h' as u32, "h", false, Some("can"), 3, 3);
         let a5_no_auto = ctx2.process_key(b's' as u32, "s", false, Some("canh"), 4, 4);
         assert_eq!(a5_no_auto.action_type, ACTION_REPLACE);

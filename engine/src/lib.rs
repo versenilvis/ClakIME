@@ -704,7 +704,11 @@ mod tests {
                     sim_closes.pop();
                 }
                 let commit = unsafe {
-                    if act.commit_str.is_null() { "" } else { std::ffi::CStr::from_ptr(act.commit_str).to_str().unwrap() }
+                    if act.commit_str.is_null() {
+                        ""
+                    } else {
+                        std::ffi::CStr::from_ptr(act.commit_str).to_str().unwrap()
+                    }
                 };
                 sim_closes.push_str(commit);
             } else if act.action_type == 0 {
@@ -787,4 +791,3 @@ mod tests {
         assert_eq!(sim_text3, "different");
     }
 }
-

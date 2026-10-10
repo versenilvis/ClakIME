@@ -105,6 +105,13 @@ bool isChromiumApp(const std::string& app) {
   return false;
 }
 
+bool isSteamApp(const std::string& app) {
+  if (app.empty()) return false;
+  if (app == "steam" || app == "steamwebhelper" || app == "com.valvesoftware.Steam") return true;
+  if (app.rfind("steamwebhelper", 0) == 0 || app.rfind("steam", 0) == 0) return true;
+  return false;
+}
+
 
 std::string extractDomain(const std::string& app, const std::string& title) {
   std::string lower_app = app;

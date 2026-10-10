@@ -24,6 +24,7 @@ public:
   void reset(bool force = false);
   bool isBrowser() const;
   bool isGecko() const;
+  bool isSteam() const;
   std::string appKey();
   void syncConfig();
   bool shouldUseUinput(bool use_surrounding, uint32_t action_type, const fcitx::SurroundingText& surr);
@@ -63,6 +64,7 @@ private:
   void setVerifyExpectation(const std::string& wordBefore, size_t delChars, const std::string& added);
   void verifySurrounding(const fcitx::SurroundingText& surr);
   void doCommitString(const std::string& text);
+  void scheduleSteamBackspaceStep();
   void updateModalEditorStatus();
   std::string classifyGroup(const std::string& app, const std::string& site, bool is_autofill, bool used_uinput);
   void logLatency(const std::string& group, uint64_t start_us, const std::string& action_type);
@@ -119,6 +121,8 @@ private:
   fcitx::Key held_key_;
   bool is_repeating_{false};
   bool enable_repeat_for_mock_{false};
+  uint32_t last_steam_key_sym_{0};
+  uint64_t last_steam_key_time_us_{0};
 };
 
 } // namespace ime

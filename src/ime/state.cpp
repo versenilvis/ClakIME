@@ -78,6 +78,8 @@ void ClakState::reset(bool force) {
     sentinel_grace_until_us_ = 0;
     pending_commit_string_.clear();
     buffered_keys_.clear();
+    last_steam_key_sym_ = 0;
+    last_steam_key_time_us_ = 0;
     verify_.pending = false;
     is_canvas_editor_ = false;
     is_rich_text_editor_ = false;
@@ -124,6 +126,11 @@ bool ClakState::isBrowser() const {
 bool ClakState::isGecko() const {
     std::string app = const_cast<ClakState*>(this)->appKey();
     return config::isGeckoApp(app);
+}
+
+bool ClakState::isSteam() const {
+    std::string app = const_cast<ClakState*>(this)->appKey();
+    return config::isSteamApp(app);
 }
 
 bool ClakState::isDraftJsEditor() const {
@@ -191,6 +198,10 @@ bool ClakState::shouldUseUinput(bool use_surrounding, uint32_t action_type, cons
     }
     // meta sites (facebook, messenger, instagram...) rely strictly on surrounding text
     if (config::isMetaSite(site) || config::isMetaSite(app)) {
+        return false;
+    }
+    // steam (xwayland/cef) inside container drops uinput kernel events or causes loops
+    if (config::isSteamApp(app)) {
         return false;
     }
     if (action_type == CLAK_ACTION_ADDRESS_BAR_FIX) {
@@ -280,6 +291,56 @@ void ClakState::doCommitString(const std::string& text) {
     ic_->commitString(text);
 }
 
+void ClakState::scheduleSteamBackspaceStep() {
+    if (!ic_ || !is_deleting_) {
+        return;
+    }
+    if (current_backspace_count_ < expected_backspaces_) {
+        ic_->forwardKey(fcitx::Key(FcitxKey_BackSpace), false);
+        ic_->forwardKey(fcitx::Key(FcitxKey_BackSpace), true);
+        current_backspace_count_++;
+
+        uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
+        if (current_backspace_count_ < expected_backspaces_) {
+            if (safety_timer_) safety_timer_.reset();
+            safety_timer_ = engine_->instance()->eventLoop().addTimeEvent(
+                CLOCK_MONOTONIC,
+                now_us + 2000,
+                1000,
+                [this](fcitx::EventSourceTime*, uint64_t) {
+                    scheduleSteamBackspaceStep();
+                    return false;
+                });
+            if (safety_timer_) {
+                safety_timer_->setOneShot();
+            }
+        } else {
+            if (safety_timer_) safety_timer_.reset();
+            safety_timer_ = engine_->instance()->eventLoop().addTimeEvent(
+                CLOCK_MONOTONIC,
+                now_us + 8000,
+                1000,
+                [this](fcitx::EventSourceTime*, uint64_t) {
+                    if (!is_deleting_) {
+                        return false;
+                    }
+                    if (!pending_commit_string_.empty()) {
+                        doCommitString(pending_commit_string_);
+                        pending_commit_string_.clear();
+                    }
+                    is_deleting_ = false;
+                    logLatency("Steam-ForwardKey", op_start_us_, "REPLACE");
+                    op_start_us_ = 0;
+                    replayBufferedKeys();
+                    return false;
+                });
+            if (safety_timer_) {
+                safety_timer_->setOneShot();
+            }
+        }
+    }
+}
+
 std::string ClakState::classifyGroup(const std::string& app, const std::string& site, bool is_autofill, bool used_uinput) {
     bool has_url_cap = ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Url);
     if (is_autofill || has_url_cap) return "address-bar";
@@ -289,6 +350,7 @@ std::string ClakState::classifyGroup(const std::string& app, const std::string& 
     if (site == "docs.google.com" || site.find("docs.google.com") != std::string::npos) return "Docs-Uinput";
     if (isDraftJsEditor()) return "DraftJS-Uinput";
     if (config::isGeckoApp(app)) return "Gecko-Uinput";
+    if (config::isSteamApp(app)) return "Steam-ForwardKey";
     if (used_uinput) return "Chromium-Uinput";
     return "Chromium-SurroundingText";
 }
@@ -675,23 +737,24 @@ bool ClakState::handleKey(const fcitx::Key& key) {
         }
     }
 
+    bool is_steam = isSteam();
     bool is_office = isWpsOfficeApp(app);
     bool is_wps_toolbar = is_office && isWpsFontSizeText(surr.text());
     // valid surrounding text to pass to rust engine (filter bogus wps font-size toolbar)
-    bool valid_surr = has_surrounding && surr.isValid() && !is_canvas_editor_ && !is_term && !is_jb && !is_wps_toolbar;
+    bool valid_surr = !is_steam && has_surrounding && surr.isValid() && !is_canvas_editor_ && !is_term && !is_jb && !is_wps_toolbar;
     if (valid_surr) {
         surr_text = surr.text().c_str();
         cursor = surr.cursor();
         anchor = surr.anchor();
     }
-    bool use_surrounding = valid_surr && !is_rich_text_editor_ && !is_force_uinput && !is_office;
+    bool use_surrounding = !is_steam && valid_surr && !is_rich_text_editor_ && !is_force_uinput && !is_office;
 
     // gecko surrounding text is async so skip verify to avoid false mismatch
     bool skip_verify = is_gecko || is_meta;
     if (verify_.pending && use_surrounding && !skip_verify) {
         verifySurrounding(surr);
         is_draftjs = isDraftJsEditor();
-        use_surrounding = valid_surr && !is_rich_text_editor_ && !is_force_uinput && !is_draftjs && !is_office;
+        use_surrounding = !is_steam && valid_surr && !is_rich_text_editor_ && !is_force_uinput && !is_draftjs && !is_office;
     } else if (verify_.pending) {
         verify_.pending = false;
     }
@@ -720,6 +783,12 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                 last_text_len_ = surr.cursor() + 1;
             } else {
                 last_text_len_ = 1;
+            }
+            if (is_steam && !has_ctrl_alt && !key_str.empty() && sym < 0xff00) {
+                doCommitString(key_str);
+                logLatency("Steam-ForwardKey", op_start_us_, "COMMIT");
+                op_start_us_ = 0;
+                return true;
             }
             logLatency(classifyGroup(app, site, false, false), op_start_us_, "FORWARD");
             op_start_us_ = 0;
@@ -793,6 +862,31 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                                    (action.commit_str ? action.commit_str : "") + "' app=" + app + " site='" + site + "'");
                     ic_->deleteSurroundingText(-static_cast<int>(real_bs),
                                                static_cast<unsigned int>(real_bs));
+                } else if (is_steam) {
+                    utils::clakLog("steam forward backspace: count=" + std::to_string(real_bs) +
+                                   " commit='" + (action.commit_str ? action.commit_str : "") + "' app=" + app);
+                    if (engine_ && engine_->instance()) {
+                        is_deleting_ = true;
+                        expected_backspaces_ = real_bs;
+                        current_backspace_count_ = 0;
+                        pending_commit_string_ = (action.commit_str ? action.commit_str : "");
+                        if (safety_timer_) safety_timer_.reset();
+                        scheduleSteamBackspaceStep();
+                        last_text_len_ = 0;
+                        return true;
+                    } else {
+                        for (size_t i = 0; i < real_bs; ++i) {
+                            ic_->forwardKey(fcitx::Key(FcitxKey_BackSpace), false);
+                            ic_->forwardKey(fcitx::Key(FcitxKey_BackSpace), true);
+                        }
+                        if (action.commit_str && action.commit_str[0] != '\0') {
+                            doCommitString(action.commit_str);
+                        }
+                    }
+                    logLatency("Steam-ForwardKey", op_start_us_, "REPLACE");
+                    op_start_us_ = 0;
+                    last_text_len_ = 0;
+                    return true;
                 } else {
                     utils::clakLog("forward backspace: count=" + std::to_string(real_bs) +
                                    " commit='" + (action.commit_str ? action.commit_str : "") + "' app=" + app);
@@ -801,7 +895,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                     }
                 }
             }
-            if (action.commit_str && action.commit_str[0] != '\0') {
+            if ((!is_steam || real_bs == 0) && action.commit_str && action.commit_str[0] != '\0') {
                 doCommitString(action.commit_str);
             }
             logLatency(classifyGroup(app, site, false, false), op_start_us_, "REPLACE");
@@ -898,10 +992,26 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
 
     bool has_ctrl_alt = is_ctrl || is_alt || is_super;
     uint32_t sym = key.sym();
+    if (sym == 0 || sym == FcitxKey_None) {
+        return;
+    }
 
     if (!engine_->isAppEnabled(app)) {
         reset(/*force=*/true);
         return;
+    }
+
+    // drop xim duplicate key reflection in steam search inputs
+    if (isSteam() && !key.isModifier()) {
+        uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
+        if (sym == last_steam_key_sym_ && (now_us - last_steam_key_time_us_) < 2000) {
+            utils::clakLog("steam duplicate key dropped: sym=" + std::to_string(sym) +
+                           " delta=" + std::to_string(now_us - last_steam_key_time_us_) + "us");
+            keyEvent.filterAndAccept();
+            return;
+        }
+        last_steam_key_sym_ = sym;
+        last_steam_key_time_us_ = now_us;
     }
 
     bool is_cursor_move = key.isCursorMove() || (sym >= FcitxKey_Home && sym <= FcitxKey_End);
@@ -923,7 +1033,7 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
         keyEvent.filterAndAccept();
         return;
     }
-    if (is_deleting_ && is_clean_backspace) {
+    if (is_deleting_ && expected_backspaces_ > 0 && is_clean_backspace) {
         current_backspace_count_++;
         if (current_backspace_count_ < expected_backspaces_) {
             return;

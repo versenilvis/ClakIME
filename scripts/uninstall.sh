@@ -60,6 +60,7 @@ lbl_remove="${c_red}GỠ BỎ   ${c_reset}"
 lbl_clean="${c_yellow}DỌN DẸP ${c_reset}"
 lbl_fcitx="${c_cyan}FCITX5  ${c_reset}"
 lbl_wps="${c_yellow}WPS     ${c_reset}"
+lbl_steam="${c_blue}STEAM   ${c_reset}"
 lbl_warn="${c_yellow}LƯU Ý   ${c_reset}"
 lbl_err="${c_red}LỖI     ${c_reset}"
 
@@ -139,6 +140,7 @@ run_simulation() {
     local has_user=0
     local has_system=0
     local has_wps=0
+    local has_steam=0
     local has_purge=0
     local has_profile=0
     local has_autostart=0
@@ -163,6 +165,8 @@ run_simulation() {
     [ -n "$(find /usr/share/icons -name '*clak*' -print -quit 2>/dev/null)" ] && has_system=1
 
     [ -f "${HOME}/.config/environment.d/99-clak-wps.conf" ] && has_wps=1
+    [ -f "${HOME}/.local/share/applications/steam.desktop" ] && grep -q "GTK_IM_MODULE=xim" "${HOME}/.local/share/applications/steam.desktop" 2>/dev/null && has_steam=1
+    [ -f "${HOME}/.local/bin/steam" ] && grep -q "GTK_IM_MODULE=xim" "${HOME}/.local/bin/steam" 2>/dev/null && has_steam=1
     [ -d "${HOME}/.config/clak" ] && [ "$purge_config" -eq 1 ] && has_config=1
     [ -f "${HOME}/.config/autostart/clak-autostart.desktop" ] && has_autostart=1
     [ -f "${HOME}/.config/environment.d/99-clak-im.conf" ] && has_autostart=1
@@ -171,7 +175,7 @@ run_simulation() {
         has_profile=1
     fi
 
-    if [ "$has_user" -eq 0 ] && [ "$has_system" -eq 0 ] && [ "$has_profile" -eq 0 ] && [ "$has_autostart" -eq 0 ] && [ "$has_config" -eq 0 ] && [ "$has_wps" -eq 0 ] && [ "$has_fcitx_bak" -eq 0 ]; then
+    if [ "$has_user" -eq 0 ] && [ "$has_system" -eq 0 ] && [ "$has_profile" -eq 0 ] && [ "$has_autostart" -eq 0 ] && [ "$has_config" -eq 0 ] && [ "$has_wps" -eq 0 ] && [ "$has_steam" -eq 0 ] && [ "$has_fcitx_bak" -eq 0 ]; then
         echo ""
         log_step "$lbl_warn" "Không tìm thấy file cài đặt hoặc cấu hình Clak nào trên hệ thống"
         return 0
@@ -209,6 +213,11 @@ run_simulation() {
     if [ "$has_wps" -eq 1 ]; then
         echo -e "  • Cấu hình tương thích WPS Office:  ${c_accent}~/.config/environment.d/99-clak-wps.conf${c_reset}"
         echo -e "  • Phím tắt WPS launcher tùy chỉnh:  ${c_accent}~/.local/share/applications/wps-office-*.desktop${c_reset}"
+    fi
+
+    if [ "$has_steam" -eq 1 ]; then
+        echo -e "  • Phím tắt Steam launcher tùy chỉnh:  ${c_accent}~/.local/share/applications/steam.desktop${c_reset}"
+        echo -e "  • Wrapper Steam terminal:            ${c_accent}~/.local/bin/steam${c_reset}"
     fi
 
     if [ "$has_config" -eq 1 ] && [ "$purge_config" -eq 1 ]; then
@@ -253,13 +262,15 @@ run_uninstall() {
     [ -f "${HOME}/.config/autostart/clak-autostart.desktop" ] && has_autostart=1
     [ -f "${HOME}/.config/environment.d/99-clak-im.conf" ] && has_autostart=1
     [ -f "${HOME}/.config/environment.d/99-clak-wps.conf" ] && has_wps=1
+    [ -f "${HOME}/.local/share/applications/steam.desktop" ] && grep -q "GTK_IM_MODULE=xim" "${HOME}/.local/share/applications/steam.desktop" 2>/dev/null && has_steam=1
+    [ -f "${HOME}/.local/bin/steam" ] && grep -q "GTK_IM_MODULE=xim" "${HOME}/.local/bin/steam" 2>/dev/null && has_steam=1
     [ -f "${HOME}/.config/fcitx5/config.bak-clak" ] && has_fcitx_bak=1
     [ -d "${HOME}/.config/clak" ] && [ "$purge_config" -eq 1 ] && has_config=1
     if [ -f "${HOME}/.config/fcitx5/profile" ] && grep -q "clak" "${HOME}/.config/fcitx5/profile" 2>/dev/null; then
         has_profile=1
     fi
 
-    if [ "$has_user_files" -eq 0 ] && [ "$has_sys_files" -eq 0 ] && [ "$has_profile" -eq 0 ] && [ "$has_autostart" -eq 0 ] && [ "$has_config" -eq 0 ] && [ "$has_wps" -eq 0 ] && [ "$has_fcitx_bak" -eq 0 ] && [ "$target_mode" != "system" ]; then
+    if [ "$has_user_files" -eq 0 ] && [ "$has_sys_files" -eq 0 ] && [ "$has_profile" -eq 0 ] && [ "$has_autostart" -eq 0 ] && [ "$has_config" -eq 0 ] && [ "$has_wps" -eq 0 ] && [ "$has_steam" -eq 0 ] && [ "$has_fcitx_bak" -eq 0 ] && [ "$target_mode" != "system" ]; then
         log_step "$lbl_warn" "Không tìm thấy file cài đặt hoặc cấu hình Clak nào trên hệ thống"
         exit 0
     fi
@@ -342,7 +353,27 @@ run_uninstall() {
         log_step "$lbl_wps" "Đã dọn dẹp các cấu hình tương thích WPS Office"
     fi
 
-    # 6. cleanup autostart and environment configuration
+    # 6. cleanup steam compatibility overrides
+    local steam_cleaned=0
+    local steam_df="${HOME}/.local/share/applications/steam.desktop"
+    if [ -f "$steam_df" ] && grep -q "GTK_IM_MODULE=xim" "$steam_df" 2>/dev/null; then
+        rm -f "$steam_df"
+        steam_cleaned=1
+    fi
+    local steam_wb="${HOME}/.local/bin/steam"
+    if [ -f "$steam_wb" ] && grep -q "GTK_IM_MODULE=xim" "$steam_wb" 2>/dev/null; then
+        rm -f "$steam_wb"
+        steam_cleaned=1
+    fi
+    if command -v flatpak >/dev/null 2>&1 && flatpak list --app 2>/dev/null | grep -q "com.valvesoftware.Steam"; then
+        flatpak override --user --reset com.valvesoftware.Steam 2>/dev/null || true
+    fi
+    if [ "$steam_cleaned" -eq 1 ]; then
+        command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "${HOME}/.local/share/applications" 2>/dev/null || true
+        log_step "$lbl_steam" "Đã dọn dẹp các cấu hình tương thích Steam"
+    fi
+
+    # 7. cleanup autostart and environment configuration
     spin_step "Đang dọn dẹp cấu hình khởi động cùng hệ thống..."
     local target_home="${HOME}"
     local target_user="${USER:-$(id -un)}"

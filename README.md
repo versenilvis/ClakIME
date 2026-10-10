@@ -84,14 +84,17 @@ nix profile install github:versenilvis/clak
 
 <img src="assets/proof/jetbrains.webp" width="100%" alt="Jetbrains" />
 
+- Clak giúp bạn gõ trên Steam Client mượt mà btw
+
+<img src="assets/proof/steam.webp" width="100%" alt="Steam" />
+
 > [!IMPORTANT]
 > Những thứ trên được test trên môi trường Arch + Wayland, chưa chắc trên môi trường máy bạn sẽ không bị lỗi
 
-## Menu cài đặt 
+## Menu cài đặt
 
 <div align="center" >
   <img width="943" height="695" alt="image" src="https://github.com/user-attachments/assets/fb428eef-a26b-4b3a-8412-9b367c26f648" />
-  
   <i><b>Clak có cả menu UI độc lập</b></i>
 </div>
 

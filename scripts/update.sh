@@ -69,6 +69,7 @@ lbl_fcitx="${c_cyan}FCITX5  ${c_reset}"
 lbl_aur="${c_purple}AUR     ${c_reset}"
 lbl_nix="${c_cyan}NIX     ${c_reset}"
 lbl_wps="${c_yellow}WPS     ${c_reset}"
+lbl_steam="${c_blue}STEAM   ${c_reset}"
 lbl_warn="${c_yellow}LƯU Ý   ${c_reset}"
 lbl_err="${c_red}LỖI     ${c_reset}"
 
@@ -360,6 +361,73 @@ EOF
     fi
 }
 
+# detect and configure steam compatibility for xwayland/pressure-vessel
+configure_steam_compatibility() {
+    local is_sim="${1:-0}"
+    local has_steam=0
+    local is_flatpak=0
+
+    if command -v steam >/dev/null 2>&1 || [ -f /usr/share/applications/steam.desktop ]; then
+        has_steam=1
+    fi
+    if command -v flatpak >/dev/null 2>&1 && flatpak list --app 2>/dev/null | grep -q "com.valvesoftware.Steam"; then
+        has_steam=1
+        is_flatpak=1
+    fi
+
+    if [ "$has_steam" -eq 1 ]; then
+        log_step "$lbl_steam" "Phát hiện hệ thống có cài đặt Steam (ứng dụng XWayland trong container)"
+        echo -e "  ${c_yellow}• Steamwebhelper chạy bên trong container Pressure-Vessel, cần giao thức XIM để gõ Tiếng Việt${c_reset}"
+        echo -e "  ${c_yellow}• Clak tối ưu cục bộ: gán biến XIM riêng cho Steam, hoàn toàn không ảnh hưởng app khác${c_reset}"
+        echo -e "  ${c_yellow}• Hoàn toàn không ghi đè file gốc của hệ thống, Steam tự động cập nhật bình thường${c_reset}"
+
+        if [ "$is_sim" -eq 1 ]; then
+            echo -e "  ${c_yellow}  [Giả lập] Tối ưu shortcut Steam tại ~/.local/share/applications/steam.desktop${c_reset}"
+            echo -e "  ${c_yellow}  [Giả lập] Tạo wrapper Steam tại ~/.local/bin/steam${c_reset}"
+            if [ "$is_flatpak" -eq 1 ]; then
+                echo -e "  ${c_yellow}  [Giả lập] Thiết lập flatpak override cho com.valvesoftware.Steam${c_reset}"
+            fi
+            log_step "$lbl_steam" "Đã tối ưu tương thích Steam (${c_green}sử dụng được ngay với mọi launcher${c_reset})"
+        else
+            mkdir -p "${HOME}/.local/share/applications"
+            local patched_desktop=0
+            if [ -f /usr/share/applications/steam.desktop ]; then
+                sed -E 's#^Exec=(/usr/bin/steam|/usr/games/steam|steam)#Exec=env GTK_IM_MODULE=xim XMODIFIERS=@im=fcitx SDL_VIDEODRIVER=x11 \1#g' \
+                    /usr/share/applications/steam.desktop > "${HOME}/.local/share/applications/steam.desktop"
+                patched_desktop=1
+            fi
+
+            if [ "$patched_desktop" -eq 1 ]; then
+                command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "${HOME}/.local/share/applications" 2>/dev/null || true
+                log_step "$lbl_steam" "Đã tạo shortcut tương thích tại ${c_accent}~/.local/share/applications/steam.desktop${c_reset}"
+            fi
+
+            mkdir -p "${HOME}/.local/bin"
+            cat << 'EOF' > "${HOME}/.local/bin/steam"
+#!/bin/sh
+real_steam=""
+for p in /usr/bin/steam /usr/games/steam /usr/local/bin/steam; do
+    if [ -x "$p" ]; then
+        real_steam="$p"
+        break
+    fi
+done
+if [ -z "$real_steam" ]; then
+    real_steam="/usr/bin/steam"
+fi
+exec env GTK_IM_MODULE=xim XMODIFIERS=@im=fcitx SDL_VIDEODRIVER=x11 "$real_steam" "$@"
+EOF
+            chmod +x "${HOME}/.local/bin/steam"
+            log_step "$lbl_steam" "Đã tạo wrapper tương thích tại ${c_accent}~/.local/bin/steam${c_reset}"
+
+            if [ "$is_flatpak" -eq 1 ]; then
+                flatpak override --user --env=GTK_IM_MODULE=xim --env=XMODIFIERS=@im=fcitx --env=SDL_VIDEODRIVER=x11 com.valvesoftware.Steam 2>/dev/null || true
+                log_step "$lbl_steam" "Đã tối ưu biến môi trường cho Steam Flatpak"
+            fi
+        fi
+    fi
+}
+
 # simulation flow
 run_simulation() {
     local cur_ver
@@ -405,6 +473,7 @@ run_simulation() {
 
     # 5. configure wps office compatibility
     configure_wps_compatibility 1
+    configure_steam_compatibility 1
 
     # 6. reload fcitx5 daemon with final spinner
     spin_step "Đang nạp lại daemon Fcitx5..." 0.6
@@ -760,6 +829,7 @@ run_update() {
 
     # 6. check and configure wps office compatibility
     configure_wps_compatibility 0
+    configure_steam_compatibility 0
 
     # 7. reload fcitx5 daemon with final spinner
     spin_step "Đang nạp lại daemon Fcitx5..." 0.6

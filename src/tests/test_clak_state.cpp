@@ -8,6 +8,7 @@
 #include "uinput/uinput.h"
 #include "platform/window_info.h"
 #include "platform/modal_editor.h"
+#include "config/sites.h"
 
 namespace clak {
 namespace test {
@@ -290,6 +291,155 @@ TEST_F(ClakStateTest, GivenVowelAndHoldingToneKey_RepeatsCharacter) {
     ic.sendKey(FcitxKey_s, fcitx::KeyStates(), true, &state);
     EXPECT_EQ(state.heldKey().sym(), 0);
     EXPECT_FALSE(state.isRepeating());
+}
+
+TEST_F(ClakStateTest, GivenSteamApp_UsesForwardBackspaceWithTimer) {
+    // steam app uses forward backspace and delayed commit instead of uinput
+    platform::setMockActiveWindow(platform::WindowInfo{"steamwebhelper", "Steam", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "steamwebhelper");
+    ime::ClakState state(engine_.get(), &ic);
+
+    EXPECT_TRUE(state.isSteam());
+    EXPECT_TRUE(config::isSteamApp("steam"));
+    EXPECT_TRUE(config::isSteamApp("steamwebhelper"));
+    EXPECT_TRUE(config::isSteamApp("com.valvesoftware.Steam"));
+    EXPECT_FALSE(config::isSteamApp("upstream"));
+    EXPECT_FALSE(config::isSteamApp("google-chrome"));
+    EXPECT_FALSE(config::isSteamApp("zen"));
+    EXPECT_FALSE(config::isSteamApp("kitty"));
+
+    size_t uinput_bs_sent = 0;
+    uinput::UinputTool::instance().setMockHandler([&](size_t count, uint32_t, uint32_t, uint32_t) {
+        uinput_bs_sent = count;
+        return true;
+    });
+
+    ic.setSurrounding("", 0, 0);
+    ic.typeChar('d', &state);
+    usleep(15000);
+    ic.typeChar('d', &state);
+
+    // uinput must not be used for steam
+    EXPECT_EQ(uinput_bs_sent, 0);
+
+    // expect 2 forwarded backspaces (press and release)
+    EXPECT_EQ(ic.forwarded_keys.size(), 2);
+    EXPECT_EQ(ic.forwarded_keys[0].sym(), FcitxKey_BackSpace);
+    EXPECT_EQ(ic.forwarded_keys[1].sym(), FcitxKey_BackSpace);
+
+    EXPECT_TRUE(state.isDeleting());
+
+    auto exit_timer = instance_->eventLoop().addTimeEvent(
+        CLOCK_MONOTONIC,
+        fcitx::now(CLOCK_MONOTONIC) + 30000,
+        0,
+        [this](fcitx::EventSourceTime*, uint64_t) {
+            instance_->eventLoop().exit();
+            return true;
+        }
+    );
+    instance_->eventLoop().exec();
+
+    EXPECT_FALSE(state.isDeleting());
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "đ");
+}
+
+TEST_F(ClakStateTest, GivenSteamApp_CommitsPrintableKeyDirectly) {
+    // steam app commits printable characters directly to prevent xim bounce reflections
+    platform::setMockActiveWindow(platform::WindowInfo{"steamwebhelper", "Steam", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "steamwebhelper");
+    ime::ClakState state(engine_.get(), &ic);
+
+    // printable key is filtered and committed directly
+    fcitx::Key key_n(FcitxKey_n);
+    fcitx::KeyEvent event1(&ic, key_n, false);
+    state.keyEvent(event1);
+    EXPECT_TRUE(event1.filtered());
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "n");
+
+    // immediate duplicate reflection within 2ms is filtered and dropped without committing again
+    fcitx::KeyEvent event2(&ic, key_n, false);
+    state.keyEvent(event2);
+    EXPECT_TRUE(event2.filtered());
+    EXPECT_EQ(ic.commits.size(), 1);
+}
+
+TEST_F(ClakStateTest, GivenSteamApp_WhenTypingFast_ProcessesBufferedKeysInStrictOrder) {
+    // keys arriving during deletion must be buffered and replayed in strict order
+    platform::setMockActiveWindow(platform::WindowInfo{"steamwebhelper", "Steam", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "steamwebhelper");
+    ime::ClakState state(engine_.get(), &ic);
+
+    ic.setSurrounding("", 0, 0);
+    ic.typeChar('d', &state);
+    usleep(15000);
+    ic.typeChar('d', &state);
+
+    EXPECT_TRUE(state.isDeleting());
+
+    // user types fast while deletion is in flight
+    ic.typeChar('o', &state);
+    ic.typeChar('n', &state);
+    ic.typeChar('g', &state);
+
+    EXPECT_TRUE(state.isDeleting());
+    EXPECT_EQ(state.bufferedKeysCount(), 3);
+
+    auto timer = instance_->eventLoop().addTimeEvent(
+        CLOCK_MONOTONIC,
+        fcitx::now(CLOCK_MONOTONIC) + 40000,
+        0,
+        [this](fcitx::EventSourceTime*, uint64_t) {
+            instance_->eventLoop().exit();
+            return true;
+        }
+    );
+    instance_->eventLoop().exec();
+
+    EXPECT_FALSE(state.isDeleting());
+    EXPECT_EQ(state.bufferedKeysCount(), 0);
+    // commits must reflect: initial 'd', replacement 'đ', then 'o', 'n', 'g'
+    ASSERT_GE(ic.commits.size(), 4);
+}
+
+TEST_F(ClakStateTest, GivenSteamApp_StaggersMultipleBackspacesWithTimers) {
+    // verify multiple backspaces are staggered across event loop timers for steam
+    platform::setMockActiveWindow(platform::WindowInfo{"steamwebhelper", "Steam", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "steamwebhelper");
+    ime::ClakState state(engine_.get(), &ic);
+
+    ic.setSurrounding("", 0, 0);
+    ic.typeChar('d', &state);
+    ic.typeChar('u', &state);
+    ic.typeChar('o', &state);
+    ic.typeChar('n', &state);
+    ic.typeChar('g', &state);
+
+    EXPECT_EQ(ic.forwarded_keys.size(), 0);
+    ic.typeChar('w', &state);
+
+    EXPECT_TRUE(state.isDeleting());
+    // only the first backspace pair should be sent immediately
+    EXPECT_EQ(ic.forwarded_keys.size(), 2);
+
+    auto timer = instance_->eventLoop().addTimeEvent(
+        CLOCK_MONOTONIC,
+        fcitx::now(CLOCK_MONOTONIC) + 80000,
+        0,
+        [this](fcitx::EventSourceTime*, uint64_t) {
+            instance_->eventLoop().exit();
+            return true;
+        }
+    );
+    instance_->eventLoop().exec();
+
+    EXPECT_FALSE(state.isDeleting());
+    // all 4 backspaces (8 events) must be sent after loop finishes
+    EXPECT_EQ(ic.forwarded_keys.size(), 8);
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "ương");
 }
 
 } // namespace test
