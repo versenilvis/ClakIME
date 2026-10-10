@@ -112,6 +112,12 @@ bool isSteamApp(const std::string& app) {
   return false;
 }
 
+bool isWpsOfficeApp(const std::string& app) {
+  if (app.empty()) return false;
+  return app == "wps" || app == "wpp" || app == "et" || app == "wpspdf" || app == "wpsoffice" ||
+         app.find("wps") != std::string::npos;
+}
+
 
 std::string extractDomain(const std::string& app, const std::string& title) {
   std::string lower_app = app;

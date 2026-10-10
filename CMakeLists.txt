@@ -135,6 +135,11 @@ set(CLAK_SOURCES
     src/uinput/uinput.cpp
     src/utils/log.cpp
     src/utils/text_utils.cpp
+    src/ime/repeat_handler.cpp
+    src/ime/modal_handler.cpp
+    src/ime/surrounding_verifier.cpp
+    src/ime/key_buffer.cpp
+    src/ime/steam_pipeline.cpp
     src/ime/state.cpp
     src/engine.cpp
 )

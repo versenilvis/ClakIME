@@ -5,9 +5,13 @@
 #include <fcitx/inputcontextproperty.h>
 #include <fcitx-utils/event.h>
 #include <string>
-#include <vector>
 #include <memory>
 #include "core.h"
+#include "repeat_handler.h"
+#include "modal_handler.h"
+#include "surrounding_verifier.h"
+#include "key_buffer.h"
+#include "steam_pipeline.h"
 
 namespace clak {
 
@@ -33,11 +37,11 @@ public:
   bool isDeleting() const { return is_deleting_; }
   bool isSelectionDeletion() const { return is_selection_deletion_; }
   uint64_t safetyTimerTime() const { return safety_timer_ ? safety_timer_->time() : 0; }
-  bool isRichTextEditor() const { return is_rich_text_editor_; }
+  bool isRichTextEditor() const { return verifier_.isRichTextEditor(); }
   bool isDraftJsEditor() const;
-  int mismatchCount() const { return mismatch_count_; }
+  int mismatchCount() const { return verifier_.mismatchCount(); }
   size_t expectedBackspaces() const { return expected_backspaces_; }
-  size_t bufferedKeysCount() const { return buffered_keys_.size(); }
+  size_t bufferedKeysCount() const { return key_buffer_.size(); }
   size_t currentBackspaceCount() const { return current_backspace_count_; }
   bool allRealBackspacesReceived() const {
     return is_deleting_ && expected_backspaces_ > 0 && current_backspace_count_ >= (expected_backspaces_ - 1);
@@ -46,26 +50,17 @@ public:
   const std::string& pendingCommitString() const { return pending_commit_string_; }
   uint64_t adaptiveExtraWaitUs() const { return adaptive_extra_us_; }
   void observeTransactionLatency(uint64_t elapsed_us);
-  void onRepeatTimer();
-  bool isRepeating() const { return is_repeating_; }
-  fcitx::Key heldKey() const { return held_key_; }
-  void setEnableRepeatForMock(bool enable) { enable_repeat_for_mock_ = enable; }
+  void onRepeatTimer() { repeat_handler_.onTimer(); }
+  bool isRepeating() const { return repeat_handler_.isRepeating(); }
+  fcitx::Key heldKey() const { return repeat_handler_.heldKey(); }
+  void setEnableRepeatForMock(bool enable) { repeat_handler_.setEnableRepeatForMock(enable); }
 
 private:
   void arm_safety_timer();
-  void armRepeatTimer(const fcitx::Key& key);
-  void cancelRepeatTimer();
-  uint64_t repeatDelayUs();
-  uint64_t repeatIntervalUs();
   bool handleKey(const fcitx::Key& key);
   void replayBufferedKeys();
-  bool isCursorNearWord(const fcitx::SurroundingText& surr);
   std::string activeSite();
-  void setVerifyExpectation(const std::string& wordBefore, size_t delChars, const std::string& added);
-  void verifySurrounding(const fcitx::SurroundingText& surr);
   void doCommitString(const std::string& text);
-  void scheduleSteamBackspaceStep();
-  void updateModalEditorStatus();
   std::string classifyGroup(const std::string& app, const std::string& site, bool is_autofill, bool used_uinput);
   void logLatency(const std::string& group, uint64_t start_us, const std::string& action_type);
 
@@ -88,41 +83,20 @@ private:
   uint64_t op_start_us_{0};
   std::string op_group_;
 
-  struct PendingVerify {
-    bool pending = false;
-    std::string preWord;
-    size_t del = 0;
-    std::string added;
-    std::string expectWord;
-  };
-  PendingVerify verify_;
   std::string pending_commit_string_;
   std::unique_ptr<fcitx::EventSourceTime> safety_timer_;
-  std::vector<fcitx::Key> buffered_keys_;
-  bool is_canvas_editor_{false};
-  bool is_rich_text_editor_{false};
-  bool is_draftjs_editor_{false};
-  int mismatch_count_{0};
 
-  enum class EditorMode {
-    NORMAL,
-    INSERT,
-    COMMAND
-  };
-  EditorMode editor_mode_{EditorMode::NORMAL};
-  bool is_modal_editor_{false};
-  uint64_t last_editor_check_us_{0};
   uint64_t last_site_check_us_{0};
   std::string cached_site_;
   bool ctrl_pressed_first_{false};
   bool ctrl_shift_armed_{false};
   uint64_t last_selection_time_us_{0};
-  std::unique_ptr<fcitx::EventSourceTime> repeat_timer_;
-  fcitx::Key held_key_;
-  bool is_repeating_{false};
-  bool enable_repeat_for_mock_{false};
-  uint32_t last_steam_key_sym_{0};
-  uint64_t last_steam_key_time_us_{0};
+
+  RepeatHandler repeat_handler_;
+  ModalHandler modal_handler_;
+  SurroundingVerifier verifier_;
+  KeyBuffer key_buffer_;
+  SteamPipeline steam_pipeline_;
 };
 
 } // namespace ime
