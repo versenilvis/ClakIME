@@ -27,7 +27,12 @@ input-method/
 ├── src/                        # Tầng kết nối Fcitx5 bằng C++
 │   ├── engine.h / .cpp         # Điểm khởi động Fcitx5 addon
 │   ├── ime/
-│   │   ├── state.h / .cpp      # Máy trạng thái xử lý phím và điều hướng Surrounding/Uinput
+│   │   ├── state.h / .cpp      # Điều phối chính Fcitx5 InputContext (orchestrator)
+│   │   ├── repeat_handler.h / .cpp     # Quản lý repeat timer và đọc cấu hình Hyprland
+│   │   ├── modal_handler.h / .cpp      # Quản lý trạng thái modal editor (Vim/Helix)
+│   │   ├── surrounding_verifier.h/.cpp # Xác thực surrounding text và phát hiện DOM desync
+│   │   ├── key_buffer.h / .cpp         # Hàng đợi đệm phím và replay có batching
+│   │   └── steam_pipeline.h / .cpp     # Pipeline cô lập cho Steam client (XIM/CEF)
 │   ├── uinput/
 │   │   ├── uinput.h / .cpp     # Phát phím phần cứng ảo qua /dev/uinput Linux
 │   ├── platform/
@@ -69,12 +74,12 @@ Fcitx5 keyEvent
    ├── COMMIT                ──► Chèn chuỗi ký tự trực tiếp (doCommitString)
    └── REPLACE / SURROUNDING ──► Cần xóa N ký tự và chèn chuỗi tiếng Việt mới
                │
-               ├────────────────────────┬────────────────────────┐
-               ▼                        ▼                        ▼
-       SurroundingText            Uinput Pacing          Address bar fix
-       (Chromium, Brave, web)    (Gecko, Docs, term)   (Omnibox autocomplete)
-       deleteSurroundingText     N+1 sentinel BS        N+1 BS + 1 BS autofill
-       + doCommitString          + loopback check       + doCommitString
+               ├────────────────────────┬────────────────────────┬────────────────────────┐
+               ▼                        ▼                        ▼                        ▼
+       SurroundingText            Uinput Pacing          Address bar fix       Steam Pipeline
+       (Chromium, Brave, web)    (Gecko, Docs, term)   (Omnibox autocomplete)  (Steam CEF / XIM)
+       deleteSurroundingText     N+1 sentinel BS        N+1 BS + 1 BS autofill  2ms staggered BS
+       + doCommitString          + loopback check       + doCommitString        + 8ms commit
 ```
 
 ### Các bước xử lý tuần tự
@@ -89,6 +94,7 @@ Fcitx5 keyEvent
 5. **Điều hướng kênh xóa văn bản**:
     - **Kênh SurroundingText**: Áp dụng cho các ô nhập liệu tiêu chuẩn trên Chromium, Brave, mạng xã hội Facebook/Messenger qua `deleteSurroundingText`.
     - **Kênh Uinput Pacing**: Áp dụng cho Gecko (Zen Browser, Firefox), Google Docs canvas, terminal, và thanh địa chỉ (Omnibox).
+    - **Kênh Steam Pipeline**: Áp dụng riêng cho Steam Client qua hẹn giờ xóa so le 2ms/8ms và lọc phím dội ngược 2.000us.
 
 ---
 
@@ -99,6 +105,7 @@ Fcitx5 keyEvent
 | **SurroundingText** | Chromium, Chrome, Brave, Facebook, Messenger | Gọi trực tiếp `deleteSurroundingText()` của Wayland rồi commit | Độ trễ cực thấp (<0.3ms), bảo toàn cấu trúc DOM và vùng chọn |
 | **Uinput Sentinel Pacing** | Gecko (Zen Browser, Firefox), Google Docs, terminal | Phát $N+1$ Backspace qua `/dev/uinput`, chờ phím chốt thứ $N+1$ loopback | Khắc phục triệt để lỗi nuốt phím và xung đột bộ đệm của Gecko/canvas |
 | **Address Bar Fix** | Thanh địa chỉ Chromium / Brave khi có autocomplete | Phát $N + 1 + 1$ Backspace (thêm 1 Backspace xóa inline autocomplete) | Ngăn mất ký tự đầu hoặc kẹt chuỗi `dđ` khi trình duyệt tự gợi ý URL |
+| **Steam Pipeline** | Steam Client (Discussion, Store, Chat, search box) | Commit trực tiếp phím in được, xóa so le 2ms, commit sau 8ms, dedup 2.000us | Loại bỏ hoàn toàn dội phím XIM và kẹt chuỗi gõ nhanh trong container Pressure-Vessel |
 | **Modal Editor Bypass** | Neovim, Helix, Vim (trong Kitty, Alacritty, WezTerm...) | Đọc IPC Hyprland socket và kiểm tra chế độ NORMAL/INSERT | Không làm phiền khi gõ lệnh Vim, tự bật lại bộ gõ khi vào INSERT |
 
 ---
@@ -167,4 +174,5 @@ Mỗi module được giải thích cặn kẽ trong các tài liệu sau:
 - [Bộ phát phím ảo và nhịp thời gian uinput](./uinput-pacing.md): Trình điều khiển `/dev/uinput`, kỹ thuật pacing với post_delay và gap_ms để trình duyệt không bị nuốt phím.
 - [Đo đạc và tối ưu độ trễ](./benchmark-latency.md): Phương pháp đo latency từ lúc nhận keydown đến khi commit, bảng số liệu p50/p95/p99 của 5 nhóm ứng dụng.
 - [Hệ thống kiểm thử tự động](./test.md): Danh mục kiểm thử Rust engine, C++ state machine, kịch bản phòng ngừa lỗi và hướng dẫn chạy test.
+- [Hướng dẫn gỡ lỗi và chẩn đoán (Debugging)](./debugging.md): Kiểm tra log, phân tích hành vi bộ gõ, giải quyết lỗi Steam Client, quyền uinput và công cụ chẩn đoán.
 - [Đặc tả giao diện lập trình (API Reference)](./api.md): Danh mục hàm C-FFI, cấu trúc ImeAction, bảng mã ký tự và quy tắc quản lý bộ nhớ.

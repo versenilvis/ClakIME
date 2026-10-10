@@ -119,7 +119,8 @@ Clak Settings > Giới thiệu > Gỡ cài đặt
 
 > [!TIP]
 > Bạn có thể dùng chức năng **Chẩn đoán** để quét nhanh Clak có đang bị lỗi gì với hệ thống không\
-> Điều đó giúp bạn debug nhanh hơn và cũng như có thể sao chép để gửi lên cho maintainer
+> Điều đó giúp bạn debug nhanh hơn và cũng như có thể sao chép để gửi lên cho maintainer\
+> Xem thêm tài liệu kỹ thuật chi tiết tại [docs/README.md](docs/README.md) và hướng dẫn chẩn đoán lỗi tại [docs/debugging.md](docs/debugging.md).
 
 - [Email](mailto:versedev.store@proton.me)
 - [Twitter](https://twitter.com/versenilvis)

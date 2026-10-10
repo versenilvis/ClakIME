@@ -2,63 +2,98 @@
 
 Thư mục: [src/ime/](../src/ime/)
 
-File chính: [state.h](../src/ime/state.h), [state.cpp](../src/ime/state.cpp)
+Files:
+- [state.h](../src/ime/state.h), [state.cpp](../src/ime/state.cpp): Điều phối chính (orchestrator)
+- [repeat_handler.h](../src/ime/repeat_handler.h), [repeat_handler.cpp](../src/ime/repeat_handler.cpp): Mô phỏng lặp phím khi IME giữ phím
+- [modal_handler.h](../src/ime/modal_handler.h), [modal_handler.cpp](../src/ime/modal_handler.cpp): Máy trạng thái modal editor (Vim / Helix)
+- [surrounding_verifier.h](../src/ime/surrounding_verifier.h), [surrounding_verifier.cpp](../src/ime/surrounding_verifier.cpp): Kiểm tra surrounding text và phát hiện DOM lệch
+- [key_buffer.h](../src/ime/key_buffer.h), [key_buffer.cpp](../src/ime/key_buffer.cpp): Hàng đợi FIFO và phát lại phím có gom nhóm (batching)
+- [steam_pipeline.h](../src/ime/steam_pipeline.h), [steam_pipeline.cpp](../src/ime/steam_pipeline.cpp): Pipeline cô lập riêng cho Steam Client
 
-Đây là khối điều khiển trung tâm của Clak trên Fcitx5, quản lý toàn bộ vòng đời phím bấm, quyết định sử dụng kênh Wayland SurroundingText hay Uinput, và đảm bảo tính toàn vẹn (correctness) của văn bản hiển thị.
+Đây là khối điều khiển trung tâm của Clak trên Fcitx5, quản lý toàn bộ vòng đời phím bấm, quyết định sử dụng kênh Wayland SurroundingText, Uinput hay Steam Pipeline, và đảm bảo tính toàn vẹn (correctness) của văn bản hiển thị.
 
 ---
 
-## 1. Cơ chế Quyết định Kênh Xóa (shouldUseUinput)
+## 1. Cấu trúc Mô-đun sau khi Refactor
+
+Nhằm tránh mô hình "God Object" khi mở rộng tính năng, tầng IME được phân tách thành 5 sub-component chuyên biệt:
+
+```text
+src/ime/
+├── state.h / .cpp              # Điều phối chính Fcitx5 InputContext (orchestrator)
+├── repeat_handler.h / .cpp     # Quản lý repeat timer, đọc delay/rate từ Hyprland qua popen
+├── modal_handler.h / .cpp      # Máy trạng thái modal editor (NORMAL, INSERT, COMMAND)
+├── surrounding_verifier.h/.cpp # Xác thực surrounding text, đếm mismatch, tự chuyển uinput
+├── key_buffer.h / .cpp         # Hàng đợi đệm phím khi đang xóa, replay có batching
+└── steam_pipeline.h / .cpp     # Xử lý cô lập cho Steam client (dedup, paced backspace)
+```
+
+[`ClakState`](../src/ime/state.h) đóng vai trò điều phối trung tâm: nhận sự kiện từ Fcitx5 `InputContext`, gọi FFI sang Rust engine, và phân phối kết quả tới các pipeline chuyên biệt tương ứng.
+
+---
+
+## 2. Cơ chế Quyết định Kênh Xóa (shouldUseUinput)
 
 Trên Wayland, các ứng dụng có cách cài đặt giao thức `zwp_text_input_v3` rất khác nhau:
 
 - **Chromium / Chrome / Brave**: Hỗ trợ `delete_surrounding_text` cực tốt, độ trễ < 1ms. Clak dùng kênh SurroundingText trực tiếp khi gõ bình thường ở cuối câu.
-- **Chèn con trỏ giữa từ hoặc trước từ (isCursorNearWord)**: Khi phát hiện phía sau con trỏ còn ký tự trong trình duyệt (người dùng click chuột vào giữa câu để sửa hoặc chèn từ), Blink dễ bị lỗi lệch offset. Clak tự động chuyển nhánh sang **Uinput** để xóa và chèn chính xác.
-- **Họ VSCode (Antigravity IDE, VSCode, Cursor, Windsurf, VSCodium)**: Terminal tích hợp bên trong chạy bằng `xterm.js`. Thành phần này hoàn toàn không hỗ trợ lệnh `delete_surrounding_text` của Wayland (gây lỗi `irỉ`, `ỉi`). Clak gom họ VSCode vào nhóm Terminal và chuyển sang **Uinput** với nhịp pacing 15ms/4ms.
+- **WPS Office**: Trên môi trường XWayland, WPS Office bỏ qua lệnh `forwardKey` của DBus. Clak bắt buộc điều hướng sang **Uinput**.
+- **Họ VSCode (Antigravity IDE, VSCode, Cursor, Windsurf, VSCodium)**: Terminal tích hợp bên trong chạy bằng `xterm.js`. Thành phần này hoàn toàn không hỗ trợ lệnh `delete_surrounding_text` của Wayland. Clak gom họ VSCode vào nhóm Terminal và chuyển sang **Uinput** với nhịp pacing 15ms/4ms.
 - **Gecko (Firefox / Zen Browser)**: Lỗi xóa xung quanh kéo dài nhiều năm trên Wayland (DOM không cập nhật kịp thời, text bị stale). Clak bắt buộc điều hướng sang kênh **Uinput**.
 - **Google Docs (Canvas Editor)**: Không dùng DOM HTML thông thường mà vẽ chữ lên HTML5 Canvas, surrounding text chỉ là 2 dấu cách giả lập (`  `). Clak bắt buộc điều hướng sang **Uinput**.
 - **Terminal Native (Kitty, Ghostty, Alacritty, Foot)**: Terminal bảo vệ buffer PTY, không hỗ trợ xóa lùi ngữ cảnh Wayland. Clak dùng **Uinput**.
 - **Address Bar (Thanh địa chỉ URL)**: Khi xuất hiện gợi ý tự động (autofill), con trỏ bị bôi đen hoặc nhảy về cuối. Clak dùng Uinput kèm thuật toán đếm bù 1 ký tự gợi ý.
+- **Steam Client**: Steam chạy CEF qua XWayland trong container Pressure-Vessel. Sự kiện uinput kernel không đi xuyên container một cách đồng bộ. Clak chuyển riêng sang **Steam Pipeline**.
 
 ```cpp
-bool ClakState::shouldUseUinput(bool use_surrounding, uint32_t action_type, const fcitx::SurroundingText& surr) {
+bool ClakState::shouldUseUinput(bool use_surrounding, uint32_t action_type, const fcitx::SurroundingText& /*surr*/) {
+    if (modal_handler_.isModalEditor()) return true;
+
     std::string app = appKey();
     std::string site = activeSite();
 
+    if (config::isWpsOfficeApp(app)) return true;
     if (config::isTerminalApp(app)) return true;
     if (config::isGeckoApp(app)) return true;
     if (config::isMetaSite(site) || config::isMetaSite(app)) return false;
+    if (config::isSteamApp(app)) return false;
     if (action_type == CLAK_ACTION_ADDRESS_BAR_FIX) return true;
-    if (config::isForceUinputSite(site)) return true;
-    if (is_canvas_editor_ || is_rich_text_editor_) return true;
-    if (isBrowser() && isCursorNearWord(surr)) return true;
+    if (config::isForceUinputSite(site) || isDraftJsEditor()) return true;
+    if (verifier_.isCanvasEditor() || verifier_.isRichTextEditor()) return true;
     return !use_surrounding;
 }
 ```
 
 ---
 
-## 2. Tại sao Không Mặc định Uinput cho Tất cả Ứng dụng?
+## 3. Pipeline Cô lập Riêng cho Steam Client (`SteamPipeline`)
 
-Có 5 lý do kỹ thuật cốt lõi khiến Clak ưu tiên SurroundingText và chỉ dùng Uinput ở nơi thực sự cần:
+Steam client trên Linux sở hữu kiến trúc đặc thù:
+1. Giao diện được xây dựng bằng CEF (Chromium Embedded Framework) chạy trên XWayland.
+2. Ứng dụng chạy bên trong container Pressure-Vessel (Steam Runtime), khiến các kernel input event từ `/dev/uinput` bị cô lập hoặc mất đồng bộ.
+3. Qua giao thức XIM, khi IME forward một phím in được thô (`forwardKey`), CEF xử lý và dội ngược lại (echo reflection) cùng một mã phím đó về IME sau khoảng 700 microsecond. Nếu không xử lý, hiện tượng nhân đôi ký tự hoặc nuốt phím sẽ xảy ra liên tục.
 
-1. **Tốc độ phản hồi cực hạn (0.3ms so với 16ms)**:
-    - SurroundingText chạy qua IPC Wayland trực tiếp trong bộ nhớ RAM, độ trễ chỉ 0.2ms đến 0.3ms, gõ tốc độ cao 150 WPM hoàn toàn không có cảm giác trễ
-    - Uinput phải bắn phím qua kernel driver `/dev/uinput` -> compositor -> ứng dụng đích -> loopback lại fcitx5, bắt buộc cần nhịp pacing 15ms đến 20ms
-2. **Bảo vệ DOM các trang Meta (Facebook, Messenger, Instagram)**:
-    - Trình soạn thảo Draft.js / Lexical của Meta quản lý con trỏ DOM rất nhạy cảm. Phím Backspace vật lý từ Uinput sẽ phá vỡ cấu trúc khối, làm con trỏ nhảy ngược ra đầu dòng hoặc xóa mất cả đoạn văn
-    - SurroundingText cho phép fcitx5 thay đổi chuỗi trực tiếp trong bộ đệm mà không phát sinh phím xóa vật lý
-3. **Mắt thần đọc ngữ cảnh (Context Awareness)**:
-    - SurroundingText cho Clak biết chính xác từ ngữ đứng trước và đứng sau con trỏ chuột, nhờ đó phục hồi dấu hoặc sửa từ cũ thông minh khi người dùng click chuột quay lại từ đã gõ
-    - Uinput là thiết bị phát phím mù, không thể đọc ngược dữ liệu trên màn hình
-4. **Blink nuốt phím cứng khi IME đang active**:
-    - Trên Chromium, khi ô nhập liệu đang trong phiên gõ IME, Blink ưu tiên nhận văn bản từ giao thức IME. Phím xóa cứng từ Uinput dễ bị xem là xung đột và bị nuốt mất, khiến bộ gõ bị kẹt ở trạng thái chờ
-5. **Quyền hạn `/dev/uinput` trên Linux**:
-    - Nhiều bản phân phối Linux không phân quyền mặc định `/dev/uinput` cho user thông thường. SurroundingText chạy qua Wayland IPC nên hoạt động ngay lập tức mà không cần cấu hình udev rule hay quyền root
+### Giải pháp kỹ thuật trong [SteamPipeline](../src/ime/steam_pipeline.cpp):
+
+1. **Lọc phản xạ phím trong 2.000us (`isDuplicateKey`)**:
+   Khi ở trong Steam, nếu một phím in được giống hệt phím vừa gõ dội ngược lại trong vòng 2.000us, Clak nhận diện đây là echo từ CEF/XIM và lập tức nuốt phím (`keyEvent.filterAndAccept()`).
+
+2. **Commit trực tiếp ký tự in được**:
+   Khi action là `CLAK_ACTION_FORWARD` trong Steam, thay vì trả về `false` để Fcitx5 forward phím thô qua X11, Clak gọi `doCommitString(key_str)` và trả về `true` (filter và accept). Điều này giúp đưa ký tự thẳng vào buffer của CEF qua XIM commit, triệt tiêu hoàn toàn race condition giữa X11 event thread và XIM thread.
+
+3. **Hẹn giờ xóa so le (`startStaggeredDeletion`)**:
+   Khi cần thay thế âm tiết tiếng Việt trong Steam (ví dụ gõ `d` + `d` -> `đ`):
+   - Thay vì bắn nhiều Backspace cùng lúc, Clak phát phím Backspace đầu tiên ngay lập tức (press + release)
+   - Nếu còn phím Backspace tiếp theo: hẹn giờ 2ms cho bước xóa kế tiếp
+   - Khi đã xóa đủ: hẹn giờ 8ms trước khi commit ký tự mới
+   - Tổng thời gian thay thế chỉ mất ~10ms (so với ~45ms trước đây), ngăn chặn hoàn toàn việc lệch hàng đợi khi người dùng gõ phím cực nhanh
+
+4. **Cô lập tuyệt đối**:
+   Toàn bộ logic trên chỉ áp dụng khi `isSteam()` trả về `true`. Các ứng dụng khác (trình duyệt, terminal, IDE) hoàn toàn giữ nguyên luồng xử lý native.
 
 ---
 
-## 3. Kỹ thuật Phím Chốt (Sentinel Backspace)
+## 4. Kỹ thuật Phím Chốt Uinput (Sentinel Backspace Protocol)
 
 Khi Clak gửi phím BackSpace qua `/dev/uinput`, sự kiện này đi vào nhân Linux, chuyển qua compositor Hyprland, rồi mới đến ứng dụng đích và vòng ngược lại Fcitx5.
 
@@ -76,20 +111,21 @@ Nếu Clak gửi lệnh `commitString` ngay lập tức, chữ mới sẽ đến
 
 ---
 
-## 4. Bộ đệm và Xử lý Lại Phím (Buffer & Replay)
+## 5. Hàng đợi Đệm và Replay Gom nhóm (`KeyBuffer`)
 
-Khi một chu trình Uinput đang diễn ra (`is_deleting_ = true`):
+Trong lúc một chu trình xóa bất đồng bộ đang diễn ra (`is_deleting_ = true`):
 
-- Nếu người dùng gõ phím tiếp theo trước khi phím chốt quay về, phím đó sẽ được gom vào danh sách `buffered_keys_` và tạm chặn gửi ra ngoài để tránh đảo lộn thứ tự.
-- Khi phím chốt quay về và commit xong ký tự tiếng Việt, hàm `replayBufferedKeys()` sẽ duyệt lại danh sách phím đệm:
-    - Nếu phím kế tiếp cần xử lý tiếp qua engine: gọi `handleKey`.
-    - Nếu là các ký tự gõ thô (chữ thường, dấu cách): Clak gộp tất cả ký tự thô liên tiếp vào một chuỗi `batch_commit` duy nhất rồi gửi qua `doCommitString`, giảm thiểu tối đa số lần gọi IPC qua Wayland.
+- Người dùng gõ phím tiếp theo sẽ không bị chặn hoặc mất phím; các phím này được đưa vào hàng đợi FIFO [KeyBuffer](../src/ime/key_buffer.cpp).
+- Sau khi chu trình xóa hoàn tất và ký tự tiếng Việt đã được commit, `replay()` sẽ duyệt lại danh sách phím theo thứ tự gốc:
+    - Các ký tự in được liên tiếp không có phím bổ trợ (Ctrl/Alt) được gom vào chuỗi `batch_commit` và gửi một lần qua `doCommitString`, giảm tối đa số lần round-trip IPC qua Wayland.
+    - Các phím điều hướng hoặc tổ hợp phím được chuyển tiếp thô nguyên bản (`forwardKey`).
 
 ---
 
-## 5. Bộ Đếm An toàn (Safety Timer)
+## 6. Bộ Đếm An toàn và Co giãn Độ trễ (Safety Timer & Adaptive Latency)
 
-Nhằm đề phòng trường hợp ứng dụng đích bị crash hoặc compositor nuốt mất phím chốt khiến Clak bị kẹt vĩnh viễn ở trạng thái xóa:
+Đề phòng trường hợp ứng dụng đích bị treo hoặc compositor nuốt phím chốt:
 
 - Mỗi khi phát phím Uinput, Clak hẹn giờ `safety_timer_` với thời gian 50ms (hoặc 100ms trên thanh địa chỉ).
-- Nếu hết thời gian mà chưa nhận đủ số phím BackSpace mong muốn, timer sẽ tự động kích hoạt: giải phóng cờ `is_deleting_`, commit phần ký tự đang chờ, và giải phóng bộ đệm phím.
+- Nếu hết thời gian mà chưa nhận đủ phím BackSpace mong muốn, timer sẽ tự động kích hoạt: giải phóng cờ `is_deleting_`, ép commit ký tự đang chờ, và giải phóng bộ đệm phím.
+- **Co giãn độ trễ thích ứng**: Nếu đo được roundtrip latency $\ge 35\text{ms}$, Clak tự động tăng thêm 10ms thời gian an toàn (tối đa 100ms). Khi hệ thống ổn định qua 4 giao dịch nhanh liên tiếp ($\le 20\text{ms}$), Clak tự động hạ dần thời gian chờ về 0.
