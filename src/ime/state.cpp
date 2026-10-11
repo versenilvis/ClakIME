@@ -817,6 +817,31 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
                 return;
             }
         }
+
+        if (is_cursor_move) {
+            // forward cursor move keys directly to avoid dropped events in wayland/chromium
+            utils::clakLog("forward cursor move: sym=" + std::to_string(sym) + " shift=" + std::to_string(is_shift));
+            ic_->forwardKey(key);
+            keyEvent.filterAndAccept();
+            return;
+        }
+
+        bool is_delete = (sym == FcitxKey_Delete || sym == FcitxKey_KP_Delete);
+        if (is_delete) {
+            uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
+            bool has_surrounding = ic_->capabilityFlags().test(fcitx::CapabilityFlag::SurroundingText);
+            const auto& surr = ic_->surroundingText();
+            bool has_selection = has_surrounding && surr.isValid() && (surr.cursor() != surr.anchor());
+            bool recent_selection = (last_selection_time_us_ > 0) && (now_us - last_selection_time_us_ < 1500000);
+
+            if (recent_selection || has_selection) {
+                last_selection_time_us_ = 0;
+                utils::clakLog("rapid selection delete: forward clean Delete without modifiers");
+                ic_->forwardKey(fcitx::Key(static_cast<fcitx::KeySym>(sym)));
+                keyEvent.filterAndAccept();
+                return;
+            }
+        }
         return;
     }
 

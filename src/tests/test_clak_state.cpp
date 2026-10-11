@@ -452,5 +452,29 @@ TEST_F(ClakStateTest, GivenSteamApp_StaggersMultipleBackspacesWithTimers) {
     EXPECT_EQ(ic.commits.back(), "ương");
 }
 
+TEST_F(ClakStateTest, GivenSelection_WhenCursorMoveKeyReceived_ForwardsKeyDirectly) {
+    MockInputContext ic(instance_->inputContextManager(), "test-app");
+    ime::ClakState state(engine_.get(), &ic);
+
+    // simulate shift+right arrow then shift+down arrow
+    fcitx::Key key_right(FcitxKey_Right, fcitx::KeyState::Shift);
+    fcitx::KeyEvent event_right(&ic, key_right, false);
+    state.keyEvent(event_right);
+
+    EXPECT_TRUE(event_right.filtered());
+    ASSERT_EQ(ic.forwarded_keys.size(), 1);
+    EXPECT_EQ(ic.forwarded_keys[0].sym(), FcitxKey_Right);
+    EXPECT_TRUE(ic.forwarded_keys[0].states().test(fcitx::KeyState::Shift));
+
+    fcitx::Key key_down(FcitxKey_Down, fcitx::KeyState::Shift);
+    fcitx::KeyEvent event_down(&ic, key_down, false);
+    state.keyEvent(event_down);
+
+    EXPECT_TRUE(event_down.filtered());
+    ASSERT_EQ(ic.forwarded_keys.size(), 2);
+    EXPECT_EQ(ic.forwarded_keys[1].sym(), FcitxKey_Down);
+    EXPECT_TRUE(ic.forwarded_keys[1].states().test(fcitx::KeyState::Shift));
+}
+
 } // namespace test
 } // namespace clak
