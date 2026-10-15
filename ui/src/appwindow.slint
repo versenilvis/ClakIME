@@ -19,8 +19,10 @@ export { MacroItemData, DoctorLineData }
 export component MainWindow inherits Window {
     title: "Cài đặt Clak";
     icon: @image-url("../assets/icons/clak-logo.svg");
-    width: 920px;
-    height: 680px;
+    preferred-width: 940px;
+    preferred-height: 680px;
+    min-width: 820px;
+    min-height: 580px;
     background: Theme.bg;
     default-font-family: "SF Pro Text";
     default-font-size: 14px;
@@ -52,7 +54,8 @@ export component MainWindow inherits Window {
     in-out property <string> new_macro_replace: "";
 
     // phim tat
-    in-out property <int> toggle_shortcut_index: 0;
+    in-out property <string> toggle_shortcut_text: "Ctrl + Shift";
+    in-out property <bool> is_recording_shortcut: false;
     in-out property <int> switch_shortcut_index: 0;
 
     // theo ung dung
@@ -93,14 +96,23 @@ export component MainWindow inherits Window {
     in-out property <string> doctor_score_label: "Khỏe mạnh";
     in-out property <color> doctor_score_color: #10b981;
     in-out property <bool> profile_needs_setup: false;
+    in-out property <bool> addon_needs_load: false;
     in-out property <bool> wps_needs_fix: false;
     in-out property <bool> jetbrains_needs_fix: false;
+    in-out property <bool> autostart_needs_fix: false;
+    in-out property <bool> permissions_needs_fix: false;
+    in-out property <bool> has_fixable_issues: false;
+    in-out property <bool> is_fixing: false;
 
     callback doctor_scan_requested();
     callback doctor_copy_requested();
     callback setup_profile_requested();
     callback fix_wps_requested();
     callback fix_jetbrains_requested();
+    callback auto_fix_requested();
+    callback fix_autostart_requested();
+    callback fix_permissions_requested();
+    callback record_shortcut_pressed(string, bool, bool, bool, bool);
 
     callback ok_requested();
     callback apply_requested();
@@ -121,6 +133,14 @@ export component MainWindow inherits Window {
         width: 100%;
         height: 100%;
         key-pressed(event) => {
+            if (root.is_recording_shortcut) {
+                if (event.text == Key.Escape) {
+                    root.is_recording_shortcut = false;
+                    return accept;
+                }
+                root.record_shortcut_pressed(event.text, event.modifiers.control, event.modifiers.alt, event.modifiers.shift, event.modifiers.meta);
+                return accept;
+            }
             if (event.text == Key.Escape) {
                 root.escape_requested();
                 return accept;
@@ -140,12 +160,15 @@ export component MainWindow inherits Window {
 
             // noi dung cac tab
             VerticalLayout {
-                padding: 20px;
-                padding-top: 18px;
-                spacing: 12px;
+                horizontal-stretch: 1;
+                padding-left: 20px;
+                padding-right: 20px;
+                padding-top: 14px;
+                padding-bottom: 10px;
+                spacing: 8px;
 
-                // banner canh bao clak chua duoc kich hoat trong fcitx5 profile
-                if root.profile_needs_setup: Rectangle {
+                // banner canh bao clak chua duoc kich hoat hoac chua nap trong fcitx5
+                if (root.profile_needs_setup || root.addon_needs_load) && root.selected_tab != 3: Rectangle {
                     border-radius: Theme.radius-md;
                     background: #3b82f6.with-alpha(0.12);
                     border-width: 0px;
@@ -176,14 +199,14 @@ export component MainWindow inherits Window {
                             horizontal-stretch: 1;
 
                             Text {
-                                text: "Chưa kích hoạt Clak trong Fcitx5";
+                                text: root.profile_needs_setup ? "Chưa kích hoạt Clak trong Fcitx5" : "Fcitx5 chưa nạp thư viện Clak";
                                 color: #60a5fa;
                                 font-size: 13px;
                                 font-weight: 600;
                             }
 
                             Text {
-                                text: "Clak chưa có trong danh sách bộ gõ. Nhấp để thêm ngay và đặt làm bộ gõ chính mà không cần cấu hình thủ công.";
+                                text: root.profile_needs_setup ? "Clak chưa có trong danh sách bộ gõ. Nhấp để thêm ngay và đặt làm bộ gõ chính mà không cần cấu hình thủ công." : "Thư viện libclak.so chưa được Fcitx5 nạp vào bộ nhớ. Nhấp để nạp và kích hoạt ngay 1-Click.";
                                 color: Theme.text-muted;
                                 font-size: 12px;
                                 wrap: word-wrap;
@@ -204,7 +227,13 @@ export component MainWindow inherits Window {
                                 ActionButton {
                                     text: "Kích hoạt 1-Click";
                                     primary: true;
-                                    clicked => { root.setup_profile_requested(); }
+                                    clicked => {
+                                        if root.profile_needs_setup {
+                                            root.setup_profile_requested();
+                                        } else {
+                                            root.restart_fcitx5_requested();
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -271,7 +300,12 @@ export component MainWindow inherits Window {
 
                 if root.selected_tab == 0: TabGeneral {
                     vertical-stretch: 1;
-                    toggle_shortcut_index <=> root.toggle_shortcut_index;
+                    toggle_shortcut_text <=> root.toggle_shortcut_text;
+                    is_recording_shortcut <=> root.is_recording_shortcut;
+                    start_recording_shortcut => {
+                        root.is_recording_shortcut = true;
+                        fs.focus();
+                    }
                     method_index <=> root.method_index;
                     charset_index <=> root.charset_index;
                     startup_mode_index <=> root.startup_mode_index;
@@ -355,14 +389,22 @@ export component MainWindow inherits Window {
                     reload_needed: root.reload_needed;
                     is_reloading: root.is_reloading;
                     profile_needs_setup: root.profile_needs_setup;
+                    addon_needs_load: root.addon_needs_load;
                     wps_needs_fix: root.wps_needs_fix;
                     jetbrains_needs_fix: root.jetbrains_needs_fix;
+                    autostart_needs_fix: root.autostart_needs_fix;
+                    permissions_needs_fix: root.permissions_needs_fix;
+                    has_fixable_issues: root.has_fixable_issues;
+                    is_fixing: root.is_fixing;
                     scan_requested => { root.doctor_scan_requested(); }
                     copy_requested => { root.doctor_copy_requested(); }
                     restart_fcitx5_requested => { root.restart_fcitx5_requested(); }
                     setup_profile_requested => { root.setup_profile_requested(); }
                     fix_wps_requested => { root.fix_wps_requested(); }
                     fix_jetbrains_requested => { root.fix_jetbrains_requested(); }
+                    auto_fix_requested => { root.auto_fix_requested(); }
+                    fix_autostart_requested => { root.fix_autostart_requested(); }
+                    fix_permissions_requested => { root.fix_permissions_requested(); }
                 }
 
                 // chan trang va nut bam thao tac
@@ -371,7 +413,7 @@ export component MainWindow inherits Window {
                 HorizontalLayout {
                     padding-left: 14px;
                     padding-right: 14px;
-                    height: 44px;
+                    height: 38px;
                     alignment: space-between;
                     spacing: 10px;
 

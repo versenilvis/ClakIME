@@ -51,7 +51,8 @@ bool hasAncestorMatching(pid_t child, const std::string& target_class) {
             std::string comm;
             if (f >> comm) {
                 for (char& c : comm) c = tolower(c);
-                if (target_class.find(comm) != std::string::npos || comm.find(target_class) != std::string::npos) {
+                if (target_class.find(comm) != std::string::npos || comm.find(target_class) != std::string::npos ||
+                    (config::isTerminalApp(target_class) && config::isTerminalApp(comm))) {
                     return true;
                 }
             }

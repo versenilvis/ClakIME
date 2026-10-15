@@ -60,7 +60,7 @@
 
               meta = with pkgs.lib; {
                 description = "Fast and highly stable Vietnamese input method for Fcitx5 and Wayland";
-                homepage = "https://github.com/versenilvis/clak";
+                homepage = "https://github.com/versenilvis/ClakIME";
                 license = licenses.bsd0;
                 platforms = platforms.linux;
               };

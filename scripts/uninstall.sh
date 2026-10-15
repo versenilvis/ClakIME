@@ -26,7 +26,7 @@ for arg in "$@"; do
             assume_yes=1
             ;;
         --help|-h)
-            echo "Cách dùng: curl -fsSL https://raw.githubusercontent.com/versenilvis/clak/main/scripts/uninstall.sh | bash [options]"
+            echo "Cách dùng: curl -fsSL https://raw.githubusercontent.com/versenilvis/ClakIME/main/scripts/uninstall.sh | bash [options]"
             echo "Hoặc: bash scripts/uninstall.sh [options]"
             echo ""
             echo "Tùy chọn:"

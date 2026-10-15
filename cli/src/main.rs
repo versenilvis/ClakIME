@@ -25,6 +25,12 @@ enum Commands {
 
         #[arg(long, help = "Output report as JSON")]
         json: bool,
+
+        #[arg(
+            long,
+            help = "Automatically fix detected issues (profile, symlinks, daemon reload, wps, jetbrains)"
+        )]
+        fix: bool,
     },
 
     #[command(about = "Benchmark latency analysis and regression assertion")]
@@ -84,8 +90,12 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Doctor { markdown, json } => {
-            commands::doctor::execute(markdown, json);
+        Commands::Doctor {
+            markdown,
+            json,
+            fix,
+        } => {
+            commands::doctor::execute(markdown, json, fix);
         }
         Commands::Bench {
             run,

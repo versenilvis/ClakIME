@@ -17,6 +17,7 @@ struct WindowInfo {
 WindowInfo getActiveWindow(const std::string& fallback_app = "");
 void setMockActiveWindow(std::optional<WindowInfo> info);
 void clearMockActiveWindow();
+void clearWindowCache();
 
 } // namespace platform
 } // namespace clak

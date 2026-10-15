@@ -1,5 +1,6 @@
 #include "engine.h"
 #include "platform/mouse_tracker.h"
+#include "platform/window_info.h"
 #include "uinput/uinput.h"
 
 #include "utils/log.h"
@@ -177,6 +178,7 @@ void ClakEngine::keyEvent(const fcitx::InputMethodEntry& entry, fcitx::KeyEvent&
 
 void ClakEngine::activate(const fcitx::InputMethodEntry& entry, fcitx::InputContextEvent& event) {
     FCITX_UNUSED(entry);
+    platform::clearWindowCache();
     auto* ic = event.inputContext();
     if (ic) {
         ic->statusArea().addAction(fcitx::StatusGroup::InputMethod, &settings_action_);

@@ -235,6 +235,7 @@ TEST_F(RegressionCorpusTest, test_regression_gecko_stale_surrounding) {
 TEST_F(RegressionCorpusTest, test_regression_twitter_draftjs_dd) {
     // draftjs rich text editors switch to uinput after 3 surrounding text mismatches
     MockInputContext ic(instance_->inputContextManager(), "google-chrome");
+    ic.auto_update_surrounding = true;
     ime::ClakState state(engine_.get(), &ic);
 
     size_t uinput_calls = 0;
@@ -589,10 +590,10 @@ TEST_F(RegressionCorpusTest, test_regression_unknown_site_draftjs_auto_detect) {
     EXPECT_TRUE(state->isDraftJsEditor());
     EXPECT_TRUE(state->isRichTextEditor());
 
-    // next deletion must use uinput with draftjs pacing (1ms post_delay, 1ms gap)
+    // next deletion must use uinput with draftjs pacing (kDraftJsPostDelayMs post_delay, kDraftJsGapMs gap)
     EXPECT_GT(uinput_calls, 0);
-    EXPECT_EQ(last_post_delay, 1);
-    EXPECT_EQ(last_gap_ms, 1);
+    EXPECT_EQ(last_post_delay, config::kDraftJsPostDelayMs);
+    EXPECT_EQ(last_gap_ms, config::kDraftJsGapMs);
 }
 
 TEST_F(RegressionCorpusTest, test_regression_backspace_hold_continues_deleting_when_composing_empties) {
@@ -646,6 +647,266 @@ TEST_F(RegressionCorpusTest, test_regression_backspace_hold_does_not_suppress_no
     for (int i = 0; i < 5; ++i) {
         bool repeat_filtered = ic.sendKey(FcitxKey_BackSpace, fcitx::KeyStates(), false, state);
         EXPECT_FALSE(repeat_filtered);
+    }
+}
+
+TEST_F(RegressionCorpusTest, test_regression_zero_cursor_surrounding_never_crashes_compositor) {
+    // When an editor (e.g. Twitter/DraftJS on GNOME Wayland) reports cursor 0 in surrounding text
+    // while replacing 'dd' -> 'đ', calling deleteSurroundingText(-1, 1) violates Wayland protocol
+    // and causes Mutter (GNOME Shell) to crash with SIGABRT (assertion before >= start failed).
+    // Clak must detect cursor < real_bs, never invoke deleteSurroundingText, and route safely to uinput.
+    MockInputContext ic(instance_->inputContextManager(), "google-chrome");
+    auto* state = ic.propertyFor(&engine_->factory());
+
+    size_t uinput_calls = 0;
+    size_t uinput_bs_sent = 0;
+    uinput::UinputTool::instance().setMockHandler([&](size_t count, uint32_t, uint32_t, uint32_t) {
+        uinput_calls++;
+        uinput_bs_sent = count;
+        return true;
+    });
+
+    // Twitter Tweet composer on Wayland reports newline with cursor 0
+    ic.setSurrounding("\n", 0, 0);
+    ic.typeChar('d', state);
+
+    // DraftJS React DOM re-renders without updating surrounding text cursor (cursor remains 0)
+    ic.setSurrounding("\n", 0, 0);
+    ic.typeChar('d', state);
+
+    // Must NEVER call deleteSurroundingText (which crashes Mutter)
+    EXPECT_TRUE(ic.deletions.empty());
+
+    // Must route to uinput with 1 deletion + 1 sentinel = 2 backspaces
+    EXPECT_EQ(uinput_calls, 1);
+    EXPECT_EQ(uinput_bs_sent, 2);
+    EXPECT_TRUE(state->isDeleting());
+
+    // Must automatically flag editor as DraftJS/RichText
+    EXPECT_TRUE(state->isDraftJsEditor());
+    EXPECT_TRUE(state->isRichTextEditor());
+
+    // Send backspaces to finish deletion and commit 'đ'
+    ic.sendCleanBackspace(state);
+    ic.sendCleanBackspace(state);
+
+    EXPECT_FALSE(state->isDeleting());
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "đ");
+}
+
+TEST_F(RegressionCorpusTest, test_regression_twitter_draftjs_newline_proactive_detection) {
+    // Twitter/DraftJS composer often exposes surrounding text ending with double newlines "\n\n"
+    // or placeholder text. Clak must proactively identify it as DraftJS/RichText and route to uinput.
+    MockInputContext ic(instance_->inputContextManager(), "google-chrome");
+    auto* state = ic.propertyFor(&engine_->factory());
+
+    size_t uinput_calls = 0;
+    uinput::UinputTool::instance().setMockHandler([&](size_t, uint32_t, uint32_t, uint32_t) {
+        uinput_calls++;
+        return true;
+    });
+
+    ic.setSurrounding("What is happening?!\n\n", 21, 21);
+    ic.typeChar('d', state);
+    ic.typeChar('d', state);
+
+    // Must NEVER call deleteSurroundingText
+    EXPECT_TRUE(ic.deletions.empty());
+    // Must use uinput
+    EXPECT_GT(uinput_calls, 0);
+    EXPECT_TRUE(state->isDraftJsEditor());
+    EXPECT_TRUE(state->isRichTextEditor());
+
+    ic.sendCleanBackspace(state);
+    ic.sendCleanBackspace(state);
+    EXPECT_FALSE(state->isDeleting());
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "đ");
+}
+
+TEST_F(RegressionCorpusTest, test_regression_twitter_space_does_not_clear_draftjs_mode) {
+    // When typing consecutive words in Twitter composer separated by space,
+    // the DraftJS editor detection must persist and NOT be cleared by space or word reset.
+    platform::setMockActiveWindow(platform::WindowInfo{"google-chrome", "Home / X", 12345});
+    MockInputContext ic(instance_->inputContextManager(), "google-chrome");
+    auto* state = ic.propertyFor(&engine_->factory());
+
+    size_t uinput_calls = 0;
+    uinput::UinputTool::instance().setMockHandler([&](size_t, uint32_t, uint32_t, uint32_t) {
+        uinput_calls++;
+        return true;
+    });
+
+    // 1st word: "dd" -> "đ" in DraftJS
+    ic.setSurrounding("\n\n", 2, 2);
+    ic.typeChar('d', state);
+    ic.typeChar('d', state);
+    EXPECT_TRUE(state->isDraftJsEditor());
+    ic.sendCleanBackspace(state);
+    ic.sendCleanBackspace(state);
+    EXPECT_EQ(ic.commits.back(), "đ");
+
+    // Type space
+    ic.typeChar(' ', state);
+    // DraftJS mode MUST NOT be cleared by typing space!
+    EXPECT_TRUE(state->isDraftJsEditor());
+
+    // 2nd word: "dd" -> "đ"
+    size_t prev_uinput = uinput_calls;
+    ic.typeChar('d', state);
+    ic.typeChar('d', state);
+
+    // 2nd word must also route to uinput and never call deleteSurroundingText
+    EXPECT_TRUE(ic.deletions.empty());
+    EXPECT_GT(uinput_calls, prev_uinput);
+
+    ic.sendCleanBackspace(state);
+    ic.sendCleanBackspace(state);
+    EXPECT_EQ(ic.commits.back(), "đ");
+}
+
+TEST_F(RegressionCorpusTest, test_regression_terminal_kitty_tone_undo_ass_to_as) {
+    // In terminal emulators (e.g. Kitty running zsh), surrounding text is ignored or unsupported by PTY.
+    // Typing 'a' + 's' -> 'á', then typing 's' again must undo tone to 'as' using uinput backspace,
+    // never deleteSurroundingText (which causes 'aá' or 'aáas').
+    platform::setMockActiveWindow(platform::WindowInfo{"kitty", "kitty", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "kitty");
+    auto* state = ic.propertyFor(&engine_->factory());
+
+    size_t uinput_calls = 0;
+    size_t uinput_bs_sent = 0;
+    uinput::UinputTool::instance().setMockHandler([&](size_t count, uint32_t, uint32_t, uint32_t) {
+        uinput_calls++;
+        uinput_bs_sent += count;
+        return true;
+    });
+
+    // 1. Type 'a' -> forward key (del=0)
+    ic.typeChar('a', state);
+    EXPECT_TRUE(ic.commits.empty());
+    EXPECT_TRUE(ic.deletions.empty());
+    EXPECT_EQ(uinput_calls, 0);
+
+    // 2. Type 's' -> replace 'a' with 'á' via uinput (1 bs + 1 sentinel = 2 bs)
+    ic.typeChar('s', state);
+    EXPECT_TRUE(ic.deletions.empty());
+    EXPECT_EQ(uinput_calls, 1);
+    EXPECT_EQ(uinput_bs_sent, 2);
+    EXPECT_TRUE(state->isDeleting());
+
+    ic.sendCleanBackspace(state);
+    ic.sendCleanBackspace(state);
+    EXPECT_FALSE(state->isDeleting());
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "á");
+
+    // 3. Type 's' -> tone undo: replace 'á' with 'as' via uinput (1 bs + 1 sentinel = 2 bs)
+    ic.typeChar('s', state);
+    EXPECT_TRUE(ic.deletions.empty());
+    EXPECT_EQ(uinput_calls, 2);
+    EXPECT_EQ(uinput_bs_sent, 4);
+    EXPECT_TRUE(state->isDeleting());
+
+    ic.sendCleanBackspace(state);
+    ic.sendCleanBackspace(state);
+    EXPECT_FALSE(state->isDeleting());
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "as");
+}
+
+TEST_F(RegressionCorpusTest, test_regression_antigravity_vscode_uses_native_surrounding_text_not_uinput) {
+    // Antigravity / VSCode is an Electron application. It natively and reliably supports
+    // Wayland deleteSurroundingText. It must NOT be treated as a Linux terminal,
+    // avoiding synthetic uinput backspaces that race with Electron's DOM and eat characters.
+    platform::setMockActiveWindow(platform::WindowInfo{"antigravity", "antigravity", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "antigravity");
+    auto* state = ic.propertyFor(&engine_->factory());
+
+    size_t uinput_calls = 0;
+    uinput::UinputTool::instance().setMockHandler([&](size_t, uint32_t, uint32_t, uint32_t) {
+        uinput_calls++;
+        return true;
+    });
+
+    ic.setSurrounding("", 0, 0);
+    ic.typeChar('a', state);
+
+    ic.setSurrounding("a", 1, 1);
+    ic.typeChar('s', state);
+
+    // Must use native deleteSurroundingText, NOT uinput!
+    EXPECT_EQ(uinput_calls, 0);
+    EXPECT_FALSE(ic.deletions.empty());
+    EXPECT_EQ(ic.deletions.back().first, -1);
+    EXPECT_EQ(ic.deletions.back().second, 1);
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "á");
+}
+
+TEST_F(RegressionCorpusTest, test_regression_antigravity_double_newline_chat_never_routes_to_uinput) {
+    // In Antigravity / Electron chat prompt, surrounding text ends with "\n\n".
+    // Clak must NEVER classify Antigravity as DraftJS or route to Uinput on double newline.
+    platform::setMockActiveWindow(platform::WindowInfo{"antigravity", "Antigravity", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "antigravity");
+    auto* state = ic.propertyFor(&engine_->factory());
+
+    size_t uinput_calls = 0;
+    uinput::UinputTool::instance().setMockHandler([&](size_t, uint32_t, uint32_t, uint32_t) {
+        uinput_calls++;
+        return true;
+    });
+
+    ic.setSurrounding("\n\n", 0, 0);
+    ic.typeChar('a', state);
+
+    ic.setSurrounding("a\n\n", 1, 1);
+    ic.typeChar('s', state);
+
+    EXPECT_FALSE(state->isDraftJsEditor());
+    EXPECT_FALSE(state->isRichTextEditor());
+    EXPECT_EQ(uinput_calls, 0);
+    EXPECT_FALSE(ic.deletions.empty());
+    EXPECT_EQ(ic.deletions.back().first, -1);
+    EXPECT_EQ(ic.deletions.back().second, 1);
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "á");
+}
+
+TEST_F(RegressionCorpusTest, test_regression_brave_fast_typing_stale_surrounding_never_falls_back_to_uinput) {
+    // When typing fast in Brave on normal web pages, surrounding text may lag behind (actualWord == preWord).
+    // SurroundingVerifier must recognize this as normal IPC latency and NOT increment mismatch count
+    // or auto-switch to Uinput.
+    platform::setMockActiveWindow(platform::WindowInfo{"brave", "Google - Brave", 5678});
+    MockInputContext ic(instance_->inputContextManager(), "brave");
+    auto* state = ic.propertyFor(&engine_->factory());
+
+    size_t uinput_calls = 0;
+    uinput::UinputTool::instance().setMockHandler([&](size_t, uint32_t, uint32_t, uint32_t) {
+        uinput_calls++;
+        return true;
+    });
+
+    for (int i = 0; i < 5; ++i) {
+        state->reset();
+        ic.clearHistory();
+
+        // Type 'a'
+        ic.setSurrounding("hello ", 6, 6);
+        ic.typeChar('a', state);
+
+        // Type 's' -> replaces 'a' with 'á'
+        ic.setSurrounding("hello a", 7, 7);
+        ic.typeChar('s', state);
+
+        // Next keystroke 't' arrives while surrounding text is still lagging at "hello a" (preWord)
+        ic.setSurrounding("hello a", 7, 7);
+        ic.typeChar('t', state);
+
+        // Must NOT switch to uinput!
+        EXPECT_FALSE(state->isDraftJsEditor());
+        EXPECT_FALSE(state->isRichTextEditor());
+        EXPECT_EQ(uinput_calls, 0);
     }
 }
 

@@ -90,6 +90,8 @@ private:
   std::string cached_site_;
   bool ctrl_pressed_first_{false};
   bool ctrl_shift_armed_{false};
+  bool alt_pressed_first_{false};
+  bool alt_shift_armed_{false};
   uint64_t last_selection_time_us_{0};
 
   RepeatHandler repeat_handler_;

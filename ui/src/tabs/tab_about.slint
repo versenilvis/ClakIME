@@ -119,7 +119,7 @@ export component TabAbout inherits VerticalLayout {
             }
 
             Text {
-                text: "versenilvis/clak (main)";
+                text: "versenilvis/ClakIME (main)";
                 color: Theme.text-muted;
                 font-size: 12px;
                 font-weight: Theme.text-weight;
@@ -306,31 +306,20 @@ export component TabAbout inherits VerticalLayout {
             alignment: center;
             spacing: 3px;
             Text {
-                text: "Tác giả";
+                text: "Mã nguồn";
                 color: Theme.text-primary;
                 font-size: 14px;
                 font-weight: Theme.feature-title-weight;
             }
 
-            Text {
-                text: "versenilvis";
-                color: Theme.text-muted;
-                font-size: 12px;
-                font-weight: Theme.text-weight;
-            }
-        }
-
-        VerticalLayout {
-            alignment: center;
-            profile_ta := TouchArea {
+            source_ta := TouchArea {
                 mouse-cursor: pointer;
-                clicked => { root.open_url("https://github.com/versenilvis"); }
+                clicked => { root.open_url("https://github.com/versenilvis/ClakIME"); }
                 Text {
-                    text: "Hồ sơ";
-                    color: profile_ta.has-hover ? #60cdff : #38bdf8;
+                    text: "versenilvis/ClakIME";
+                    color: source_ta.has-hover ? #60cdff : #38bdf8;
                     font-size: 12px;
-                    font-weight: 600;
-                    vertical-alignment: center;
+                    font-weight: Theme.text-weight;
                 }
             }
         }

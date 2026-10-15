@@ -37,7 +37,7 @@ bool isForceUinputSite(const std::string& site) {
 
 bool isVSCodeApp(const std::string& app) {
   static const std::vector<std::string> vsc = {
-    "antigravity-ide", "cursor", "windsurf", "vscodium", "codium",
+    "antigravity", "antigravity-ide", "cursor", "windsurf", "vscodium", "codium",
     "code-oss", "positron", "trae"};
   if (app == "code" || app == "vscode") return true;
   for (const auto& v : vsc) {
@@ -58,12 +58,11 @@ bool isJetBrainsApp(const std::string& app) {
 }
 
 bool isTerminalApp(const std::string& app) {
-  if (isVSCodeApp(app)) return true;
   if (isJetBrainsApp(app)) return true;
   static const std::vector<std::string> terms = {
     "kitty", "ghostty", "alacritty", "foot", "wezterm", "xterm",
     "gnome-terminal", "konsole", "tilix", "terminator", "urxvt",
-    "terminal", "x-terminal-emulator"};
+    "terminal", "x-terminal-emulator", "x-terminal-emul"};
   for (const auto& t : terms) {
     if (app.find(t) != std::string::npos) return true;
   }

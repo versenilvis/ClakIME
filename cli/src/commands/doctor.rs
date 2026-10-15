@@ -1,6 +1,33 @@
 use clak_diagnostics::run_diagnostics;
 
-pub fn execute(markdown: bool, json: bool) {
+pub fn execute(markdown: bool, json: bool, fix: bool) {
+    if fix {
+        println!("=== CLAK DOCTOR: TỰ ĐỘNG KHẮC PHỤC SỰ CỐ ===");
+        let summary = clak_diagnostics::auto_fix_all(true);
+        if summary.profile_fixed {
+            println!("    ✔ Đã cấu hình profile và liên kết thư viện thành công.");
+        }
+        if summary.fcitx5_restarted {
+            println!("    ✔ Đã khởi động lại Fcitx5 daemon thành công.");
+        }
+        if summary.autostart_enabled {
+            println!("    ✔ Đã kích hoạt khởi động cùng hệ thống.");
+        }
+        if summary.wps_patched > 0 {
+            println!("    ✔ Đã cấu hình tương thích WPS Office.");
+        }
+        if summary.jetbrains_patched > 0 {
+            println!("    ✔ Đã cấu hình tương thích JetBrains IDEs.");
+        }
+        if summary.permissions_fixed {
+            println!("    ✔ Đã cấp quyền thiết bị input/uinput thành công.");
+        }
+        for err in &summary.errors {
+            eprintln!("    ❌ {}", err);
+        }
+        println!();
+    }
+
     let report = run_diagnostics();
 
     if json {

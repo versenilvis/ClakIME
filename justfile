@@ -2,6 +2,13 @@
 default:
     @just --list
 
+# automatically include user-local pkg-config path if present (e.g. non-root Debian/Ubuntu)
+export PKG_CONFIG_PATH := if path_exists(home_directory() + "/.local/usr/lib/x86_64-linux-gnu/pkgconfig") == "true" {
+    home_directory() + "/.local/usr/lib/x86_64-linux-gnu/pkgconfig" + (if env_var_or_default("PKG_CONFIG_PATH", "") != "" { ":" + env_var_or_default("PKG_CONFIG_PATH", "") } else { "" })
+} else {
+    env_var_or_default("PKG_CONFIG_PATH", "")
+}
+
 # build, install and restart fcitx5
 [group("dev")]
 dev: build install restart

@@ -2,7 +2,7 @@
 header = "# Changelog\n\nAll notable changes to this project are documented in this file.\n\n"
 body = """
 {% if version %}\
-## [{{ version }}](https://github.com/versenilvis/clak/releases/tag/{{ version }}) - {{ timestamp | date(format="%Y-%m-%d") }}
+## [{{ version }}](https://github.com/versenilvis/ClakIME/releases/tag/{{ version }}) - {{ timestamp | date(format="%Y-%m-%d") }}
 {% else %}\
 ## [Unreleased]
 {% endif %}\
@@ -11,7 +11,7 @@ body = """
 ### {{ group | upper_first }}
 {{ "\n" }}\
 {% for commit in commits %}\
-- {{ commit.message | upper_first }} ([{{ commit.id | truncate(length=6, end="") }}](https://github.com/versenilvis/clak/commit/{{ commit.id }}))
+- {{ commit.message | upper_first }} ([{{ commit.id | truncate(length=6, end="") }}](https://github.com/versenilvis/ClakIME/commit/{{ commit.id }}))
 {% endfor %}\
 {{ "\n" }}\
 {% endfor %}\
@@ -24,7 +24,7 @@ conventional_commits = true
 filter_unconventional = true
 split_commits = false
 commit_preprocessors = [
-    { pattern = '\(#([0-9]+)\)', replace = "([#${1}](https://github.com/versenilvis/clak/issues/${1}))" },
+    { pattern = '\(#([0-9]+)\)', replace = "([#${1}](https://github.com/versenilvis/ClakIME/issues/${1}))" },
 ]
 tag_pattern = "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
 sort_commits = "oldest"

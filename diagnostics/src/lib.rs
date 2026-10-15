@@ -3,10 +3,10 @@ pub mod report;
 
 use serde::{Deserialize, Serialize};
 
-pub use checks::autostart::{check_autostart, AutostartStatus};
+pub use checks::autostart::{check_autostart, disable_autostart, enable_autostart, AutostartStatus};
 pub use checks::compatibility::{
     check_jetbrains, check_profile, check_wps, fix_fcitx5_profile, fix_jetbrains_compatibility,
-    fix_wps_compatibility, JetBrainsStatus, ProfileStatus, WpsStatus,
+    fix_wps_compatibility, restart_fcitx5_daemon, JetBrainsStatus, ProfileStatus, WpsStatus,
 };
 pub use checks::config::{check_config, ConfigStatus};
 pub use checks::conflicts::{check_conflicts, AppConflict};
@@ -14,7 +14,7 @@ pub use checks::daemon::{check_daemon, DaemonStatus};
 pub use checks::environment::{check_environment, EnvironmentStatus};
 pub use checks::frontends::{check_frontends, FrontendStatus};
 pub use checks::memory::{check_memory, MemoryInspection};
-pub use checks::permissions::{check_permissions, PermissionChecks};
+pub use checks::permissions::{check_permissions, fix_input_permissions, PermissionChecks};
 pub use checks::system::{check_system, SystemInfo};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -248,6 +248,86 @@ pub fn run_diagnostics() -> DiagnosticReport {
         issues,
         warnings,
     }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AutoFixSummary {
+    pub profile_fixed: bool,
+    pub fcitx5_restarted: bool,
+    pub autostart_enabled: bool,
+    pub wps_patched: usize,
+    pub jetbrains_patched: usize,
+    pub permissions_fixed: bool,
+    pub errors: Vec<String>,
+}
+
+impl AutoFixSummary {
+    pub fn has_any_action(&self) -> bool {
+        self.profile_fixed
+            || self.fcitx5_restarted
+            || self.autostart_enabled
+            || self.wps_patched > 0
+            || self.jetbrains_patched > 0
+            || self.permissions_fixed
+    }
+}
+
+pub fn auto_fix_all(include_permissions: bool) -> AutoFixSummary {
+    let mut summary = AutoFixSummary::default();
+    let pre_report = run_diagnostics();
+
+    // 1. Setup profile if not configured
+    if !pre_report.profile.clak_in_profile || !pre_report.profile.is_default_im {
+        match fix_fcitx5_profile() {
+            Ok(_) => summary.profile_fixed = true,
+            Err(e) => summary.errors.push(format!("Lỗi cấu hình profile: {}", e)),
+        }
+    }
+
+    // 2. Restart daemon if addon not loaded or deleted inode
+    if pre_report.daemon.fcitx5_running && (!pre_report.memory.clak_loaded || pre_report.memory.is_deleted_inode) {
+        if restart_fcitx5_daemon() {
+            summary.fcitx5_restarted = true;
+        } else {
+            summary.errors.push("Khởi động lại Fcitx5 không thành công".to_string());
+        }
+    } else if pre_report.daemon.fcitx5_running && pre_report.daemon.current_im.as_deref() != Some("clak") {
+        let _ = std::process::Command::new("fcitx5-remote").args(["-s", "clak"]).status();
+    }
+
+    // 3. Enable autostart if disabled
+    if !pre_report.autostart.is_enabled {
+        match enable_autostart() {
+            Ok(_) => summary.autostart_enabled = true,
+            Err(e) => summary.errors.push(format!("Lỗi bật khởi động cùng hệ thống: {}", e)),
+        }
+    }
+
+    // 4. Fix WPS compatibility if needed
+    if pre_report.wps.installed && !pre_report.wps.configured {
+        match fix_wps_compatibility() {
+            Ok(count) => summary.wps_patched = count,
+            Err(e) => summary.errors.push(format!("Lỗi cấu hình WPS: {}", e)),
+        }
+    }
+
+    // 5. Fix JetBrains compatibility if needed
+    if pre_report.jetbrains.installed && !pre_report.jetbrains.unconfigured_ides.is_empty() {
+        match fix_jetbrains_compatibility() {
+            Ok(count) => summary.jetbrains_patched = count,
+            Err(e) => summary.errors.push(format!("Lỗi cấu hình JetBrains: {}", e)),
+        }
+    }
+
+    // 6. Fix permissions if requested and needed
+    if include_permissions && (!pre_report.permissions.uinput_writable || pre_report.permissions.input_readable_count == 0) {
+        match fix_input_permissions() {
+            Ok(_) => summary.permissions_fixed = true,
+            Err(e) => summary.errors.push(format!("Lỗi cấp quyền thiết bị: {}", e)),
+        }
+    }
+
+    summary
 }
 
 #[cfg(test)]

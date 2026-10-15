@@ -9,7 +9,8 @@ import {
 
 // tab 0: cai dat chung ve kieu go va chinh ta
 export component TabGeneral inherits VerticalLayout {
-    in-out property <int> toggle_shortcut_index: 0;
+    in-out property <string> toggle_shortcut_text: "Ctrl + Shift";
+    in-out property <bool> is_recording_shortcut: false;
     in-out property <int> method_index: 0;
     in-out property <int> charset_index: 0;
     in-out property <int> startup_mode_index: 0;
@@ -20,6 +21,7 @@ export component TabGeneral inherits VerticalLayout {
     in-out property <bool> modern_tone: true;
     in-out property <string> playground_input: "";
     callback changed();
+    callback start_recording_shortcut();
 
     spacing: 0px;
 
@@ -30,10 +32,54 @@ export component TabGeneral inherits VerticalLayout {
 
     FieldRow {
         title: "Phím chuyển";
-        SegmentedSwitch {
-            options: ["Ctrl + Shift", "Alt + Z"];
-            current-index <=> root.toggle_shortcut_index;
-            selected => { root.changed(); }
+        subtitle: root.is_recording_shortcut ? "Đang chờ phím... (nhấn tổ hợp phím hoặc ESC để hủy)" : "Bấm để đổi phím tắt chuyển đổi";
+
+        Rectangle {
+            height: 32px;
+            min-width: 140px;
+            border-radius: 8px;
+            background: root.is_recording_shortcut ? #3b82f6.with-alpha(0.22) : (rec_ta.has-hover ? #282828 : #1c1c1e);
+            border-width: 1px;
+            border-color: root.is_recording_shortcut ? #60a5fa : (rec_ta.has-hover ? #3f3f46 : #27272a);
+
+            animate background, border-color {
+                duration: 150ms;
+                easing: ease-out;
+            }
+
+            rec_ta := TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    if root.is_recording_shortcut {
+                        root.is_recording_shortcut = false;
+                    } else {
+                        root.start_recording_shortcut();
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                padding-left: 14px;
+                padding-right: 14px;
+                spacing: 8px;
+                alignment: center;
+
+                if root.is_recording_shortcut: Text {
+                    text: "...";
+                    color: #60a5fa;
+                    font-size: 14px;
+                    font-weight: 700;
+                    vertical-alignment: center;
+                }
+
+                if !root.is_recording_shortcut: Text {
+                    text: root.toggle_shortcut_text;
+                    color: Theme.text-primary;
+                    font-size: 13px;
+                    font-weight: 600;
+                    vertical-alignment: center;
+                }
+            }
         }
     }
 
@@ -109,17 +155,17 @@ export component TabGeneral inherits VerticalLayout {
         show-divider: false;
     }
 
-    // o go thu nghiem keo dai xuong chan trang
+    // o go thu nghiem
     HorizontalLayout {
-        vertical-stretch: 1;
         padding-left: 14px;
         padding-right: 14px;
         padding-top: 4px;
         padding-bottom: 2px;
 
         Rectangle {
-            vertical-stretch: 1;
             min-height: 48px;
+            max-height: 76px;
+            preferred-height: 58px;
             background: #121214;
             border-radius: 8px;
             border-width: 0px;

@@ -319,11 +319,60 @@ impl ClakContext {
             };
 
             let before_cur: String = chars[..cur].iter().collect();
-            let matches_last = !self.last_composed.is_empty()
+            let mut matches_last = !self.last_composed.is_empty()
                 && (before_cur.ends_with(&self.last_composed)
                     || (!self.prev_composed.is_empty()
                         && before_cur.ends_with(&self.prev_composed))
                     || (!self.raw_buffer.is_empty() && before_cur.ends_with(&self.raw_buffer)));
+
+            if !matches_last && !self.last_composed.is_empty() {
+                for i in (1..self.last_composed.len()).rev() {
+                    if let Some(prefix) = self.last_composed.get(..i) {
+                        if !prefix.is_empty() && before_cur.ends_with(prefix) {
+                            matches_last = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if !matches_last && !self.prev_composed.is_empty() {
+                for i in (1..self.prev_composed.len()).rev() {
+                    if let Some(prefix) = self.prev_composed.get(..i) {
+                        if !prefix.is_empty() && before_cur.ends_with(prefix) {
+                            matches_last = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if !matches_last && !self.raw_buffer.is_empty() {
+                for i in (1..self.raw_buffer.len()).rev() {
+                    if let Some(prefix) = self.raw_buffer.get(..i) {
+                        if !prefix.is_empty() && before_cur.ends_with(prefix) {
+                            matches_last = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if !matches_last && !self.raw_buffer.is_empty() && cur > 0 {
+                let mut start = cur;
+                while start > 0 && !is_word_break(chars[start - 1] as u32) {
+                    start -= 1;
+                }
+                let word: String = chars[start..cur].iter().collect();
+                if !word.is_empty() {
+                    let word_telex = decompose_to_telex(&word);
+                    if self.raw_buffer.starts_with(&word_telex)
+                        || self.raw_buffer.starts_with(&word)
+                    {
+                        matches_last = true;
+                    }
+                }
+            }
 
             if sel_start == sel_end {
                 self.typed_over_selection = false;
@@ -341,7 +390,7 @@ impl ClakContext {
             // word seeding from surrounding text only when cursor is at word end
             let is_at_word_end = cur == chars.len() || is_word_break(chars[cur] as u32);
             let is_telex_mod = matches!(
-                key_ch,
+                key_ch.to_ascii_lowercase(),
                 'a' | 'e' | 'o' | 'd' | 'w' | 's' | 'f' | 'r' | 'x' | 'j'
             );
             if !just_del
@@ -1456,5 +1505,55 @@ mod tests {
         let act7 = ctx.process_key(b'j' as u32, "j", false, Some("đươc"), 4, 4);
         assert_eq!(act7.action_type, ACTION_REPLACE);
         assert_eq!(ctx.last_composed, "được");
+    }
+
+    #[test]
+    fn test_rapid_typing_lagging_surrounding_viet_tone_marks() {
+        let mut ctx = ClakContext::new(Method::Telex);
+        // Type "việt" (v-i-e-e-t-j) rapidly in a multiline document
+        // Surrounding text lags behind at "v" or "vi"
+        ctx.process_key(b'v' as u32, "v", false, Some("xin chao "), 9, 9);
+        ctx.process_key(b'i' as u32, "i", false, Some("xin chao v"), 10, 10);
+        // 1st 'e' -> "vie"
+        let act_e1 = ctx.process_key(b'e' as u32, "e", false, Some("xin chao vi"), 11, 11);
+        assert_eq!(act_e1.action_type, ACTION_FORWARD);
+        assert_eq!(ctx.last_composed, "vie");
+
+        // 2nd 'e' -> replaces to "viê"
+        let act_e2 = ctx.process_key(b'e' as u32, "e", false, Some("xin chao vie"), 12, 12);
+        assert_eq!(act_e2.action_type, ACTION_REPLACE);
+        assert_eq!(ctx.last_composed, "viê");
+
+        // Client still reports "xin chao vi" at cursor 11 due to Wayland roundtrip latency
+        // User immediately types 't' -> "viêt"
+        let act_t = ctx.process_key(b't' as u32, "t", false, Some("xin chao vi"), 11, 11);
+        assert_eq!(act_t.action_type, ACTION_FORWARD);
+        assert_eq!(ctx.last_composed, "viêt");
+
+        // Client STILL reports "xin chao vi" at cursor 11
+        // User types tone 'j' -> "việt"
+        // IME MUST NOT RESET or eat letters!
+        let act_j = ctx.process_key(b'j' as u32, "j", false, Some("xin chao vi"), 11, 11);
+        assert_eq!(act_j.action_type, ACTION_REPLACE);
+        assert_eq!(ctx.last_composed, "việt");
+    }
+
+    #[test]
+    fn test_twitter_draftjs_uppercase_dd_to_capital_d_stroke() {
+        let mut ctx = ClakContext::new(Method::Telex);
+        // Key 1: 'D' forwarded, editor gets "D\n"
+        let act1 = ctx.process_key(b'D' as u32, "D", false, Some("\n"), 0, 0);
+        assert_eq!(act1.action_type, ACTION_FORWARD);
+        assert_eq!(ctx.last_composed, "D");
+
+        // Twitter / DraftJS remounts DOM, causing reset of IME context
+        ctx.reset();
+        assert!(ctx.last_composed.is_empty());
+
+        // Key 2: 'D' pressed. Surrounding text reports "D\n" cursor 1.
+        // Engine must seed "D", accept uppercase 'D' as telex modifier, and replace to "Đ"!
+        let act2 = ctx.process_key(b'D' as u32, "D", false, Some("D\n"), 1, 1);
+        assert_eq!(act2.action_type, ACTION_REPLACE);
+        assert_eq!(ctx.last_composed, "Đ");
     }
 }

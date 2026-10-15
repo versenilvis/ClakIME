@@ -47,9 +47,9 @@ export component ActionButton inherits Rectangle {
     in property <bool> enabled: true;
     callback clicked();
 
-    height: 32px;
+    height: 30px;
     horizontal-stretch: 0;
-    border-radius: 7px;
+    border-radius: 6px;
     background: !root.enabled ? #1a1a1a : (
         root.destructive ? (btn_ta.has-hover ? #c5585830 : #c558581a)
         : (root.primary ? (btn_ta.has-hover ? #ffffff : #e6e6e6)
@@ -68,9 +68,9 @@ export component ActionButton inherits Rectangle {
 
     hl := HorizontalLayout {
         alignment: center;
-        min-width: 78px;
-        padding-left: 16px;
-        padding-right: 16px;
+        min-width: 56px;
+        padding-left: 12px;
+        padding-right: 12px;
         padding-top: 1px;
 
         Text {
@@ -78,8 +78,8 @@ export component ActionButton inherits Rectangle {
             color: !root.enabled ? #505050 : (
                 root.destructive ? (btn_ta.has-hover ? #e57c7c : #c55858)
                 : (root.primary ? #000000 : (btn_ta.has-hover ? #ffffff : #d4d4d4)));
-            font-size: 14px;
-            font-weight: 700;
+            font-size: 13px;
+            font-weight: 600;
             vertical-alignment: center;
             horizontal-alignment: center;
             animate color { duration: 120ms; }

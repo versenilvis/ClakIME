@@ -73,8 +73,62 @@ pub fn check_profile() -> ProfileStatus {
     }
 }
 
+// get active input method group name from fcitx5 dbus, falling back to "Default"
+fn get_active_im_group() -> String {
+    let out = Command::new("busctl")
+        .args([
+            "--user",
+            "call",
+            "org.fcitx.Fcitx5",
+            "/controller",
+            "org.fcitx.Fcitx.Controller1",
+            "CurrentInputMethodGroup",
+        ])
+        .output();
+    if let Ok(output) = out {
+        if output.status.success() {
+            let stdout_str = String::from_utf8_lossy(&output.stdout);
+            if let Some(start) = stdout_str.find('"') {
+                if let Some(end) = stdout_str[start + 1..].find('"') {
+                    let grp = &stdout_str[start + 1..start + 1 + end];
+                    if !grp.is_empty() {
+                        return grp.to_string();
+                    }
+                }
+            }
+        }
+    }
+
+    let grps_out = Command::new("busctl")
+        .args([
+            "--user",
+            "call",
+            "org.fcitx.Fcitx5",
+            "/controller",
+            "org.fcitx.Fcitx.Controller1",
+            "InputMethodGroups",
+        ])
+        .output();
+    if let Ok(output) = grps_out {
+        if output.status.success() {
+            let stdout_str = String::from_utf8_lossy(&output.stdout);
+            if let Some(start) = stdout_str.find('"') {
+                if let Some(end) = stdout_str[start + 1..].find('"') {
+                    let grp = &stdout_str[start + 1..start + 1 + end];
+                    if !grp.is_empty() {
+                        return grp.to_string();
+                    }
+                }
+            }
+        }
+    }
+
+    "Default".to_string()
+}
+
 // try adding clak and setting default im via fcitx5 dbus controller
 fn setup_profile_via_dbus() -> bool {
+    let active_group = get_active_im_group();
     let out = Command::new("busctl")
         .args([
             "--user",
@@ -84,7 +138,7 @@ fn setup_profile_via_dbus() -> bool {
             "org.fcitx.Fcitx.Controller1",
             "InputMethodGroupInfo",
             "s",
-            "Default",
+            &active_group,
         ])
         .output();
 
@@ -125,7 +179,13 @@ fn setup_profile_via_dbus() -> bool {
         return false;
     }
 
-    let layout = tokens.get(1).map(|s| s.as_str()).unwrap_or("us");
+    let raw_layout = tokens.get(1).map(|s| s.as_str()).unwrap_or("us");
+    let layout = if raw_layout.is_empty() || raw_layout.starts_with("vn") {
+        "us"
+    } else {
+        raw_layout
+    };
+
     let mut items: Vec<(String, String)> = Vec::new();
     let mut i = 3;
     while i < tokens.len() {
@@ -148,7 +208,7 @@ fn setup_profile_via_dbus() -> bool {
         "org.fcitx.Fcitx.Controller1".to_string(),
         "SetInputMethodGroupInfo".to_string(),
         "ssa(ss)".to_string(),
-        "Default".to_string(),
+        active_group,
         layout.to_string(),
         count_str,
     ];
@@ -181,27 +241,58 @@ fn setup_profile_via_dbus() -> bool {
                 "Save",
             ])
             .status();
-        let _ = Command::new("busctl")
-            .args([
-                "--user",
-                "call",
-                "org.fcitx.Fcitx5",
-                "/controller",
-                "org.fcitx.Fcitx.Controller1",
-                "Refresh",
-            ])
-            .status();
         return true;
     }
 
     false
 }
 
-// automatically insert clak into fcitx5 profile and reload daemon
+// restart fcitx5 daemon cleanly and switch to clak
+pub fn restart_fcitx5_daemon() -> bool {
+    let mut restarted = Command::new("busctl")
+        .args([
+            "--user",
+            "call",
+            "org.fcitx.Fcitx5",
+            "/controller",
+            "org.fcitx.Fcitx.Controller1",
+            "Restart",
+        ])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
+    if !restarted {
+        restarted = if Command::new("systemctl")
+            .args(["--user", "is-active", "fcitx5.service"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
+            Command::new("systemctl")
+                .args(["--user", "restart", "fcitx5.service"])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
+        } else {
+            Command::new("fcitx5")
+                .args(["-r", "-d"])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
+        };
+    }
+
+    std::thread::sleep(std::time::Duration::from_millis(350));
+    let _ = Command::new("fcitx5-remote").args(["-s", "clak"]).status();
+    restarted
+}
+
+// automatically insert clak into fcitx5 profile, fix ubuntu paths, and reload daemon
 pub fn fix_fcitx5_profile() -> Result<(), String> {
     let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
 
-    // tao file bien moi truong 99-clak-im.conf neu chua co
+    // 1. Tao file bien moi truong 99-clak-im.conf neu chua co
     let env_dir = PathBuf::from(&home).join(".config/environment.d");
     let env_file = env_dir.join("99-clak-im.conf");
     if !env_file.exists() {
@@ -211,16 +302,40 @@ pub fn fix_fcitx5_profile() -> Result<(), String> {
         }
     }
 
-    // uu tien goi truc tiep qua fcitx5 dbus controller neu dang chay
-    if setup_profile_via_dbus() {
-        return Ok(());
+    // 2. Kiem tra va dam bao duong dan addon tren Ubuntu
+    // Fcitx5 tren Ubuntu multiarch tim lib trong x86_64-linux-gnu hoac absolute path
+    let local_lib_dir = PathBuf::from(&home).join(".local/lib/fcitx5");
+    let local_multiarch_dir = PathBuf::from(&home).join(".local/lib/x86_64-linux-gnu/fcitx5");
+    let lib_so = local_lib_dir.join("libclak.so");
+    if lib_so.exists() {
+        let _ = fs::create_dir_all(&local_multiarch_dir);
+        let multiarch_so = local_multiarch_dir.join("libclak.so");
+        if !multiarch_so.exists() {
+            #[cfg(unix)]
+            let _ = std::os::unix::fs::symlink(&lib_so, &multiarch_so);
+        }
+
+        // Dam bao addon/clak.conf tro den duong dan tuyet doi neu la user install
+        let user_addon_conf = PathBuf::from(&home).join(".local/share/fcitx5/addon/clak.conf");
+        if user_addon_conf.exists() {
+            if let Ok(c) = fs::read_to_string(&user_addon_conf) {
+                let lib_path_str = lib_so.to_string_lossy();
+                let base_lib = lib_path_str.trim_end_matches(".so");
+                if c.contains("Library=libclak") || !c.contains(base_lib) {
+                    let updated = c.replace("Library=libclak", &format!("Library={}", base_lib));
+                    let _ = fs::write(&user_addon_conf, updated);
+                }
+            }
+        }
     }
 
+    // 3. Cap nhat profile qua DBus controller (nhanh, khong mat state)
+    let _ = setup_profile_via_dbus();
+
+    // 4. Luon dam bao file ~/.config/fcitx5/profile tren disk co clak va Default Layout=us
     let config_dir = PathBuf::from(&home).join(".config/fcitx5");
     let profile_path = config_dir.join("profile");
-
-    fs::create_dir_all(&config_dir)
-        .map_err(|e| format!("không thể tạo thư mục ~/.config/fcitx5: {}", e))?;
+    let _ = fs::create_dir_all(&config_dir);
 
     if !profile_path.exists() {
         let default_content = r#"[Groups/0]
@@ -239,17 +354,12 @@ Layout=
 [GroupOrder]
 0=Default
 "#;
-        fs::write(&profile_path, default_content)
-            .map_err(|e| format!("không thể ghi file profile: {}", e))?;
-    } else {
-        let content = fs::read_to_string(&profile_path)
-            .map_err(|e| format!("không thể đọc file profile: {}", e))?;
-
+        let _ = fs::write(&profile_path, default_content);
+    } else if let Ok(content) = fs::read_to_string(&profile_path) {
         let mut lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
         let has_clak = lines.iter().any(|l| l.trim() == "Name=clak");
 
         if !has_clak {
-            // dem so luong item hien co trong group 0
             let item_count = lines
                 .iter()
                 .filter(|l| l.contains("[Groups/0/Items/"))
@@ -272,7 +382,6 @@ Layout=
             }
         }
 
-        // cap nhat DefaultIM=clak va Default Layout=us
         let mut found_default_im = false;
         for line in &mut lines {
             if line.starts_with("DefaultIM=") {
@@ -290,37 +399,11 @@ Layout=
         }
 
         let new_content = lines.join("\n") + "\n";
-        fs::write(&profile_path, new_content)
-            .map_err(|e| format!("không thể cập nhật file profile: {}", e))?;
+        let _ = fs::write(&profile_path, new_content);
     }
 
-    // yeu cau fcitx5 nap lai profile va chuyen ngay sang clak
-    let _ = Command::new("fcitx5-remote").arg("-r").status();
-    let _ = Command::new("fcitx5-remote").args(["-s", "clak"]).status();
-
-    // neu fcitx5 chua switch duoc sang clak, restart daemon de nhan addon moi
-    let is_active = Command::new("fcitx5-remote")
-        .arg("-n")
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "clak")
-        .unwrap_or(false);
-
-    if !is_active {
-        if Command::new("systemctl")
-            .args(["--user", "is-active", "fcitx5.service"])
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
-        {
-            let _ = Command::new("systemctl")
-                .args(["--user", "restart", "fcitx5.service"])
-                .status();
-        } else {
-            let _ = Command::new("fcitx5").args(["-r", "-d"]).status();
-        }
-        std::thread::sleep(std::time::Duration::from_millis(250));
-        let _ = Command::new("fcitx5-remote").args(["-s", "clak"]).status();
-    }
+    // 5. Luon khoi dong lai fcitx5 daemon de dam bao SharedLibrary duoc dlopen
+    restart_fcitx5_daemon();
 
     Ok(())
 }

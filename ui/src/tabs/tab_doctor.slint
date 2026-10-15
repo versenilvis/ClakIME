@@ -19,13 +19,21 @@ export component TabDoctor inherits VerticalLayout {
     in property <bool> reload_needed: false;
     in property <bool> is_reloading: false;
     in property <bool> profile_needs_setup: false;
+    in property <bool> addon_needs_load: false;
     in property <bool> wps_needs_fix: false;
     in property <bool> jetbrains_needs_fix: false;
+    in property <bool> autostart_needs_fix: false;
+    in property <bool> permissions_needs_fix: false;
+    in property <bool> has_fixable_issues: false;
+    in property <bool> is_fixing: false;
 
     callback scan_requested();
     callback copy_requested();
+    callback auto_fix_requested();
     callback restart_fcitx5_requested();
     callback setup_profile_requested();
+    callback fix_autostart_requested();
+    callback fix_permissions_requested();
     callback fix_wps_requested();
     callback fix_jetbrains_requested();
 
@@ -45,10 +53,11 @@ export component TabDoctor inherits VerticalLayout {
 
         VerticalLayout {
             alignment: center;
-            spacing: 4px;
+            spacing: 3px;
+            horizontal-stretch: 1;
 
             HorizontalLayout {
-                spacing: 10px;
+                spacing: 8px;
                 alignment: start;
 
                 Text {
@@ -63,8 +72,8 @@ export component TabDoctor inherits VerticalLayout {
                     alignment: center;
 
                     Rectangle {
-                        height: 24px;
-                        border-radius: 12px;
+                        height: 22px;
+                        border-radius: 11px;
                         background: root.score_color.with-alpha(0.12);
                         border-width: 0px;
                         border-color: transparent;
@@ -72,7 +81,7 @@ export component TabDoctor inherits VerticalLayout {
                         HorizontalLayout {
                             padding-left: 8px;
                             padding-right: 10px;
-                            spacing: 6px;
+                            spacing: 5px;
                             alignment: center;
 
                             VerticalLayout {
@@ -80,20 +89,20 @@ export component TabDoctor inherits VerticalLayout {
 
                                 if root.score_level == 0: Image {
                                     source: @image-url("../../assets/icons/smile.svg");
-                                    width: 14px;
-                                    height: 14px;
+                                    width: 13px;
+                                    height: 13px;
                                     colorize: root.score_color;
                                 }
                                 if root.score_level == 1: Image {
                                     source: @image-url("../../assets/icons/meh.svg");
-                                    width: 14px;
-                                    height: 14px;
+                                    width: 13px;
+                                    height: 13px;
                                     colorize: root.score_color;
                                 }
                                 if root.score_level == 2: Image {
                                     source: @image-url("../../assets/icons/frown.svg");
-                                    width: 14px;
-                                    height: 14px;
+                                    width: 13px;
+                                    height: 13px;
                                     colorize: root.score_color;
                                 }
                             }
@@ -104,7 +113,7 @@ export component TabDoctor inherits VerticalLayout {
                                 Text {
                                     text: root.score_text + "/100 · " + root.score_label;
                                     color: root.score_color;
-                                    font-size: 12px;
+                                    font-size: 11px;
                                     font-weight: 600;
                                     vertical-alignment: center;
                                 }
@@ -117,7 +126,7 @@ export component TabDoctor inherits VerticalLayout {
             Text {
                 text: root.has_scanned ? ("Lần quét gần nhất: " + root.last_scanned) : "Chưa thực hiện chẩn đoán trong phiên làm việc này";
                 color: Theme.text-muted;
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: Theme.text-weight;
             }
         }
@@ -129,16 +138,23 @@ export component TabDoctor inherits VerticalLayout {
                 spacing: 8px;
                 alignment: end;
 
+                if root.has_scanned && root.has_fixable_issues: ActionButton {
+                    text: root.is_fixing ? "Đang xử lý..." : "Tự động sửa lỗi";
+                    primary: true;
+                    enabled: !root.is_fixing && !root.is_scanning;
+                    clicked => { root.auto_fix_requested(); }
+                }
+
                 if root.has_scanned: ActionButton {
-                    text: root.copied_toast ? "Đã sao chép!" : "Sao chép báo cáo";
-                    enabled: !root.is_scanning;
+                    text: root.copied_toast ? "Đã sao chép!" : "Sao chép";
+                    enabled: !root.is_scanning && !root.is_fixing;
                     clicked => { root.copy_requested(); }
                 }
 
                 ActionButton {
                     text: root.is_scanning ? "Đang quét..." : (root.has_scanned ? "Quét lại" : "Chẩn đoán ngay");
-                    primary: true;
-                    enabled: !root.is_scanning;
+                    primary: !root.has_fixable_issues;
+                    enabled: !root.is_scanning && !root.is_fixing;
                     clicked => { root.scan_requested(); }
                 }
             }
@@ -265,6 +281,183 @@ export component TabDoctor inherits VerticalLayout {
                     primary: true;
                     enabled: !root.is_scanning;
                     clicked => { root.setup_profile_requested(); }
+                }
+            }
+        }
+    }
+
+    // card xu ly fcitx5 chua nap thu vien clak
+    if root.has_scanned && root.addon_needs_load && !root.reload_needed && !root.profile_needs_setup: Rectangle {
+        border-radius: Theme.radius-md;
+        background: #ef4444.with-alpha(0.12);
+        border-width: 0px;
+        border-color: transparent;
+
+        HorizontalLayout {
+            padding-left: 14px;
+            padding-right: 14px;
+            padding-top: 10px;
+            padding-bottom: 10px;
+            alignment: space-between;
+            spacing: 12px;
+
+            VerticalLayout {
+                alignment: center;
+                width: 24px;
+                Image {
+                    source: @image-url("../../assets/icons/zap.svg");
+                    width: 18px;
+                    height: 18px;
+                    colorize: #f87171;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                spacing: 2px;
+                horizontal-stretch: 1;
+
+                Text {
+                    text: "Fcitx5 chưa nạp thư viện Clak";
+                    color: #f87171;
+                    font-size: 13px;
+                    font-weight: 600;
+                }
+
+                Text {
+                    text: "Thư viện libclak.so chưa được nạp vào RAM. Nhấp để tự động liên kết thư viện và kích hoạt Fcitx5 ngay.";
+                    color: Theme.text-muted;
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+
+                ActionButton {
+                    text: root.is_reloading ? "Đang xử lý..." : "Nạp & Kích hoạt 1-Click";
+                    primary: true;
+                    enabled: !root.is_reloading && !root.is_scanning;
+                    clicked => { root.restart_fcitx5_requested(); }
+                }
+            }
+        }
+    }
+
+    // card kich hoat khoi dong cung he thong
+    if root.has_scanned && root.autostart_needs_fix: Rectangle {
+        border-radius: Theme.radius-md;
+        background: #10b981.with-alpha(0.12);
+        border-width: 0px;
+        border-color: transparent;
+
+        HorizontalLayout {
+            padding-left: 14px;
+            padding-right: 14px;
+            padding-top: 10px;
+            padding-bottom: 10px;
+            alignment: space-between;
+            spacing: 12px;
+
+            VerticalLayout {
+                alignment: center;
+                width: 24px;
+                Image {
+                    source: @image-url("../../assets/icons/zap.svg");
+                    width: 18px;
+                    height: 18px;
+                    colorize: #34d399;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                spacing: 2px;
+                horizontal-stretch: 1;
+
+                Text {
+                    text: "Chưa kích hoạt khởi động cùng hệ thống";
+                    color: #34d399;
+                    font-size: 13px;
+                    font-weight: 600;
+                }
+
+                Text {
+                    text: "Tự động thiết lập file autostart và biến môi trường để Clak luôn sẵn sàng khi đăng nhập.";
+                    color: Theme.text-muted;
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+
+                ActionButton {
+                    text: "Bật tự khởi động";
+                    primary: true;
+                    enabled: !root.is_scanning && !root.is_fixing;
+                    clicked => { root.fix_autostart_requested(); }
+                }
+            }
+        }
+    }
+
+    // card cap quyen doc thiet bi chuot
+    if root.has_scanned && root.permissions_needs_fix: Rectangle {
+        border-radius: Theme.radius-md;
+        background: #f59e0b.with-alpha(0.12);
+        border-width: 0px;
+        border-color: transparent;
+
+        HorizontalLayout {
+            padding-left: 14px;
+            padding-right: 14px;
+            padding-top: 10px;
+            padding-bottom: 10px;
+            alignment: space-between;
+            spacing: 12px;
+
+            VerticalLayout {
+                alignment: center;
+                width: 24px;
+                Image {
+                    source: @image-url("../../assets/icons/info.svg");
+                    width: 18px;
+                    height: 18px;
+                    colorize: #fbbf24;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                spacing: 2px;
+                horizontal-stretch: 1;
+
+                Text {
+                    text: "Thiếu quyền đọc chuột để reset buffer";
+                    color: #fbbf24;
+                    font-size: 13px;
+                    font-weight: 600;
+                }
+
+                Text {
+                    text: "Cần quyền đọc thiết bị chuột để tự động reset buffer khi nhấp chuột. Bấm để cấp quyền qua pkexec.";
+                    color: Theme.text-muted;
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+
+                ActionButton {
+                    text: "Cấp quyền 1-Click";
+                    primary: true;
+                    enabled: !root.is_scanning && !root.is_fixing;
+                    clicked => { root.fix_permissions_requested(); }
                 }
             }
         }

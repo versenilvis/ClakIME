@@ -86,6 +86,8 @@ TEST_F(ClakStateTest, GivenStaleSurroundingText3TimesInRow_FallsBackToUinput) {
         return true;
     });
 
+    ic.auto_update_surrounding = true;
+
     for (int i = 0; i < 3; ++i) {
         state.reset();
         ic.clearHistory();
@@ -182,6 +184,7 @@ TEST_F(ClakStateTest, GivenKeysBufferedDuringDelete_ReplaysInOriginalOrder) {
 TEST_F(ClakStateTest, GivenChromiumNormalPage_UsesSurroundingText) {
     // normal browser page with valid surrounding text should use surrounding text deletion
     MockInputContext ic(instance_->inputContextManager(), "google-chrome");
+    ic.auto_update_surrounding = true;
     ime::ClakState state(engine_.get(), &ic);
 
     ic.setSurrounding("", 0, 0);
@@ -209,6 +212,13 @@ TEST_F(ClakStateTest, GivenGnomeFallbackApp_PopulatesTerminalClass) {
     platform::setMockActiveWindow(platform::WindowInfo{"", "", 0});
     platform::WindowInfo win = platform::getActiveWindow("gnome-terminal-server");
     EXPECT_EQ(win.win_class, "gnome-terminal-server");
+}
+
+TEST_F(ClakStateTest, GivenXTerminalEmul_RecognizedAsTerminalAndEditorWhenTitleMatches) {
+    EXPECT_TRUE(config::isTerminalApp("x-terminal-emul"));
+    EXPECT_TRUE(config::isTerminalApp("x-terminal-emulator"));
+    platform::WindowInfo win{"x-terminal-emul", "nvim main.rs", 1234};
+    EXPECT_TRUE(platform::isEditorActive(win));
 }
 
 TEST_F(ClakStateTest, GivenCtrlShift_TogglesEnabledState) {

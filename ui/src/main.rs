@@ -802,6 +802,123 @@ fn format_doctor_lines(report: &DiagnosticReport, time_tag: &str) -> Vec<DoctorL
     lines
 }
 
+fn shortcut_id_to_display(id: &str) -> String {
+    let lower = id.trim().to_lowercase();
+    match lower.as_str() {
+        "ctrl_shift" | "ctrl+shift" => "Ctrl + Shift".to_string(),
+        "alt_z" | "alt+z" => "Alt + Z".to_string(),
+        "super_space" | "super+space" => "Super + Space".to_string(),
+        "ctrl_space" | "ctrl+space" => "Ctrl + Space".to_string(),
+        "shift_space" | "shift+space" => "Shift + Space".to_string(),
+        "alt_shift" | "alt+shift" => "Alt + Shift".to_string(),
+        "alt_space" | "alt+space" => "Alt + Space".to_string(),
+        other => {
+            if other.is_empty() {
+                "Ctrl + Shift".to_string()
+            } else {
+                other
+                    .replace('_', " + ")
+                    .split(" + ")
+                    .map(|p| {
+                        let mut chars = p.chars();
+                        match chars.next() {
+                            None => String::new(),
+                            Some(f) => f.to_uppercase().collect::<String>() + chars.as_str(),
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" + ")
+            }
+        }
+    }
+}
+
+fn shortcut_display_to_id(display: &str) -> String {
+    let s = display.trim().to_lowercase().replace(" + ", "_").replace(' ', "_");
+    if s.is_empty() {
+        "ctrl_shift".to_string()
+    } else {
+        s
+    }
+}
+
+fn format_recorded_shortcut(
+    key_text: &str,
+    ctrl: bool,
+    alt: bool,
+    shift: bool,
+    meta: bool,
+) -> Option<(String, String)> {
+    let is_space = key_text == " "
+        || key_text == "\u{0020}"
+        || key_text.eq_ignore_ascii_case("space");
+
+    // Case 1: Super / Meta (Windows key) combinations (e.g. Super + Space)
+    if meta {
+        if is_space {
+            return Some(("Super + Space".to_string(), "super_space".to_string()));
+        }
+        let clean = key_text.trim();
+        if !clean.is_empty() && clean.chars().any(|c| c.is_alphanumeric()) {
+            let u = clean.to_uppercase();
+            let l = clean.to_lowercase();
+            return Some((format!("Super + {}", u), format!("super_{}", l)));
+        }
+        return None;
+    }
+
+    // Case 2: Ctrl + Shift
+    if ctrl && shift {
+        if is_space {
+            return Some(("Ctrl + Shift + Space".to_string(), "ctrl_shift_space".to_string()));
+        }
+        return Some(("Ctrl + Shift".to_string(), "ctrl_shift".to_string()));
+    }
+
+    // Case 3: Alt + Shift
+    if alt && shift {
+        return Some(("Alt + Shift".to_string(), "alt_shift".to_string()));
+    }
+
+    // Case 4: Ctrl + key (e.g. Ctrl + Space)
+    if ctrl && !alt {
+        if is_space {
+            return Some(("Ctrl + Space".to_string(), "ctrl_space".to_string()));
+        }
+        let clean = key_text.trim();
+        if !clean.is_empty() && clean.chars().any(|c| c.is_alphanumeric() || c.is_ascii_punctuation()) {
+            let u = clean.to_uppercase();
+            let l = clean.to_lowercase();
+            return Some((format!("Ctrl + {}", u), format!("ctrl_{}", l)));
+        }
+        return None;
+    }
+
+    // Case 5: Alt + key (e.g. Alt + Z, Alt + Space)
+    if alt && !ctrl {
+        if is_space {
+            return Some(("Alt + Space".to_string(), "alt_space".to_string()));
+        }
+        let clean = key_text.trim();
+        if !clean.is_empty() && clean.chars().any(|c| c.is_alphanumeric() || c.is_ascii_punctuation()) {
+            let u = clean.to_uppercase();
+            let l = clean.to_lowercase();
+            return Some((format!("Alt + {}", u), format!("alt_{}", l)));
+        }
+        return None;
+    }
+
+    // Case 6: Shift + Space
+    if shift && !ctrl && !alt {
+        if is_space {
+            return Some(("Shift + Space".to_string(), "shift_space".to_string()));
+        }
+        return None;
+    }
+
+    None
+}
+
 // extract and save configuration from ui state
 fn save_config(
     window: &MainWindow,
@@ -822,10 +939,8 @@ fn save_config(
         1 => "english",
         _ => "vietnamese",
     };
-    let toggle_sc_str = match window.get_toggle_shortcut_index() {
-        1 => "alt_z",
-        _ => "ctrl_shift",
-    };
+    let toggle_sc_display = window.get_toggle_shortcut_text().to_string();
+    let toggle_sc_str = shortcut_display_to_id(&toggle_sc_display);
     let switch_sc_str = match window.get_switch_shortcut_index() {
         1 => "none",
         _ => "ctrl_space",
@@ -922,11 +1037,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     main_window.set_auto_capitalize(cfg.typing.auto_capitalize);
     main_window.set_macros_enabled(cfg.macros.enabled);
 
-    let toggle_sc_idx = match cfg.shortcuts.toggle_vietnamese.as_str() {
-        "alt_z" => 1,
-        _ => 0,
-    };
-    main_window.set_toggle_shortcut_index(toggle_sc_idx);
+    let toggle_sc_display = shortcut_id_to_display(&cfg.shortcuts.toggle_vietnamese);
+    main_window.set_toggle_shortcut_text(toggle_sc_display.into());
 
     if let Ok(tab_str) = std::env::var("CLAK_TAB") {
         if let Ok(tab_num) = tab_str.parse::<i32>() {
@@ -1088,18 +1200,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     w.set_doctor_score_color(score_color);
                     w.set_doctor_has_scanned(true);
                     w.set_doctor_is_scanning(false);
-                    w.set_reload_needed(report_for_ui.memory.is_deleted_inode);
-                    w.set_profile_needs_setup(
-                        !report_for_ui.profile.clak_in_profile
-                            || !report_for_ui.profile.is_default_im,
-                    );
-                    w.set_wps_needs_fix(
-                        report_for_ui.wps.installed && !report_for_ui.wps.configured,
-                    );
-                    w.set_jetbrains_needs_fix(
-                        report_for_ui.jetbrains.installed
-                            && !report_for_ui.jetbrains.unconfigured_ides.is_empty(),
-                    );
+                    let is_deleted = report_for_ui.memory.is_deleted_inode;
+                    let addon_not_loaded = report_for_ui.daemon.fcitx5_running && !report_for_ui.memory.clak_loaded;
+                    let profile_needs = !report_for_ui.profile.clak_in_profile || !report_for_ui.profile.is_default_im;
+                    let autostart_needs = !report_for_ui.autostart.is_enabled;
+                    let permissions_needs = !report_for_ui.permissions.uinput_writable || report_for_ui.permissions.input_readable_count == 0;
+                    let wps_fix = report_for_ui.wps.installed && !report_for_ui.wps.configured;
+                    let jb_fix = report_for_ui.jetbrains.installed && !report_for_ui.jetbrains.unconfigured_ides.is_empty();
+                    let has_fixable = is_deleted || (addon_not_loaded && !is_deleted) || profile_needs || autostart_needs || permissions_needs || wps_fix || jb_fix;
+
+                    w.set_reload_needed(is_deleted);
+                    w.set_addon_needs_load(addon_not_loaded && !is_deleted);
+                    w.set_profile_needs_setup(profile_needs);
+                    w.set_autostart_needs_fix(autostart_needs);
+                    w.set_permissions_needs_fix(permissions_needs);
+                    w.set_wps_needs_fix(wps_fix);
+                    w.set_jetbrains_needs_fix(jb_fix);
+                    w.set_has_fixable_issues(has_fixable);
                     if let Ok(mut guard) = last_report_async.lock() {
                         *guard = Some(report_for_ui);
                     }
@@ -1190,6 +1307,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .spawn();
     });
 
+    let win_record = main_window.as_weak();
+    let apps_rec = apps_model.clone();
+    let macros_rec = macros_model.clone();
+    main_window.on_record_shortcut_pressed(move |text, ctrl, alt, shift, meta| {
+        let Some(window) = win_record.upgrade() else {
+            return;
+        };
+        if let Some((display_str, _id_str)) =
+            format_recorded_shortcut(text.as_str(), ctrl, alt, shift, meta)
+        {
+            window.set_toggle_shortcut_text(display_str.into());
+            window.set_is_recording_shortcut(false);
+            window.set_has_changes(true);
+            save_config(&window, &apps_rec, &macros_rec);
+        }
+    });
+
     let win_reset = main_window.as_weak();
     let apps_reset = apps_model.clone();
     let macros_reset = macros_model.clone();
@@ -1209,7 +1343,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         window.set_double_space_period(default_cfg.typing.double_space_period);
         window.set_auto_capitalize(default_cfg.typing.auto_capitalize);
         window.set_macros_enabled(default_cfg.macros.enabled);
-        window.set_toggle_shortcut_index(0);
+        window.set_toggle_shortcut_text("Ctrl + Shift".into());
+        window.set_is_recording_shortcut(false);
         window.set_switch_shortcut_index(0);
         window.set_autostart_system(default_cfg.advanced.autostart);
         window.set_remember_app_state(default_cfg.per_app.remember_state);
@@ -1331,7 +1466,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap_or(false)
         });
 
-        let script_cmd = "if [ -f scripts/uninstall.sh ]; then bash scripts/uninstall.sh; elif [ -f \"$HOME/.local/share/clak/uninstall.sh\" ]; then bash \"$HOME/.local/share/clak/uninstall.sh\"; else curl -fsSL https://raw.githubusercontent.com/versenilvis/clak/main/scripts/uninstall.sh | bash; fi; echo ''; read -p 'Nhấn Enter để đóng...' dummy";
+        let script_cmd = "if [ -f scripts/uninstall.sh ]; then bash scripts/uninstall.sh; elif [ -f \"$HOME/.local/share/clak/uninstall.sh\" ]; then bash \"$HOME/.local/share/clak/uninstall.sh\"; else curl -fsSL https://raw.githubusercontent.com/versenilvis/ClakIME/main/scripts/uninstall.sh | bash; fi; echo ''; read -p 'Nhấn Enter để đóng...' dummy";
 
         if let Some(&term_cmd) = term {
             let mut cmd = std::process::Command::new(term_cmd);
@@ -1369,24 +1504,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let win_async = win_restart.clone();
         std::thread::spawn(move || {
-            let restarted = if std::process::Command::new("systemctl")
-                .args(["--user", "is-active", "fcitx5.service"])
-                .output()
-                .map(|o| o.status.success())
-                .unwrap_or(false)
-            {
-                std::process::Command::new("systemctl")
-                    .args(["--user", "restart", "fcitx5.service"])
-                    .status()
-                    .map(|s| s.success())
-                    .unwrap_or(false)
-            } else {
-                std::process::Command::new("fcitx5")
-                    .args(["-r", "-d"])
-                    .status()
-                    .map(|s| s.success())
-                    .unwrap_or(false)
-            };
+            // Dam bao symlink Ubuntu va cau hinh profile duoc dong bo
+            let _ = clak_diagnostics::fix_fcitx5_profile();
+
+            let restarted = clak_diagnostics::restart_fcitx5_daemon();
 
             // poll fcitx5 daemon readiness instead of blind fixed sleep
             let mut is_deleted = true;
@@ -1409,6 +1530,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     w.set_is_reloading(false);
                     if restarted && daemon_ready && !is_deleted {
                         w.set_reload_needed(false);
+                        w.set_addon_needs_load(false);
+                        w.set_profile_needs_setup(false);
                         w.set_reload_status_text(
                             "Khởi động lại Fcitx5 thành công! Phiên bản mới đã được nạp.".into(),
                         );
@@ -1427,18 +1550,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let win_prof = main_window.as_weak();
     main_window.on_setup_profile_requested(move || {
-        let Some(_window) = win_prof.upgrade() else {
+        let Some(window) = win_prof.upgrade() else {
             return;
         };
+        window.set_is_reloading(true);
+        window.set_reload_status_text("Đang kích hoạt Clak và khởi động lại Fcitx5...".into());
         let win_async = win_prof.clone();
         std::thread::spawn(move || {
             if let Err(e) = clak_diagnostics::fix_fcitx5_profile() {
                 eprintln!("lỗi thêm clak vào profile: {}", e);
             }
-            std::thread::sleep(std::time::Duration::from_millis(300));
+            std::thread::sleep(std::time::Duration::from_millis(500));
             let _ = slint::invoke_from_event_loop(move || {
                 if let Some(w) = win_async.upgrade() {
+                    w.set_is_reloading(false);
                     w.set_profile_needs_setup(false);
+                    w.set_addon_needs_load(false);
                     if w.get_doctor_has_scanned() {
                         w.invoke_doctor_scan_requested();
                     }
@@ -1475,6 +1602,60 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 window.invoke_doctor_scan_requested();
             }
         }
+    });
+
+    let win_autofix = main_window.as_weak();
+    main_window.on_auto_fix_requested(move || {
+        let Some(window) = win_autofix.upgrade() else {
+            return;
+        };
+        window.set_is_fixing(true);
+        let win_async = win_autofix.clone();
+        std::thread::spawn(move || {
+            let _ = clak_diagnostics::auto_fix_all(true);
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(w) = win_async.upgrade() {
+                    w.set_is_fixing(false);
+                    w.invoke_doctor_scan_requested();
+                }
+            });
+        });
+    });
+
+    let win_auto = main_window.as_weak();
+    main_window.on_fix_autostart_requested(move || {
+        let Some(window) = win_auto.upgrade() else {
+            return;
+        };
+        if let Err(e) = clak_diagnostics::enable_autostart() {
+            eprintln!("lỗi bật autostart: {}", e);
+        } else {
+            window.set_autostart_needs_fix(false);
+            if window.get_doctor_has_scanned() {
+                window.invoke_doctor_scan_requested();
+            }
+        }
+    });
+
+    let win_perm = main_window.as_weak();
+    main_window.on_fix_permissions_requested(move || {
+        let Some(window) = win_perm.upgrade() else {
+            return;
+        };
+        window.set_is_fixing(true);
+        let win_async = win_perm.clone();
+        std::thread::spawn(move || {
+            if let Err(e) = clak_diagnostics::fix_input_permissions() {
+                eprintln!("lỗi phân quyền: {}", e);
+            }
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(w) = win_async.upgrade() {
+                    w.set_is_fixing(false);
+                    w.invoke_doctor_scan_requested();
+                }
+            });
+        });
     });
 
     let win_startup = main_window.as_weak();
@@ -1520,9 +1701,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         let is_deleted = report.memory.is_deleted_inode;
+        let addon_not_loaded = report.daemon.fcitx5_running && !report.memory.clak_loaded;
         let needs_setup = !report.profile.clak_in_profile || !report.profile.is_default_im;
+        let autostart_needs = !report.autostart.is_enabled;
+        let permissions_needs = !report.permissions.uinput_writable || report.permissions.input_readable_count == 0;
         let wps_fix = report.wps.installed && !report.wps.configured;
         let jb_fix = report.jetbrains.installed && !report.jetbrains.unconfigured_ides.is_empty();
+        let has_fixable = is_deleted || (addon_not_loaded && !is_deleted) || needs_setup || autostart_needs || permissions_needs || wps_fix || jb_fix;
 
         let report_for_ui = report.clone();
         let _ = slint::invoke_from_event_loop(move || {
@@ -1542,12 +1727,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if is_deleted {
                     w.set_reload_needed(true);
                 }
+                w.set_addon_needs_load(addon_not_loaded && !is_deleted);
                 w.set_profile_needs_setup(needs_setup);
+                w.set_autostart_needs_fix(autostart_needs);
+                w.set_permissions_needs_fix(permissions_needs);
                 w.set_wps_needs_fix(wps_fix);
                 w.set_jetbrains_needs_fix(jb_fix);
+                w.set_has_fixable_issues(has_fixable);
 
-                // nếu chưa thêm vào profile, tự động mở tab Chẩn đoán để hướng dẫn người dùng
-                if needs_setup {
+                // nếu chưa thêm vào profile hoặc chưa nạp addon, tự động mở tab Chẩn đoán để hướng dẫn người dùng
+                if needs_setup || (addon_not_loaded && !is_deleted) {
                     w.set_selected_tab(3);
                 }
 
@@ -1611,6 +1800,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         main_window.set_doctor_has_scanned(true);
         main_window.set_doctor_is_scanning(false);
         main_window.set_reload_needed(report.memory.is_deleted_inode);
+        let addon_not_loaded = report.daemon.fcitx5_running && !report.memory.clak_loaded;
+        main_window.set_addon_needs_load(addon_not_loaded && !report.memory.is_deleted_inode);
         main_window.set_profile_needs_setup(
             !report.profile.clak_in_profile || !report.profile.is_default_im,
         );

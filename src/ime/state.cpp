@@ -79,7 +79,11 @@ void ClakState::reset(bool force) {
     sentinel_grace_until_us_ = 0;
     pending_commit_string_.clear();
     key_buffer_.clear();
-    verifier_.reset();
+    if (force) {
+        verifier_.reset();
+    } else {
+        verifier_.clearPending();
+    }
     cached_site_.clear();
     last_site_check_us_ = 0;
     if (rust_ctx_) {
@@ -389,17 +393,21 @@ bool ClakState::handleKey(const fcitx::Key& key) {
         } else if (verifier_.isCanvasEditor() && text.size() > 2 && text != "  " && text != "\xc2\xa0\xc2\xa0") {
             verifier_.setCanvasEditor(false);
         }
+        bool is_twitter_placeholder = (text.find("happening") != std::string::npos || text.find("diễn ra") != std::string::npos);
+        if (!config::isVSCodeApp(app) && (config::isDraftJsSite(site) || is_twitter_placeholder) &&
+            text.size() >= 2 && text.compare(text.size() - 2, 2, "\n\n") == 0) {
+            verifier_.setDraftJsEditor(true);
+            verifier_.setRichTextEditor(true);
+            is_draftjs = true;
+        }
     }
 
     bool is_steam = isSteam();
     bool is_office = config::isWpsOfficeApp(app);
     bool is_wps_toolbar = is_office && isWpsFontSizeText(surr.text());
-    bool valid_surr = !is_steam && has_surrounding && surr.isValid() && !verifier_.isCanvasEditor() && !is_term && !is_jb && !is_wps_toolbar;
-    if (valid_surr) {
-        surr_text = surr.text().c_str();
-        cursor = surr.cursor();
-        anchor = surr.anchor();
-    }
+    bool valid_surr = !is_steam && has_surrounding && surr.isValid() &&
+                      surr.cursor() <= surr.text().size() &&
+                      !verifier_.isCanvasEditor() && !is_term && !is_jb && !is_wps_toolbar;
     bool use_surrounding = !is_steam && valid_surr && !verifier_.isRichTextEditor() && !is_force_uinput && !is_office;
 
     bool skip_verify = is_gecko || is_meta;
@@ -413,6 +421,16 @@ bool ClakState::handleKey(const fcitx::Key& key) {
 
     if (is_gecko && verifier_.isRichTextEditor()) {
         verifier_.setRichTextEditor(false);
+    }
+
+    if (valid_surr) {
+        surr_text = surr.text().c_str();
+        cursor = surr.cursor();
+        anchor = surr.anchor();
+    } else {
+        surr_text = nullptr;
+        cursor = 0;
+        anchor = 0;
     }
 
     ClakAction action = clak_process_key(rust_ctx_,
@@ -462,6 +480,14 @@ bool ClakState::handleKey(const fcitx::Key& key) {
 
             bool is_autofill = (action.action_type == CLAK_ACTION_ADDRESS_BAR_FIX) ||
                                (isBrowser() && isAutofillCertain(surr));
+            if (real_bs > 0 && surr.isValid() && surr.cursor() < real_bs) {
+                use_surrounding = false;
+                if (!config::isVSCodeApp(app) && (config::isDraftJsSite(site) || config::isBrowserApp(app))) {
+                    verifier_.setDraftJsEditor(true);
+                    verifier_.setRichTextEditor(true);
+                    is_draftjs = isDraftJsEditor();
+                }
+            }
             bool use_uinput = is_autofill || shouldUseUinput(use_surrounding, action.action_type, surr);
 
             if (use_uinput && real_bs > 0) {
@@ -478,11 +504,11 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                 bool use_term_pacing = is_term || is_jb || modal_handler_.isModalEditor();
                 uint32_t post_delay = is_autofill ? config::kAddressBarPostDelayMs :
                                       (use_term_pacing ? config::kTerminalPostDelayMs :
-                                      (is_draftjs ? 1 :
-                                      (is_wps ? 3 : 2)));
+                                      (is_draftjs ? config::kDraftJsPostDelayMs :
+                                      (is_wps ? 15 : 6)));
                 uint32_t gap_ms = use_term_pacing ? config::kTerminalGapMs :
-                                  (is_draftjs ? 1 :
-                                  (is_wps ? 2 : 2));
+                                  (is_draftjs ? config::kDraftJsGapMs :
+                                  (is_wps ? 4 : 2));
                 uint32_t pre_delay = 0;
 
                 utils::clakLog("uinput waiting for sentinel: expected=" + std::to_string(bs_to_send) +
@@ -506,12 +532,21 @@ bool ClakState::handleKey(const fcitx::Key& key) {
 
             if (real_bs > 0) {
                 if (use_surrounding) {
-                    std::string wordBefore = utils::extractWordBeforeCursor(surr.text(), surr.cursor());
-                    verifier_.setExpectation(wordBefore, real_bs, action.commit_str ? action.commit_str : "");
-                    utils::clakLog("surrounding delete: -" + std::to_string(real_bs) + " commit='" +
-                                   (action.commit_str ? action.commit_str : "") + "' app=" + app + " site='" + site + "'");
-                    ic_->deleteSurroundingText(-static_cast<int>(real_bs),
-                                               static_cast<unsigned int>(real_bs));
+                    if (surr.cursor() < real_bs) {
+                        utils::clakLog("WARNING: surr.cursor()=" + std::to_string(surr.cursor()) +
+                                       " < real_bs=" + std::to_string(real_bs) +
+                                       ", skipping deleteSurroundingText to prevent compositor crash!");
+                        for (size_t i = 0; i < real_bs; ++i) {
+                            ic_->forwardKey(fcitx::Key(FcitxKey_BackSpace));
+                        }
+                    } else {
+                        std::string wordBefore = utils::extractWordBeforeCursor(surr.text(), surr.cursor());
+                        verifier_.setExpectation(wordBefore, real_bs, action.commit_str ? action.commit_str : "");
+                        utils::clakLog("surrounding delete: -" + std::to_string(real_bs) + " commit='" +
+                                       (action.commit_str ? action.commit_str : "") + "' app=" + app + " site='" + site + "'");
+                        ic_->deleteSurroundingText(-static_cast<int>(real_bs),
+                                                   static_cast<unsigned int>(real_bs));
+                    }
                 } else if (is_steam) {
                     utils::clakLog("steam forward backspace: count=" + std::to_string(real_bs) +
                                    " commit='" + (action.commit_str ? action.commit_str : "") + "' app=" + app);
@@ -576,15 +611,26 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
     const auto& key = keyEvent.key();
     std::string key_str = fcitx::Key::keySymToUTF8(key.sym());
 
-    bool is_alt = key.states().test(fcitx::KeyState::Alt);
     bool is_ctrl = key.states().test(fcitx::KeyState::Ctrl);
     bool is_shift = key.states().test(fcitx::KeyState::Shift);
+    bool is_alt = key.states().test(fcitx::KeyState::Alt);
     bool is_super = key.states().test(fcitx::KeyState::Super);
     bool is_ctrl_sym = (key.sym() == FcitxKey_Control_L || key.sym() == FcitxKey_Control_R);
     bool is_shift_sym = (key.sym() == FcitxKey_Shift_L || key.sym() == FcitxKey_Shift_R);
+    bool is_alt_sym = (key.sym() == FcitxKey_Alt_L || key.sym() == FcitxKey_Alt_R);
     char* sc_c = engine_->config() ? clak_config_get_toggle_shortcut(engine_->config()) : nullptr;
-    std::string shortcut = sc_c ? sc_c : "ctrl_shift";
+    std::string raw_shortcut = sc_c ? sc_c : "ctrl_shift";
     if (sc_c) clak_free_string(sc_c);
+
+    std::string shortcut = "";
+    for (char c : raw_shortcut) {
+        if (c == '+' || c == ' ' || c == '-') {
+            if (!shortcut.empty() && shortcut.back() != '_') shortcut.push_back('_');
+        } else {
+            shortcut.push_back(std::tolower(static_cast<unsigned char>(c)));
+        }
+    }
+    if (shortcut.empty()) shortcut = "ctrl_shift";
 
     if (keyEvent.isRelease()) {
         if (repeat_handler_.heldKey().sym() != 0 && (key.sym() == repeat_handler_.heldKey().sym() || key.isModifier())) {
@@ -607,6 +653,23 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
             } else if (is_ctrl_sym) {
                 ctrl_pressed_first_ = false;
             }
+        } else if (shortcut == "alt_shift") {
+            if (alt_shift_armed_ && (is_shift_sym || is_alt_sym)) {
+                engine_->toggleAppEnabled(app);
+                reset(/*force=*/true);
+                ic_->updateUserInterface(fcitx::UserInterfaceComponent::StatusArea, true);
+                if (engine_->instance() && std::string(ic_->frontend()) != "mock") {
+#ifdef FCITX5_HAVE_SHOW_CUSTOM_IM_INFO
+                    engine_->instance()->showCustomInputMethodInformation(ic_, engine_->isAppEnabled(app) ? "VI" : "EN");
+#else
+                    engine_->instance()->showInputMethodInformation(ic_);
+#endif
+                }
+                alt_shift_armed_ = false;
+                alt_pressed_first_ = false;
+            } else if (is_alt_sym) {
+                alt_pressed_first_ = false;
+            }
         }
         return;
     }
@@ -616,9 +679,23 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
     utils::clakLog("keyEvent: sym=" + std::to_string(key.sym()) + " ('" + key_str + "') app='" + app +
                    "' enabled=" + std::to_string(engine_->isAppEnabled(app)) +
                    " ctrl=" + std::to_string(is_ctrl) + " shift=" + std::to_string(is_shift) +
-                   " alt=" + std::to_string(is_alt) + " shortcut='" + shortcut + "'");
+                   " alt=" + std::to_string(is_alt) + " super=" + std::to_string(is_super) +
+                   " shortcut='" + shortcut + "'");
 
+    bool match_toggle = false;
     if (shortcut == "alt_z" && is_alt && !is_ctrl && (key.sym() == FcitxKey_z || key.sym() == FcitxKey_Z)) {
+        match_toggle = true;
+    } else if (shortcut == "super_space" && is_super && (key.sym() == FcitxKey_space || key.sym() == FcitxKey_KP_Space)) {
+        match_toggle = true;
+    } else if (shortcut == "ctrl_space" && is_ctrl && !is_shift && !is_alt && (key.sym() == FcitxKey_space || key.sym() == FcitxKey_KP_Space)) {
+        match_toggle = true;
+    } else if (shortcut == "shift_space" && is_shift && !is_ctrl && !is_alt && (key.sym() == FcitxKey_space || key.sym() == FcitxKey_KP_Space)) {
+        match_toggle = true;
+    } else if (shortcut == "alt_space" && is_alt && !is_ctrl && (key.sym() == FcitxKey_space || key.sym() == FcitxKey_KP_Space)) {
+        match_toggle = true;
+    }
+
+    if (match_toggle) {
         engine_->toggleAppEnabled(app);
         reset(/*force=*/true);
         ic_->updateUserInterface(fcitx::UserInterfaceComponent::StatusArea, true);
@@ -645,6 +722,19 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
             ctrl_pressed_first_ = false;
         } else {
             ctrl_pressed_first_ = false;
+        }
+    } else if (shortcut == "alt_shift") {
+        if (alt_shift_armed_) {
+            if (!is_alt_sym && !is_shift_sym) {
+                alt_shift_armed_ = false;
+            }
+        } else if (is_alt_sym && !is_shift && !is_ctrl && !is_super) {
+            alt_pressed_first_ = true;
+        } else if (is_shift_sym && alt_pressed_first_ && is_alt) {
+            alt_shift_armed_ = true;
+            alt_pressed_first_ = false;
+        } else {
+            alt_pressed_first_ = false;
         }
     }
 

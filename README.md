@@ -15,10 +15,10 @@
 Cài nhanh qua script tự động (tự nhận diện và cấu hình Fcitx5):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/versenilvis/clak/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/versenilvis/ClakIME/main/scripts/install.sh | bash
 ```
 
-Hoặc tải gói `.deb` từ [Releases](https://github.com/versenilvis/clak/releases) rồi cài đặt:
+Hoặc tải gói `.deb` từ [Releases](https://github.com/versenilvis/ClakIME/releases) rồi cài đặt:
 
 ```bash
 sudo apt install ./clak_*_amd64.deb
@@ -38,7 +38,7 @@ yay -S clak
 ### Nix Flake:
 
 ```bash
-nix profile install github:versenilvis/clak
+nix profile install github:versenilvis/ClakIME
 ```
 
 > [!NOTE]
@@ -115,7 +115,7 @@ Clak Settings > Giới thiệu > Gỡ cài đặt
 
 - [Email](mailto:versedev.store@proton.me)
 - [Twitter](https://twitter.com/versenilvis)
-- [GitHub issues](https://github.com/versenilvis/clak/issues/new)
+- [GitHub issues](https://github.com/versenilvis/ClakIME/issues/new)
 
 ## Giấy phép
 

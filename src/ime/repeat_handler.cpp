@@ -26,9 +26,25 @@ uint64_t RepeatHandler::repeatDelayUs() {
             }
             pclose(fp);
         }
+    } else {
+        FILE* fp = popen("gsettings get org.gnome.desktop.peripherals.keyboard delay 2>/dev/null", "r");
+        if (fp) {
+            char buf[128];
+            while (fgets(buf, sizeof(buf), fp)) {
+                unsigned int val = 0;
+                if (sscanf(buf, "uint32 %u", &val) == 1 && val > 0) {
+                    cached_delay = static_cast<uint64_t>(val) * 1000;
+                    break;
+                } else if (sscanf(buf, "%u", &val) == 1 && val > 0) {
+                    cached_delay = static_cast<uint64_t>(val) * 1000;
+                    break;
+                }
+            }
+            pclose(fp);
+        }
     }
     if (cached_delay == 0) {
-        cached_delay = 200000;
+        cached_delay = 500000;
     }
     utils::clakLog("repeat delay initialized: " + std::to_string(cached_delay) + "us");
     return cached_delay;
@@ -50,9 +66,25 @@ uint64_t RepeatHandler::repeatIntervalUs() {
             }
             pclose(fp);
         }
+    } else {
+        FILE* fp = popen("gsettings get org.gnome.desktop.peripherals.keyboard repeat-interval 2>/dev/null", "r");
+        if (fp) {
+            char buf[128];
+            while (fgets(buf, sizeof(buf), fp)) {
+                unsigned int val = 0;
+                if (sscanf(buf, "uint32 %u", &val) == 1 && val > 0) {
+                    cached_interval = static_cast<uint64_t>(val) * 1000;
+                    break;
+                } else if (sscanf(buf, "%u", &val) == 1 && val > 0) {
+                    cached_interval = static_cast<uint64_t>(val) * 1000;
+                    break;
+                }
+            }
+            pclose(fp);
+        }
     }
     if (cached_interval == 0) {
-        cached_interval = 25000;
+        cached_interval = 30000;
     }
     utils::clakLog("repeat interval initialized: " + std::to_string(cached_interval) + "us");
     return cached_interval;
