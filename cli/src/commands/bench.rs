@@ -83,29 +83,27 @@ pub fn execute(
     let mut groups: BTreeMap<String, Vec<f64>> = BTreeMap::new();
     let reader = BufReader::new(file);
 
-    for line_res in reader.lines() {
-        if let Ok(line) = line_res {
-            if let Some(idx) = line.find("[LATENCY]") {
-                let rest = &line[idx + 9..];
-                let tokens: Vec<&str> = rest.split_whitespace().collect();
-                let mut group_val = None;
-                let mut delta_val = None;
-                let mut action_val = None;
+    for line in reader.lines().map_while(Result::ok) {
+        if let Some(idx) = line.find("[LATENCY]") {
+            let rest = &line[idx + 9..];
+            let tokens: Vec<&str> = rest.split_whitespace().collect();
+            let mut group_val = None;
+            let mut delta_val = None;
+            let mut action_val = None;
 
-                for token in tokens {
-                    if let Some(stripped) = token.strip_prefix("group=") {
-                        group_val = Some(stripped.to_string());
-                    } else if let Some(stripped) = token.strip_prefix("delta_ms=") {
-                        delta_val = stripped.parse::<f64>().ok();
-                    } else if let Some(stripped) = token.strip_prefix("action=") {
-                        action_val = Some(stripped.to_string());
-                    }
+            for token in tokens {
+                if let Some(stripped) = token.strip_prefix("group=") {
+                    group_val = Some(stripped.to_string());
+                } else if let Some(stripped) = token.strip_prefix("delta_ms=") {
+                    delta_val = stripped.parse::<f64>().ok();
+                } else if let Some(stripped) = token.strip_prefix("action=") {
+                    action_val = Some(stripped.to_string());
                 }
+            }
 
-                if let (Some(g), Some(d), Some(a)) = (group_val, delta_val, action_val) {
-                    if a.starts_with("REPLACE") {
-                        groups.entry(g).or_default().push(d);
-                    }
+            if let (Some(g), Some(d), Some(a)) = (group_val, delta_val, action_val) {
+                if a.starts_with("REPLACE") {
+                    groups.entry(g).or_default().push(d);
                 }
             }
         }

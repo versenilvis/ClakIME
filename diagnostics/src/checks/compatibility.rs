@@ -295,11 +295,9 @@ pub fn fix_fcitx5_profile() -> Result<(), String> {
     // 1. Tao file bien moi truong 99-clak-im.conf neu chua co
     let env_dir = PathBuf::from(&home).join(".config/environment.d");
     let env_file = env_dir.join("99-clak-im.conf");
-    if !env_file.exists() {
-        if fs::create_dir_all(&env_dir).is_ok() {
-            let env_content = "QT_IM_MODULE=fcitx\nXMODIFIERS=@im=fcitx\nINPUT_METHOD=fcitx5\nSDL_IM_MODULE=fcitx\n";
-            let _ = fs::write(&env_file, env_content);
-        }
+    if !env_file.exists() && fs::create_dir_all(&env_dir).is_ok() {
+        let env_content = "QT_IM_MODULE=fcitx\nXMODIFIERS=@im=fcitx\nINPUT_METHOD=fcitx5\nSDL_IM_MODULE=fcitx\n";
+        let _ = fs::write(&env_file, env_content);
     }
 
     // 2. Kiem tra va dam bao duong dan addon tren Ubuntu
@@ -540,7 +538,7 @@ pub fn check_jetbrains() -> JetBrainsStatus {
 
     if let Ok(entries) = fs::read_dir(&jb_dir) {
         for entry in entries.flatten() {
-            if entry.file_type().map_or(false, |t| t.is_dir()) {
+            if entry.file_type().is_ok_and(|t| t.is_dir()) {
                 let name = entry.file_name();
                 let name_str = name.to_string_lossy().to_string();
 
@@ -615,7 +613,7 @@ pub fn fix_jetbrains_compatibility() -> Result<usize, String> {
 
     if let Ok(entries) = fs::read_dir(&jb_dir) {
         for entry in entries.flatten() {
-            if entry.file_type().map_or(false, |t| t.is_dir()) {
+            if entry.file_type().is_ok_and(|t| t.is_dir()) {
                 let name = entry.file_name();
                 let dir_name = name.to_string_lossy().to_string();
 
@@ -666,15 +664,11 @@ pub fn fix_jetbrains_compatibility() -> Result<usize, String> {
                         content.push_str("-Didea.input.method.disabler.notification.muted=true\n");
                         needs_append = true;
                     }
-                    if needs_append {
-                        if fs::write(&target_vmo, content).is_ok() {
-                            patched_count += 1;
-                        }
-                    }
-                } else {
-                    if fs::write(&target_vmo, option_lines).is_ok() {
+                    if needs_append && fs::write(&target_vmo, content).is_ok() {
                         patched_count += 1;
                     }
+                } else if fs::write(&target_vmo, option_lines).is_ok() {
+                    patched_count += 1;
                 }
             }
         }

@@ -14,7 +14,7 @@
 #include "ime/state.h"
 
 namespace clak {
-namespace platform {
+namespace mouse {
 class MouseTracker;
 }
 
@@ -79,7 +79,7 @@ private:
     std::unordered_map<std::string, bool> app_states_;
     bool global_enabled_{true};
     uint64_t config_version_{0};
-    std::unique_ptr<platform::MouseTracker> mouse_tracker_;
+    std::unique_ptr<mouse::MouseTracker> mouse_tracker_;
     ClakSettingsAction settings_action_;
     ClakFcitxConfig fcitx_config_;
     uint64_t last_replacement_check_us_{0};

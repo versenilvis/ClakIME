@@ -1,23 +1,29 @@
 #ifndef CLAK_CONFIG_SITES_H
 #define CLAK_CONFIG_SITES_H
 
-#include <string>
+#include "apps/terminal.h"
+#include "apps/ide.h"
+#include "apps/browser.h"
+#include "apps/steam.h"
+#include "apps/wps.h"
+#include "apps/sites.h"
 
 namespace clak {
 namespace config {
 
-bool isTerminalApp(const std::string& app);
-bool isVSCodeApp(const std::string& app);
-bool isJetBrainsApp(const std::string& app);
-bool isBrowserApp(const std::string& app);
-bool isGeckoApp(const std::string& app);
-bool isChromiumApp(const std::string& app);
-bool isSteamApp(const std::string& app);
-bool isWpsOfficeApp(const std::string& app);
-bool isMetaSite(const std::string& site);
-bool isDraftJsSite(const std::string& site);
-bool isForceUinputSite(const std::string& site);
-std::string extractDomain(const std::string& app, const std::string& title);
+// backwards compatibility aliases
+using apps::isTerminalApp;
+using apps::isVSCodeApp;
+using apps::isJetBrainsApp;
+using apps::isBrowserApp;
+using apps::isGeckoApp;
+using apps::isChromiumApp;
+using apps::isSteamApp;
+using apps::isWpsOfficeApp;
+using apps::isMetaSite;
+using apps::isDraftJsSite;
+using apps::isForceUinputSite;
+using apps::extractDomain;
 
 } // namespace config
 } // namespace clak

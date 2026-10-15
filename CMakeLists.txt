@@ -128,18 +128,26 @@ target_link_libraries(clak_rust_engine INTERFACE "${CLAK_ENGINE_LIB}")
 add_dependencies(clak_rust_engine clak_engine_build)
 
 set(CLAK_SOURCES
-    src/config/sites.cpp
-    src/platform/hyprland.cpp
-    src/platform/modal_editor.cpp
-    src/platform/mouse_tracker.cpp
+    src/de/hyprland.cpp
+    src/de/gnome.cpp
+    src/de/keyboard_settings.cpp
+    src/apps/steam.cpp
+    src/apps/wps.cpp
+    src/apps/ide.cpp
+    src/apps/terminal.cpp
+    src/apps/browser.cpp
+    src/apps/sites.cpp
+    src/apps/modal_editor.cpp
+    src/window/window_tracker.cpp
+    src/mouse/mouse_tracker.cpp
     src/uinput/uinput.cpp
     src/utils/log.cpp
     src/utils/text_utils.cpp
+    src/apps/app_profile.cpp
     src/ime/repeat_handler.cpp
     src/ime/modal_handler.cpp
     src/ime/surrounding_verifier.cpp
     src/ime/key_buffer.cpp
-    src/ime/steam_pipeline.cpp
     src/ime/state.cpp
     src/engine.cpp
 )

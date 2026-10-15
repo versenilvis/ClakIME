@@ -850,7 +850,6 @@ fn format_recorded_shortcut(
     meta: bool,
 ) -> Option<(String, String)> {
     let is_space = key_text == " "
-        || key_text == "\u{0020}"
         || key_text.eq_ignore_ascii_case("space");
 
     // Case 1: Super / Meta (Windows key) combinations (e.g. Super + Space)
@@ -1207,7 +1206,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let permissions_needs = !report_for_ui.permissions.uinput_writable || report_for_ui.permissions.input_readable_count == 0;
                     let wps_fix = report_for_ui.wps.installed && !report_for_ui.wps.configured;
                     let jb_fix = report_for_ui.jetbrains.installed && !report_for_ui.jetbrains.unconfigured_ides.is_empty();
-                    let has_fixable = is_deleted || (addon_not_loaded && !is_deleted) || profile_needs || autostart_needs || permissions_needs || wps_fix || jb_fix;
+                    let has_fixable = is_deleted || addon_not_loaded || profile_needs || autostart_needs || permissions_needs || wps_fix || jb_fix;
 
                     w.set_reload_needed(is_deleted);
                     w.set_addon_needs_load(addon_not_loaded && !is_deleted);
@@ -1707,7 +1706,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let permissions_needs = !report.permissions.uinput_writable || report.permissions.input_readable_count == 0;
         let wps_fix = report.wps.installed && !report.wps.configured;
         let jb_fix = report.jetbrains.installed && !report.jetbrains.unconfigured_ides.is_empty();
-        let has_fixable = is_deleted || (addon_not_loaded && !is_deleted) || needs_setup || autostart_needs || permissions_needs || wps_fix || jb_fix;
+        let has_fixable = is_deleted || addon_not_loaded || needs_setup || autostart_needs || permissions_needs || wps_fix || jb_fix;
 
         let report_for_ui = report.clone();
         let _ = slint::invoke_from_event_loop(move || {

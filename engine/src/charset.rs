@@ -893,7 +893,7 @@ mod tests {
         assert!(encoded.iter().all(|&b| b <= 0x7F));
         // Should contain recognizable VIQR patterns
         let s = String::from_utf8(encoded).unwrap();
-        assert!(s.contains("tie^'ng") || s.contains("tie^'ng") || s.len() > 0);
+        assert!(s.contains("tie^'ng") || !s.is_empty());
     }
 
     #[test]

@@ -1,5 +1,5 @@
-#include "modal_editor.h"
-#include "config/sites.h"
+#include "apps/modal_editor.h"
+#include "apps/terminal.h"
 #include <vector>
 #include <unordered_set>
 #include <fstream>
@@ -9,7 +9,7 @@
 #include <dirent.h>
 
 namespace clak {
-namespace platform {
+namespace apps {
 
 namespace {
 
@@ -52,7 +52,7 @@ bool hasAncestorMatching(pid_t child, const std::string& target_class) {
             if (f >> comm) {
                 for (char& c : comm) c = tolower(c);
                 if (target_class.find(comm) != std::string::npos || comm.find(target_class) != std::string::npos ||
-                    (config::isTerminalApp(target_class) && config::isTerminalApp(comm))) {
+                    (apps::isTerminalApp(target_class) && apps::isTerminalApp(comm))) {
                     return true;
                 }
             }
@@ -94,11 +94,11 @@ bool isForegroundTerminalProcess(pid_t pid) {
 
 } // namespace
 
-bool isEditorActive(const WindowInfo& win) {
+bool isEditorActive(const window::WindowInfo& win) {
     std::string lower_class = win.win_class;
     for (char& c : lower_class) c = tolower(c);
 
-    bool is_term = config::isTerminalApp(lower_class);
+    bool is_term = apps::isTerminalApp(lower_class);
     bool is_gui_editor = (lower_class.find("neovide") != std::string::npos ||
                           lower_class.find("gvim") != std::string::npos);
     if (!is_term && !is_gui_editor) {
@@ -185,5 +185,5 @@ bool isEditorActive(const WindowInfo& win) {
     return found;
 }
 
-} // namespace platform
+} // namespace apps
 } // namespace clak

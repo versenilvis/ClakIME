@@ -1,4 +1,4 @@
-#include "platform/mouse_tracker.h"
+#include "mouse/mouse_tracker.h"
 #include "utils/log.h"
 #include <libinput.h>
 #include <libudev.h>
@@ -7,7 +7,7 @@
 #include <errno.h>
 
 namespace clak {
-namespace platform {
+namespace mouse {
 
 namespace {
 int open_restricted(const char* path, int flags, void* user_data) {
@@ -110,5 +110,5 @@ void MouseTracker::processEvents() {
     }
 }
 
-} // namespace platform
+} // namespace mouse
 } // namespace clak

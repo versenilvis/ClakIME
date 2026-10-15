@@ -2,7 +2,7 @@
 #include "engine.h"
 #include "config/config.h"
 #include "config/sites.h"
-#include "platform/window_info.h"
+#include "window/window_info.h"
 #include "uinput/uinput.h"
 #include "utils/log.h"
 #include "utils/text_utils.h"
@@ -65,7 +65,9 @@ void ClakState::reset(bool force) {
     }
     repeat_handler_.cancel();
     modal_handler_.reset();
-    steam_pipeline_.reset();
+    if (profile_) {
+        profile_->reset();
+    }
 
     if (!key_buffer_.empty() || !pending_commit_string_.empty()) {
         utils::clakLog("reset: clearing state (buf_len=" + std::to_string(key_buffer_.size()) + ") app=" + app + " site='" + site + "'");
@@ -119,17 +121,17 @@ std::string ClakState::activeSite() {
 
 bool ClakState::isBrowser() const {
     std::string app = const_cast<ClakState*>(this)->appKey();
-    return config::isBrowserApp(app);
+    return apps::isBrowserApp(app);
 }
 
 bool ClakState::isGecko() const {
     std::string app = const_cast<ClakState*>(this)->appKey();
-    return config::isGeckoApp(app);
+    return apps::isGeckoApp(app);
 }
 
 bool ClakState::isSteam() const {
     std::string app = const_cast<ClakState*>(this)->appKey();
-    return config::isSteamApp(app);
+    return apps::isSteamApp(app);
 }
 
 bool ClakState::isDraftJsEditor() const {
@@ -137,14 +139,22 @@ bool ClakState::isDraftJsEditor() const {
     return verifier_.isDraftJsEditor(site);
 }
 
+apps::AppProfile* ClakState::currentProfile() {
+    std::string app = appKey();
+    std::string site = activeSite();
+    bool has_url_cap = ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Url);
+    bool is_autofill = has_url_cap;
+    bool is_draftjs = isDraftJsEditor();
 
-
-static bool isWpsFontSizeText(const std::string& text) {
-    if (text.empty() || text.size() > 4) return false;
-    for (char c : text) {
-        if (!isdigit(static_cast<unsigned char>(c)) && c != '.') return false;
+    if (!profile_ || profile_app_ != app || profile_site_ != site ||
+        profile_autofill_ != is_autofill || profile_draftjs_ != is_draftjs) {
+        profile_ = apps::createAppProfile(app, site, is_autofill, is_draftjs);
+        profile_app_ = app;
+        profile_site_ = site;
+        profile_autofill_ = is_autofill;
+        profile_draftjs_ = is_draftjs;
     }
-    return true;
+    return profile_.get();
 }
 
 bool ClakState::shouldUseUinput(bool use_surrounding, uint32_t action_type, const fcitx::SurroundingText& /*surr*/) {
@@ -152,28 +162,17 @@ bool ClakState::shouldUseUinput(bool use_surrounding, uint32_t action_type, cons
         return true;
     }
 
-    std::string app = appKey();
-    std::string site = activeSite();
-
-    if (config::isWpsOfficeApp(app)) {
+    auto* profile = currentProfile();
+    if (profile->forcesUinput()) {
         return true;
     }
-    if (config::isTerminalApp(app)) {
-        return true;
-    }
-    if (config::isGeckoApp(app)) {
-        return true;
-    }
-    if (config::isMetaSite(site) || config::isMetaSite(app)) {
+    if (profile->preventsUinput()) {
         return false;
     }
-    if (config::isSteamApp(app)) {
+    if (profile->hasCustomDeletion()) {
         return false;
     }
     if (action_type == CLAK_ACTION_ADDRESS_BAR_FIX) {
-        return true;
-    }
-    if (config::isForceUinputSite(site) || isDraftJsEditor()) {
         return true;
     }
     if (verifier_.isCanvasEditor() || verifier_.isRichTextEditor()) {
@@ -184,9 +183,8 @@ bool ClakState::shouldUseUinput(bool use_surrounding, uint32_t action_type, cons
 
 bool ClakState::isAutofillCertain(const fcitx::SurroundingText& surr) {
     if (!surr.isValid()) return false;
-    std::string app = appKey();
-    std::string site = activeSite();
-    if (config::isMetaSite(site) || config::isMetaSite(app)) {
+    auto* profile = currentProfile();
+    if (!profile->allowsAutofillHeuristic()) {
         return false;
     }
     const std::string& text = surr.text();
@@ -213,17 +211,12 @@ void ClakState::doCommitString(const std::string& text) {
 }
 
 std::string ClakState::classifyGroup(const std::string& app, const std::string& site, bool is_autofill, bool used_uinput) {
-    bool has_url_cap = ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Url);
-    if (is_autofill || has_url_cap) return "address-bar";
-    if (config::isWpsOfficeApp(app)) return "WPS-Office";
-    if (config::isJetBrainsApp(app)) return "JetBrains-Uinput";
-    if (config::isTerminalApp(app)) return "Terminal-Uinput";
-    if (site == "docs.google.com" || site.find("docs.google.com") != std::string::npos) return "Docs-Uinput";
-    if (isDraftJsEditor()) return "DraftJS-Uinput";
-    if (config::isGeckoApp(app)) return "Gecko-Uinput";
-    if (config::isSteamApp(app)) return "Steam-ForwardKey";
-    if (used_uinput) return "Chromium-Uinput";
-    return "Chromium-SurroundingText";
+    (void)app;
+    (void)site;
+    auto* profile = currentProfile();
+    if (is_autofill) return "address-bar";
+    if (used_uinput && profile->name() == "Chromium-SurroundingText") return "Chromium-Uinput";
+    return profile->name();
 }
 
 void ClakState::logLatency(const std::string& group, uint64_t start_us, const std::string& action_type) {
@@ -365,11 +358,8 @@ bool ClakState::handleKey(const fcitx::Key& key) {
 
     std::string app = appKey();
     std::string site = activeSite();
-    bool is_term = config::isTerminalApp(app);
-    bool is_jb = config::isJetBrainsApp(app);
     bool is_meta = config::isMetaSite(site) || config::isMetaSite(app);
     bool is_draftjs = isDraftJsEditor();
-    bool is_force_uinput = config::isForceUinputSite(site) || is_draftjs;
     bool is_gecko = config::isGeckoApp(app);
 
     bool has_surrounding = ic_->capabilityFlags().test(fcitx::CapabilityFlag::SurroundingText);
@@ -402,19 +392,17 @@ bool ClakState::handleKey(const fcitx::Key& key) {
         }
     }
 
-    bool is_steam = isSteam();
-    bool is_office = config::isWpsOfficeApp(app);
-    bool is_wps_toolbar = is_office && isWpsFontSizeText(surr.text());
-    bool valid_surr = !is_steam && has_surrounding && surr.isValid() &&
+    bool valid_surr = has_surrounding && surr.isValid() &&
                       surr.cursor() <= surr.text().size() &&
-                      !verifier_.isCanvasEditor() && !is_term && !is_jb && !is_wps_toolbar;
-    bool use_surrounding = !is_steam && valid_surr && !verifier_.isRichTextEditor() && !is_force_uinput && !is_office;
+                      !verifier_.isCanvasEditor();
+    bool use_surrounding = valid_surr && !verifier_.isRichTextEditor() &&
+                           currentProfile()->allowsSurroundingText();
 
     bool skip_verify = is_gecko || is_meta;
     if (verifier_.isPending() && use_surrounding && !skip_verify) {
         verifier_.verify(surr);
         is_draftjs = isDraftJsEditor();
-        use_surrounding = !is_steam && valid_surr && !verifier_.isRichTextEditor() && !is_force_uinput && !is_draftjs && !is_office;
+        use_surrounding = currentProfile()->allowsSurroundingText() && valid_surr && !verifier_.isRichTextEditor() && !is_draftjs;
     } else if (verifier_.isPending()) {
         verifier_.clearPending();
     }
@@ -454,9 +442,9 @@ bool ClakState::handleKey(const fcitx::Key& key) {
             } else {
                 last_text_len_ = 1;
             }
-            if (is_steam && !has_ctrl_alt && !key_str.empty() && sym < 0xff00) {
+            if (currentProfile()->directCommitPrintableKey() && !has_ctrl_alt && !key_str.empty() && sym < 0xff00) {
                 doCommitString(key_str);
-                logLatency("Steam-ForwardKey", op_start_us_, "COMMIT");
+                logLatency(currentProfile()->name(), op_start_us_, "COMMIT");
                 op_start_us_ = 0;
                 return true;
             }
@@ -500,24 +488,21 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                 is_selection_deletion_ = recent_selection || has_selection;
                 op_group_ = classifyGroup(app, site, is_autofill, true);
 
-                bool is_wps = config::isWpsOfficeApp(app);
-                bool use_term_pacing = is_term || is_jb || modal_handler_.isModalEditor();
-                uint32_t post_delay = is_autofill ? config::kAddressBarPostDelayMs :
-                                      (use_term_pacing ? config::kTerminalPostDelayMs :
-                                      (is_draftjs ? config::kDraftJsPostDelayMs :
-                                      (is_wps ? 15 : 6)));
-                uint32_t gap_ms = use_term_pacing ? config::kTerminalGapMs :
-                                  (is_draftjs ? config::kDraftJsGapMs :
-                                  (is_wps ? 4 : 2));
+                apps::UinputPacing pacing = currentProfile()->uinputPacing();
+                if (is_autofill) {
+                    pacing = {config::kAddressBarPostDelayMs, 2};
+                } else if (modal_handler_.isModalEditor()) {
+                    pacing = {config::kTerminalPostDelayMs, config::kTerminalGapMs};
+                }
                 uint32_t pre_delay = 0;
 
                 utils::clakLog("uinput waiting for sentinel: expected=" + std::to_string(bs_to_send) +
                                " (real=" + std::to_string(real_bs) + (is_autofill ? " + 1 autofill" : "") +
-                               " + 1 sentinel) post_delay=" + std::to_string(post_delay) + "ms gap=" +
-                               std::to_string(gap_ms) + "ms commit='" +
+                               " + 1 sentinel) post_delay=" + std::to_string(pacing.post_delay_ms) + "ms gap=" +
+                               std::to_string(pacing.gap_ms) + "ms commit='" +
                                (action.commit_str ? action.commit_str : "") + "' app=" + app + " site='" + site + "'");
 
-                if (uinput::UinputTool::instance().send_backspace(bs_to_send, post_delay, pre_delay, gap_ms)) {
+                if (uinput::UinputTool::instance().send_backspace(bs_to_send, pacing.post_delay_ms, pre_delay, pacing.gap_ms)) {
                     is_deleting_ = true;
                     expected_backspaces_ = bs_to_send;
                     current_backspace_count_ = 0;
@@ -547,15 +532,15 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                         ic_->deleteSurroundingText(-static_cast<int>(real_bs),
                                                    static_cast<unsigned int>(real_bs));
                     }
-                } else if (is_steam) {
-                    utils::clakLog("steam forward backspace: count=" + std::to_string(real_bs) +
+                } else if (currentProfile()->hasCustomDeletion()) {
+                    utils::clakLog("custom deletion: count=" + std::to_string(real_bs) +
                                    " commit='" + (action.commit_str ? action.commit_str : "") + "' app=" + app);
                     if (engine_ && engine_->instance()) {
                         is_deleting_ = true;
                         expected_backspaces_ = real_bs;
                         current_backspace_count_ = 0;
                         pending_commit_string_ = (action.commit_str ? action.commit_str : "");
-                        steam_pipeline_.startStaggeredDeletion(
+                        currentProfile()->startCustomDeletion(
                             engine_->instance()->eventLoop(),
                             ic_,
                             real_bs,
@@ -564,7 +549,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                             [this]() {
                                 pending_commit_string_.clear();
                                 is_deleting_ = false;
-                                logLatency("Steam-ForwardKey", op_start_us_, "REPLACE");
+                                logLatency(currentProfile()->name(), op_start_us_, "REPLACE");
                                 op_start_us_ = 0;
                                 replayBufferedKeys();
                             }
@@ -580,7 +565,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                             doCommitString(action.commit_str);
                         }
                     }
-                    logLatency("Steam-ForwardKey", op_start_us_, "REPLACE");
+                    logLatency(currentProfile()->name(), op_start_us_, "REPLACE");
                     op_start_us_ = 0;
                     last_text_len_ = 0;
                     return true;
@@ -592,7 +577,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                     }
                 }
             }
-            if ((!is_steam || real_bs == 0) && action.commit_str && action.commit_str[0] != '\0') {
+            if ((!currentProfile()->hasCustomDeletion() || real_bs == 0) && action.commit_str && action.commit_str[0] != '\0') {
                 doCommitString(action.commit_str);
             }
             logLatency(classifyGroup(app, site, false, false), op_start_us_, "REPLACE");
@@ -633,7 +618,7 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
     if (shortcut.empty()) shortcut = "ctrl_shift";
 
     if (keyEvent.isRelease()) {
-        if (repeat_handler_.heldKey().sym() != 0 && (key.sym() == repeat_handler_.heldKey().sym() || key.isModifier())) {
+        if (repeat_handler_.heldKey().sym() != 0) {
             repeat_handler_.cancel();
         }
         if (shortcut == "ctrl_shift") {
@@ -749,11 +734,10 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
         return;
     }
 
-    if (isSteam() && !key.isModifier()) {
-        if (steam_pipeline_.isDuplicateKey(sym, fcitx::now(CLOCK_MONOTONIC))) {
-            keyEvent.filterAndAccept();
-            return;
-        }
+    auto* profile = currentProfile();
+    if (!key.isModifier() && profile && profile->filterIncomingKey(sym, fcitx::now(CLOCK_MONOTONIC))) {
+        keyEvent.filterAndAccept();
+        return;
     }
 
     bool is_cursor_move = key.isCursorMove() || (sym >= FcitxKey_Home && sym <= FcitxKey_End);
@@ -785,7 +769,9 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
 
     if (has_ctrl_alt || is_cursor_move || is_special_nav) {
         repeat_handler_.cancel();
-        steam_pipeline_.cancelTimer();
+        if (profile) {
+            profile->cancelCustomDeletion();
+        }
         if (is_deleting_) {
             if (safety_timer_) {
                 safety_timer_.reset();

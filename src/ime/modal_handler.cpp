@@ -1,7 +1,7 @@
 #include "modal_handler.h"
 #include "config/config.h"
-#include "platform/window_info.h"
-#include "platform/modal_editor.h"
+#include "window/window_info.h"
+#include "apps/modal_editor.h"
 #include "utils/log.h"
 #include <fcitx-utils/event.h>
 #include <fcitx-utils/keysym.h>

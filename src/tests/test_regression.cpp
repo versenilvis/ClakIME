@@ -6,7 +6,7 @@
 #include "engine.h"
 #include "core.h"
 #include "uinput/uinput.h"
-#include "platform/window_info.h"
+#include "window/window_info.h"
 #include "config/config.h"
 
 namespace clak {

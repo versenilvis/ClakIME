@@ -6,8 +6,8 @@
 #include "engine.h"
 #include "core.h"
 #include "uinput/uinput.h"
-#include "platform/window_info.h"
-#include "platform/modal_editor.h"
+#include "window/window_info.h"
+#include "apps/modal_editor.h"
 #include "config/sites.h"
 
 namespace clak {

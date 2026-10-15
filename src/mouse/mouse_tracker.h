@@ -8,7 +8,7 @@ struct libinput;
 struct udev;
 
 namespace clak {
-namespace platform {
+namespace mouse {
 
 // theo doi su kien click chuot qua libinput de reset composition
 class MouseTracker {
@@ -32,5 +32,5 @@ private:
     void processEvents();
 };
 
-} // namespace platform
+} // namespace mouse
 } // namespace clak

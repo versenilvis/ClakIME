@@ -24,7 +24,7 @@ pub fn check_daemon() -> DaemonStatus {
                         let arg0 = String::from_utf8_lossy(&content[..first_null]);
                         if Path::new(&*arg0)
                             .file_name()
-                            .map_or(false, |n| n == "fcitx5")
+                            .is_some_and(|n| n == "fcitx5")
                         {
                             fcitx5_pids.push(pid);
                         }
