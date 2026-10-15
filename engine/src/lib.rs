@@ -45,6 +45,7 @@ pub struct ClakCore {
     auto_restore: bool,
     dict: bool,
     user_words: HashSet<String>,
+    user_bases: Vec<String>,
 }
 
 pub type ClakEngine = ClakCore;
@@ -58,6 +59,7 @@ impl ClakCore {
             auto_restore: false,
             dict: false,
             user_words: HashSet::new(),
+            user_bases: Vec::new(),
         }
     }
 
@@ -78,11 +80,17 @@ impl ClakCore {
     }
 
     pub fn add_word(&mut self, word: &str) {
-        self.user_words.insert(word.to_lowercase());
+        let w = word.to_lowercase();
+        let base = charset::remove_tone(&w);
+        self.user_words.insert(w);
+        if let Err(pos) = self.user_bases.binary_search(&base) {
+            self.user_bases.insert(pos, base);
+        }
     }
 
     pub fn clear_words(&mut self) {
         self.user_words.clear();
+        self.user_bases.clear();
     }
 
     fn dict_known(&self, word: &str) -> bool {
@@ -91,11 +99,12 @@ impl ClakCore {
             if self.user_words.contains(word) || dict().binary_search(&word).is_ok() {
                 return true;
             }
-            for w in &self.user_words {
-                let wb = charset::remove_tone(w);
-                if wb.starts_with(&base) && wb != base {
-                    return true;
-                }
+            let user_match = match self.user_bases.binary_search(&base) {
+                Ok(i) => i + 1 < self.user_bases.len() && self.user_bases[i + 1].starts_with(&base),
+                Err(i) => i < self.user_bases.len() && self.user_bases[i].starts_with(&base),
+            };
+            if user_match {
+                return true;
             }
             let bs = bases();
             match bs.binary_search(&base) {
@@ -103,10 +112,12 @@ impl ClakCore {
                 Err(i) => i < bs.len() && bs[i].starts_with(&base),
             }
         } else {
-            for w in &self.user_words {
-                if charset::remove_tone(w).starts_with(&base) {
-                    return true;
-                }
+            let user_match = match self.user_bases.binary_search(&base) {
+                Ok(_) => true,
+                Err(i) => i < self.user_bases.len() && self.user_bases[i].starts_with(&base),
+            };
+            if user_match {
+                return true;
             }
             let bs = bases();
             match bs.binary_search(&base) {
