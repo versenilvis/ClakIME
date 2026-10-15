@@ -48,6 +48,11 @@ typedef void ClakContext;
 #define CLAK_ACTION_REPLACE             4
 #define CLAK_ACTION_UINPUT_REPLACE      4
 
+// Lifetime contract:
+// commit_str and delete_str are borrowed from the internal buffers of ClakContext.
+// They are valid synchronously until the next call to clak_process_key, clak_context_reset,
+// or clak_context_free on the same context. Callers must copy them immediately if needed
+// across asynchronous event loop dispatches.
 typedef struct {
     int32_t     action_type;
     size_t      delete_count;
