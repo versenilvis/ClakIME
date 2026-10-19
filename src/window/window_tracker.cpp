@@ -2,6 +2,7 @@
 #include "de/hyprland.h"
 #include "de/gnome.h"
 #include "apps/terminal.h"
+#include "apps/browser.h"
 #include <chrono>
 
 namespace clak {
@@ -54,18 +55,27 @@ WindowInfo getActiveWindow(const std::string& fallback_app) {
     if (!hypr_ok || info.win_class.empty()) {
         if (de::queryAtspiActiveWindow(info)) {
             // found active window via at-spi
+        } else if (!fallback_app.empty() && fallback_app != "gnome-shell") {
+            info.win_class = fallback_app;
+            info.win_title = fallback_app;
         } else {
-            // at-spi has no active window, check if a non-at-spi terminal is running
             std::string term = apps::detectRunningTerminalApp();
             if (!term.empty()) {
                 info.win_class = term;
                 info.win_title = term;
+            } else {
+                std::string browser = apps::detectRunningBrowserApp();
+                if (!browser.empty()) {
+                    info.win_class = browser;
+                    info.win_title = browser;
+                }
             }
         }
     }
 
-    if (info.win_class.empty() && !fallback_app.empty()) {
-        info.win_class = fallback_app;
+    if (info.win_class == "gnome-shell") {
+        info.win_class.clear();
+        info.win_title.clear();
     }
 
     if (!info.win_class.empty()) {

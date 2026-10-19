@@ -11,6 +11,7 @@ namespace apps {
 bool isBrowserApp(const std::string& app);
 bool isGeckoApp(const std::string& app);
 bool isChromiumApp(const std::string& app);
+std::string detectRunningBrowserApp();
 std::string extractDomain(const std::string& app, const std::string& title);
 
 std::unique_ptr<AppProfile> createGeckoProfile();

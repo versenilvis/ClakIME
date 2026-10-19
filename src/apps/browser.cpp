@@ -2,6 +2,10 @@
 #include "apps/ide.h"
 #include <vector>
 #include <cctype>
+#include <chrono>
+#include <cstring>
+#include <dirent.h>
+#include <sys/stat.h>
 
 namespace clak {
 namespace apps {
@@ -42,6 +46,142 @@ bool isChromiumApp(const std::string& app) {
     return false;
 }
 
+std::string detectRunningBrowserApp() {
+    static int64_t s_last_browser_check_ms = 0;
+    static std::string s_last_browser_app;
+
+    auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    if (now_ms - s_last_browser_check_ms < 2000 && !s_last_browser_app.empty()) {
+        return s_last_browser_app;
+    }
+    s_last_browser_check_ms = now_ms;
+
+    static const char* const kBrowsers[] = {
+        "helium", "zen", "zen-bin", "firefox", "google-chrome", "chrome",
+        "chromium", "brave", "vivaldi", "opera", "microsoft-edge", "edge",
+        "waterfox", "librewolf", "thorium", "floorp"
+    };
+
+    DIR* proc_dir = opendir("/proc");
+    if (!proc_dir) return s_last_browser_app;
+
+    struct dirent* ent;
+    std::string found;
+    while ((ent = readdir(proc_dir)) != nullptr) {
+        if (ent->d_name[0] < '0' || ent->d_name[0] > '9') continue;
+        char comm_path[64];
+        snprintf(comm_path, sizeof(comm_path), "/proc/%s/comm", ent->d_name);
+        FILE* f = fopen(comm_path, "r");
+        if (!f) continue;
+        char comm[64];
+        if (fgets(comm, sizeof(comm), f)) {
+            size_t len = strlen(comm);
+            while (len > 0 && (comm[len - 1] == '\n' || comm[len - 1] == ' ' || comm[len - 1] == '\r')) {
+                comm[--len] = '\0';
+            }
+            if (strstr(comm, "crashpad") != nullptr) {
+                fclose(f);
+                continue;
+            }
+            for (const char* b : kBrowsers) {
+                if (strcmp(comm, b) == 0) {
+                    found = comm;
+                    fclose(f);
+                    closedir(proc_dir);
+                    s_last_browser_app = found;
+                    return found;
+                }
+            }
+        }
+        fclose(f);
+    }
+    closedir(proc_dir);
+    s_last_browser_app = found;
+    return found;
+}
+
+static std::string extractSessionDomain(const std::string& app) {
+    const char* home = getenv("HOME");
+    if (!home) return "";
+
+    std::vector<std::string> session_dirs;
+    if (app == "helium") {
+        session_dirs.push_back(std::string(home) + "/.config/net.imput.helium/Default/Sessions");
+    } else if (app == "google-chrome" || app == "chrome") {
+        session_dirs.push_back(std::string(home) + "/.config/google-chrome/Default/Sessions");
+    } else if (app == "chromium") {
+        session_dirs.push_back(std::string(home) + "/.config/chromium/Default/Sessions");
+    } else if (app == "brave") {
+        session_dirs.push_back(std::string(home) + "/.config/BraveSoftware/Brave-Browser/Default/Sessions");
+    } else {
+        session_dirs.push_back(std::string(home) + "/.config/net.imput.helium/Default/Sessions");
+        session_dirs.push_back(std::string(home) + "/.config/google-chrome/Default/Sessions");
+        session_dirs.push_back(std::string(home) + "/.config/chromium/Default/Sessions");
+    }
+
+    std::string newest_file;
+    time_t newest_mtime = 0;
+
+    for (const auto& sdir : session_dirs) {
+        DIR* d = opendir(sdir.c_str());
+        if (!d) continue;
+        struct dirent* ent;
+        while ((ent = readdir(d)) != nullptr) {
+            if (strncmp(ent->d_name, "Session_", 8) == 0) {
+                std::string full_path = sdir + "/" + ent->d_name;
+                struct stat st{};
+                if (stat(full_path.c_str(), &st) == 0 && st.st_mtime > newest_mtime) {
+                    newest_mtime = st.st_mtime;
+                    newest_file = full_path;
+                }
+            }
+        }
+        closedir(d);
+    }
+
+    if (newest_file.empty()) return "";
+
+    FILE* f = fopen(newest_file.c_str(), "rb");
+    if (!f) return "";
+
+    if (fseek(f, 0, SEEK_END) != 0) {
+        fclose(f);
+        return "";
+    }
+    long size = ftell(f);
+    long read_len = std::min(4096L, size);
+    if (read_len <= 0 || fseek(f, size - read_len, SEEK_SET) != 0) {
+        fclose(f);
+        return "";
+    }
+
+    std::vector<char> buf(read_len + 1, 0);
+    size_t n = fread(buf.data(), 1, read_len, f);
+    fclose(f);
+    buf[n] = '\0';
+
+    std::string chunk(buf.data(), n);
+    size_t pos_https = chunk.rfind("https://");
+    size_t pos_http = chunk.rfind("http://");
+    size_t pos = std::string::npos;
+    if (pos_https != std::string::npos && pos_http != std::string::npos) {
+        pos = std::max(pos_https, pos_http);
+    } else if (pos_https != std::string::npos) {
+        pos = pos_https;
+    } else {
+        pos = pos_http;
+    }
+
+    if (pos == std::string::npos) return "";
+
+    size_t start = (chunk.substr(pos, 8) == "https://") ? pos + 8 : pos + 7;
+    size_t end = chunk.find_first_of("/ :?#\x00\r\n\t", start);
+    std::string host = (end == std::string::npos) ? chunk.substr(start) : chunk.substr(start, end - start);
+    if (host.rfind("www.", 0) == 0) host = host.substr(4);
+    return host;
+}
+
 std::string extractDomain(const std::string& app, const std::string& title) {
     std::string lower_app = app;
     for (char& c : lower_app) c = tolower(c);
@@ -50,6 +190,10 @@ std::string extractDomain(const std::string& app, const std::string& title) {
     }
 
     if (title.empty()) {
+        std::string session_domain = extractSessionDomain(lower_app);
+        if (!session_domain.empty()) {
+            return session_domain;
+        }
         return app;
     }
 

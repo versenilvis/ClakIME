@@ -10,10 +10,11 @@ namespace de {
 // -----------------------------------------------------------------------------
 // AT-SPI2 dynamic query for GNOME / generic Wayland
 // -----------------------------------------------------------------------------
+typedef int (*fn_init)();
 typedef void* (*fn_get_desktop)(int);
-typedef int (*fn_get_child_count)(void*);
-typedef void* (*fn_get_child_at_index)(void*, int);
-typedef char* (*fn_get_name)(void*);
+typedef int (*fn_get_child_count)(void*, void**);
+typedef void* (*fn_get_child_at_index)(void*, int, void**);
+typedef char* (*fn_get_name)(void*, void**);
 typedef void* (*fn_get_state_set)(void*);
 typedef int (*fn_state_contains)(void*, int);
 typedef void (*fn_unref)(void*);
@@ -22,6 +23,7 @@ typedef void (*fn_free)(void*);
 #define ATSPI_STATE_ACTIVE 1
 
 static void* s_atspi_handle = nullptr;
+static fn_init p_init = nullptr;
 static fn_get_desktop p_get_desktop = nullptr;
 static fn_get_child_count p_count = nullptr;
 static fn_get_child_at_index p_child = nullptr;
@@ -37,6 +39,7 @@ static bool initAtspi() {
     s_atspi_inited = true;
     s_atspi_handle = dlopen("libatspi.so.0", RTLD_LAZY);
     if (!s_atspi_handle) return false;
+    p_init = (fn_init)dlsym(s_atspi_handle, "atspi_init");
     p_get_desktop = (fn_get_desktop)dlsym(s_atspi_handle, "atspi_get_desktop");
     p_count = (fn_get_child_count)dlsym(s_atspi_handle, "atspi_accessible_get_child_count");
     p_child = (fn_get_child_at_index)dlsym(s_atspi_handle, "atspi_accessible_get_child_at_index");
@@ -45,6 +48,9 @@ static bool initAtspi() {
     p_contains = (fn_state_contains)dlsym(s_atspi_handle, "atspi_state_set_contains");
     p_unref = (fn_unref)dlsym(s_atspi_handle, "g_object_unref");
     p_free = (fn_free)dlsym(s_atspi_handle, "g_free");
+    if (p_init) {
+        p_init();
+    }
     return (p_get_desktop && p_count && p_child && p_name && p_state_set && p_contains);
 }
 
@@ -53,6 +59,7 @@ static std::string normalizeAppName(const std::string& raw_name) {
     for (char& c : lower) c = tolower(static_cast<unsigned char>(c));
     if (lower.find("visual studio code") != std::string::npos || lower == "code") return "code";
     if (lower.find("brave") != std::string::npos) return "brave";
+    if (lower.find("helium") != std::string::npos) return "helium";
     if (lower.find("chrome") != std::string::npos || lower.find("chromium") != std::string::npos) return "google-chrome";
     if (lower.find("firefox") != std::string::npos) return "firefox";
     if (lower.find("zen") != std::string::npos) return "zen";
@@ -63,27 +70,35 @@ bool queryAtspiActiveWindow(window::WindowInfo& info) {
     if (!initAtspi()) return false;
     void* desktop = p_get_desktop(0);
     if (!desktop) return false;
-    int app_count = p_count(desktop);
+    void* err = nullptr;
+    int app_count = p_count(desktop, &err);
     bool found = false;
     for (int i = 0; i < app_count; ++i) {
-        void* app = p_child(desktop, i);
+        void* app = p_child(desktop, i, &err);
         if (!app) continue;
-        int wc = p_count(app);
+
+        char* an = p_name(app, &err);
+        std::string raw_an = an ? an : "";
+        if (p_free && an) p_free(an);
+        std::string app_name = normalizeAppName(raw_an);
+        if (app_name == "gnome-shell" || app_name.find("portal") != std::string::npos) {
+            if (p_unref) p_unref(app);
+            continue;
+        }
+
+        int wc = p_count(app, &err);
         for (int j = 0; j < wc; ++j) {
-            void* win = p_child(app, j);
+            void* win = p_child(app, j, &err);
             if (!win) continue;
             void* st = p_state_set(win);
-            if (st && p_contains(st, ATSPI_STATE_ACTIVE)) {
-                char* an = p_name(app);
-                char* wn = p_name(win);
-                if (an) {
-                    info.win_class = normalizeAppName(an);
-                    if (p_free) p_free(an);
-                }
-                if (wn) {
-                    info.win_title = wn;
-                    if (p_free) p_free(wn);
-                }
+            bool is_active = (st && (p_contains(st, ATSPI_STATE_ACTIVE) || p_contains(st, 13)));
+            char* wn = p_name(win, &err);
+            std::string win_title = wn ? wn : "";
+            if (p_free && wn) p_free(wn);
+
+            if (is_active || (wc == 1 && !win_title.empty())) {
+                info.win_class = (app_name.empty() || app_name == "unnamed") ? normalizeAppName(win_title) : app_name;
+                info.win_title = win_title;
                 found = true;
             }
             if (st && p_unref) p_unref(st);
