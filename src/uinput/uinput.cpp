@@ -165,6 +165,9 @@ bool UinputTool::send_backspace_direct(size_t count, uint32_t post_delay_ms, uin
             std::this_thread::sleep_for(std::chrono::milliseconds(post_delay_ms));
         }
 
+        // record sentinel emission time immediately before dispatching sentinel
+        sentinel_emit_time_us_.store(monotonic_now_us(), std::memory_order_release);
+
         // send final sentinel backspace
         emit_bs();
     }).detach();
@@ -327,6 +330,9 @@ bool UinputTool::send_backspace_xtest(size_t count, uint32_t post_delay_ms, uint
             std::this_thread::sleep_for(std::chrono::milliseconds(post_delay_ms));
         }
 
+        // record sentinel emission time immediately before dispatching sentinel
+        sentinel_emit_time_us_.store(monotonic_now_us(), std::memory_order_release);
+
         emit_bs();
     }).detach();
 
@@ -395,6 +401,7 @@ bool UinputTool::send_select(size_t count) {
 }
 
 bool UinputTool::send_backspace(size_t count, uint32_t post_delay_ms, uint32_t pre_delay_ms, uint32_t gap_ms) {
+    sentinel_emit_time_us_.store(0, std::memory_order_relaxed);
     if (mock_handler_) {
         return mock_handler_(count, post_delay_ms, pre_delay_ms, gap_ms);
     }

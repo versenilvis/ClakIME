@@ -70,5 +70,53 @@ void clakLog(const std::string& msg) {
     fclose(log_fp);
 }
 
+void logRttCsv(uint64_t rtt_us, double delta_ms, const std::string& frontend,
+               const std::string& group, const std::string& app, const std::string& action) {
+    const char* env_path = getenv("CLAK_RTT_CSV");
+    const char* path = (env_path && env_path[0] != '\0') ? env_path : "/tmp/clak_rtt.csv";
+
+    // open with nofollow and user-only permissions
+    int fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW | O_CLOEXEC, 0600);
+    if (fd < 0) return;
+
+    struct stat st{};
+    if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_uid != getuid()) {
+        close(fd);
+        return;
+    }
+
+    FILE* fp = fdopen(fd, "a");
+    if (!fp) {
+        close(fd);
+        return;
+    }
+
+    // write header on newly created file
+    if (st.st_size == 0) {
+        fprintf(fp, "timestamp,rtt_us,rtt_ms,delta_ms,frontend,group,app,action\n");
+    }
+
+    auto now = std::chrono::system_clock::now();
+    auto t = std::chrono::system_clock::to_time_t(now);
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() % 1000;
+    struct tm tm_buf{};
+    localtime_r(&t, &tm_buf);
+    char ts[32];
+    snprintf(ts, sizeof(ts), "%02d:%02d:%02d.%03ld",
+             tm_buf.tm_hour, tm_buf.tm_min, tm_buf.tm_sec, ms);
+
+    double rtt_ms = static_cast<double>(rtt_us) / 1000.0;
+    fprintf(fp, "%s,%llu,%.3f,%.2f,%s,%s,%s,%s\n",
+            ts,
+            static_cast<unsigned long long>(rtt_us),
+            rtt_ms,
+            delta_ms,
+            frontend.empty() ? "unknown" : frontend.c_str(),
+            group.empty() ? "unknown" : group.c_str(),
+            app.empty() ? "unknown" : app.c_str(),
+            action.c_str());
+    fclose(fp);
+}
+
 } // namespace utils
 } // namespace clak
