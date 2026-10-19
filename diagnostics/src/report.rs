@@ -20,8 +20,18 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
         "- `/dev/uinput`: {}\n",
         if report.permissions.uinput_writable {
             "Khả dụng (có quyền ghi)"
+        } else if report.permissions.xtest_available {
+            "Thiếu quyền ghi (Đang dùng XTest fallback trên X11/XWayland)"
         } else {
             "Thiếu quyền ghi"
+        }
+    ));
+    out.push_str(&format!(
+        "- XTest Fallback: {}\n",
+        if report.permissions.xtest_available {
+            "Khả dụng"
+        } else {
+            "Không khả dụng"
         }
     ));
     out.push_str(&format!(

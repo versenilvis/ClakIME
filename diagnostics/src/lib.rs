@@ -78,11 +78,19 @@ pub fn run_diagnostics() -> DiagnosticReport {
     let mut warnings = Vec::new();
 
     if !permissions.uinput_writable {
-        issues.push(DiagnosticIssue {
-            title: "Thiếu quyền /dev/uinput".to_string(),
-            message: "Người dùng chưa có quyền ghi vào /dev/uinput để gửi phím ảo khi cần".to_string(),
-            fix_command: Some("echo 'KERNEL==\"uinput\", SUBSYSTEM==\"misc\", TAG+=\"uaccess\"' | sudo tee /etc/udev/rules.d/99-uinput.rules && sudo udevadm trigger /dev/uinput".to_string()),
-        });
+        if permissions.xtest_available {
+            warnings.push(DiagnosticWarning {
+                title: "Đang dùng XTest fallback cho phím ảo".to_string(),
+                message: "Thiếu quyền ghi /dev/uinput, đang tạm dùng XTest trên X11/XWayland. Khuyên dùng uinput để hỗ trợ toàn diện trên Wayland và terminal".to_string(),
+                fix_command: Some("echo 'KERNEL==\"uinput\", SUBSYSTEM==\"misc\", TAG+=\"uaccess\"' | sudo tee /etc/udev/rules.d/99-uinput.rules && sudo udevadm trigger /dev/uinput".to_string()),
+            });
+        } else {
+            issues.push(DiagnosticIssue {
+                title: "Thiếu quyền /dev/uinput".to_string(),
+                message: "Người dùng chưa có quyền ghi vào /dev/uinput để gửi phím ảo khi cần".to_string(),
+                fix_command: Some("echo 'KERNEL==\"uinput\", SUBSYSTEM==\"misc\", TAG+=\"uaccess\"' | sudo tee /etc/udev/rules.d/99-uinput.rules && sudo udevadm trigger /dev/uinput".to_string()),
+            });
+        }
     }
 
     if permissions.input_total_count > 0 && permissions.input_readable_count == 0 {

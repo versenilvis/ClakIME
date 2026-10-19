@@ -5,14 +5,48 @@ use std::fs;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PermissionChecks {
     pub uinput_writable: bool,
+    pub xtest_available: bool,
     pub input_readable_count: usize,
     pub input_total_count: usize,
+}
+
+fn check_xtest_available() -> bool {
+    let display = match std::env::var("DISPLAY") {
+        Ok(d) if !d.is_empty() => d,
+        _ => return false,
+    };
+    let _ = display;
+    let c_xcb1 = CString::new("libxcb.so.1").unwrap();
+    let c_xcb2 = CString::new("libxcb.so").unwrap();
+    let c_xtest1 = CString::new("libxcb-xtest.so.0").unwrap();
+    let c_xtest2 = CString::new("libxcb-xtest.so").unwrap();
+
+    unsafe {
+        let mut xcb = libc::dlopen(c_xcb1.as_ptr(), libc::RTLD_NOW | libc::RTLD_LOCAL);
+        if xcb.is_null() {
+            xcb = libc::dlopen(c_xcb2.as_ptr(), libc::RTLD_NOW | libc::RTLD_LOCAL);
+        }
+        let mut xtest = libc::dlopen(c_xtest1.as_ptr(), libc::RTLD_NOW | libc::RTLD_LOCAL);
+        if xtest.is_null() {
+            xtest = libc::dlopen(c_xtest2.as_ptr(), libc::RTLD_NOW | libc::RTLD_LOCAL);
+        }
+
+        let ok = !xcb.is_null() && !xtest.is_null();
+        if !xcb.is_null() {
+            libc::dlclose(xcb);
+        }
+        if !xtest.is_null() {
+            libc::dlclose(xtest);
+        }
+        ok
+    }
 }
 
 pub fn check_permissions() -> PermissionChecks {
     let uinput_path = CString::new("/dev/uinput").unwrap();
     // check write access to uinput virtual device
     let uinput_writable = unsafe { libc::access(uinput_path.as_ptr(), libc::W_OK) == 0 };
+    let xtest_available = check_xtest_available();
 
     let mut input_total_count = 0;
     let mut input_readable_count = 0;
@@ -36,6 +70,7 @@ pub fn check_permissions() -> PermissionChecks {
 
     PermissionChecks {
         uinput_writable,
+        xtest_available,
         input_readable_count,
         input_total_count,
     }

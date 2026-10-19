@@ -24,6 +24,16 @@ fn format_doctor_lines(report: &DiagnosticReport, time_tag: &str) -> Vec<DoctorL
             color: ok_color,
             bold: false,
         });
+    } else if report.permissions.xtest_available {
+        lines.push(DoctorLineData {
+            text: format!(
+                "[{}] WARNING | /dev/uinput (Thiếu quyền ghi, đang dùng XTest fallback)",
+                time_tag
+            )
+            .into(),
+            color: warn_color,
+            bold: false,
+        });
     } else {
         lines.push(DoctorLineData {
             text: format!("[{}] FAILED  | /dev/uinput (Không có quyền ghi)", time_tag).into(),

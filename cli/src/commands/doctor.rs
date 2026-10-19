@@ -59,6 +59,8 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
     println!("\n[2/8] Thiết bị ảo và Quyền hạn:");
     if report.permissions.uinput_writable {
         println!("  • /dev/uinput: \x1b[32m[OK]\x1b[0m Khả dụng (chống nuốt chữ Kitty, Ghostty, Chrome, VSCode)");
+    } else if report.permissions.xtest_available {
+        println!("  • /dev/uinput: \x1b[33m[FALLBACK]\x1b[0m Thiếu quyền ghi, đang dùng XTest fallback trên X11/XWayland");
     } else {
         println!("  • /dev/uinput: \x1b[31m[THIẾU QUYỀN]\x1b[0m Người dùng chưa có quyền ghi vào /dev/uinput");
     }
