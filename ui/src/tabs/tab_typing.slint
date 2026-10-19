@@ -7,7 +7,8 @@ import { GhostButton } from "../components/buttons.slint";
 export component TabTyping inherits VerticalLayout {
     in-out property <bool> double_space_period: false;
     in-out property <bool> auto_capitalize: false;
-    in-out property <bool> shift_autofix: false;
+    in-out property <bool> short_w: true;
+    in-out property <bool> bracket_brackets: true;
     in-out property <bool> macros_enabled: true;
     in-out property <[MacroItemData]> macro_items: [];
     in-out property <string> new_macro_trigger: "";
@@ -24,9 +25,16 @@ export component TabTyping inherits VerticalLayout {
     }
 
     SettingItem {
-        title: "Sửa chính tả bằng phím Shift";
-        subtitle: "Nhấn nhả nhanh phím Shift để tự động sửa từ hoặc vùng chọn; nhấn lần nữa để hoàn tác";
-        checked <=> root.shift_autofix;
+        title: "Gõ w thành ư";
+        subtitle: "Phím w ra chữ ư ở đầu từ";
+        checked <=> root.short_w;
+        toggled => { root.changed(); }
+    }
+
+    SettingItem {
+        title: "Gõ [ ] { } thành ơ ư Ơ Ư";
+        subtitle: "Gõ 2 lần ngoặc để trả lại ký tự gốc";
+        checked <=> root.bracket_brackets;
         toggled => { root.changed(); }
     }
 

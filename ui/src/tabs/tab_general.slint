@@ -14,8 +14,8 @@ export component TabGeneral inherits VerticalLayout {
     in-out property <int> method_index: 0;
     in-out property <int> charset_index: 0;
     in-out property <int> startup_mode_index: 0;
-    in-out property <bool> short_w: true;
-    in-out property <bool> bracket_brackets: true;
+    in-out property <bool> autocorrect: true;
+    in-out property <bool> shift_autofix: false;
     in-out property <bool> spelling_enabled: false;
     in-out property <bool> auto_restore: false;
     in-out property <bool> modern_tone: true;
@@ -116,16 +116,16 @@ export component TabGeneral inherits VerticalLayout {
     }
 
     SettingItem {
-        title: "Gõ w thành ư";
-        subtitle: "Phím w ra chữ ư ở đầu từ";
-        checked <=> root.short_w;
+        title: "Tự sửa chính tả khi gõ sai";
+        subtitle: "Tự động nhận diện và sửa lỗi đảo phím khi gõ nhanh";
+        checked <=> root.autocorrect;
         toggled => { root.changed(); }
     }
 
     SettingItem {
-        title: "Gõ [ ] { } thành ơ ư Ơ Ư";
-        subtitle: "Gõ 2 lần ngoặc để trả lại ký tự gốc";
-        checked <=> root.bracket_brackets;
+        title: "Sửa chính tả bằng phím Shift";
+        subtitle: "Nhấn nhả nhanh phím Shift để tự động sửa từ hoặc vùng chọn; nhấn lần nữa để hoàn tác";
+        checked <=> root.shift_autofix;
         toggled => { root.changed(); }
     }
 

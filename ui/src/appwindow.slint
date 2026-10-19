@@ -41,6 +41,8 @@ export component MainWindow inherits Window {
     in-out property <int> startup_mode_index: 0;
 
     // chinh ta
+    in-out property <bool> autocorrect: false;
+    in-out property <bool> shift_autofix: false;
     in-out property <bool> spelling_enabled: false;
     in-out property <bool> auto_restore: false;
     in-out property <bool> modern_tone: true;
@@ -48,7 +50,6 @@ export component MainWindow inherits Window {
     // go tat va tu dong sua
     in-out property <bool> double_space_period: false;
     in-out property <bool> auto_capitalize: false;
-    in-out property <bool> shift_autofix: false;
     in-out property <bool> macros_enabled: true;
     in-out property <[MacroItemData]> macro_items: [];
     in-out property <string> new_macro_trigger: "";
@@ -310,8 +311,8 @@ export component MainWindow inherits Window {
                     method_index <=> root.method_index;
                     charset_index <=> root.charset_index;
                     startup_mode_index <=> root.startup_mode_index;
-                    short_w <=> root.short_w;
-                    bracket_brackets <=> root.bracket_brackets;
+                    autocorrect <=> root.autocorrect;
+                    shift_autofix <=> root.shift_autofix;
                     spelling_enabled <=> root.spelling_enabled;
                     auto_restore <=> root.auto_restore;
                     modern_tone <=> root.modern_tone;
@@ -321,9 +322,10 @@ export component MainWindow inherits Window {
 
                 if root.selected_tab == 1: TabTyping {
                     vertical-stretch: 1;
+                    short_w <=> root.short_w;
+                    bracket_brackets <=> root.bracket_brackets;
                     double_space_period <=> root.double_space_period;
                     auto_capitalize <=> root.auto_capitalize;
-                    shift_autofix <=> root.shift_autofix;
                     macros_enabled <=> root.macros_enabled;
                     macro_items <=> root.macro_items;
                     new_macro_trigger <=> root.new_macro_trigger;
