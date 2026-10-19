@@ -208,8 +208,8 @@ run_simulation() {
     [ -n "$(find /usr/share/icons -name '*clak*' -print -quit 2>/dev/null)" ] && has_system=1
 
     [ -f "${HOME}/.config/environment.d/99-clak-wps.conf" ] && has_wps=1
-    [ -f "${HOME}/.local/share/applications/steam.desktop" ] && grep -q "GTK_IM_MODULE=xim" "${HOME}/.local/share/applications/steam.desktop" 2>/dev/null && has_steam=1
-    [ -f "${HOME}/.local/bin/steam" ] && grep -q "GTK_IM_MODULE=xim" "${HOME}/.local/bin/steam" 2>/dev/null && has_steam=1
+    [ -f "${HOME}/.local/share/applications/steam.desktop" ] && grep -q "GTK_IM_MODULE=xim" "${HOME}/.local/share/applications/steam.desktop" 2>/dev/null && grep -q "XMODIFIERS=@im=fcitx" "${HOME}/.local/share/applications/steam.desktop" 2>/dev/null && has_steam=1
+    [ -f "${HOME}/.local/bin/steam" ] && grep -q "GTK_IM_MODULE=xim" "${HOME}/.local/bin/steam" 2>/dev/null && grep -q "XMODIFIERS=@im=fcitx" "${HOME}/.local/bin/steam" 2>/dev/null && has_steam=1
     [ -d "${HOME}/.config/clak" ] && [ "$purge_config" -eq 1 ] && has_config=1
     [ -f "${HOME}/.config/autostart/clak-autostart.desktop" ] && has_autostart=1
     [ -f "${HOME}/.config/environment.d/99-clak-im.conf" ] && has_autostart=1
@@ -340,8 +340,8 @@ run_uninstall() {
     [ -f "${HOME}/.config/autostart/clak-autostart.desktop" ] && has_autostart=1
     [ -f "${HOME}/.config/environment.d/99-clak-im.conf" ] && has_autostart=1
     [ -f "${HOME}/.config/environment.d/99-clak-wps.conf" ] && has_wps=1
-    [ -f "${HOME}/.local/share/applications/steam.desktop" ] && grep -q "GTK_IM_MODULE=xim" "${HOME}/.local/share/applications/steam.desktop" 2>/dev/null && has_steam=1
-    [ -f "${HOME}/.local/bin/steam" ] && grep -q "GTK_IM_MODULE=xim" "${HOME}/.local/bin/steam" 2>/dev/null && has_steam=1
+    [ -f "${HOME}/.local/share/applications/steam.desktop" ] && grep -q "GTK_IM_MODULE=xim" "${HOME}/.local/share/applications/steam.desktop" 2>/dev/null && grep -q "XMODIFIERS=@im=fcitx" "${HOME}/.local/share/applications/steam.desktop" 2>/dev/null && has_steam=1
+    [ -f "${HOME}/.local/bin/steam" ] && grep -q "GTK_IM_MODULE=xim" "${HOME}/.local/bin/steam" 2>/dev/null && grep -q "XMODIFIERS=@im=fcitx" "${HOME}/.local/bin/steam" 2>/dev/null && has_steam=1
     [ -f "${HOME}/.config/fcitx5/config.bak-clak" ] && has_fcitx_bak=1
     [ -d "${HOME}/.config/clak" ] && [ "$purge_config" -eq 1 ] && has_config=1
     if [ -f "${HOME}/.config/fcitx5/profile" ] && grep -q "clak" "${HOME}/.config/fcitx5/profile" 2>/dev/null; then
@@ -464,12 +464,12 @@ run_uninstall() {
     # 6. cleanup steam compatibility overrides
     local steam_cleaned=0
     local steam_df="${HOME}/.local/share/applications/steam.desktop"
-    if [ -f "$steam_df" ] && grep -q "GTK_IM_MODULE=xim" "$steam_df" 2>/dev/null; then
+    if [ -f "$steam_df" ] && grep -q "GTK_IM_MODULE=xim" "$steam_df" 2>/dev/null && grep -q "XMODIFIERS=@im=fcitx" "$steam_df" 2>/dev/null; then
         rm -f "$steam_df"
         steam_cleaned=1
     fi
     local steam_wb="${HOME}/.local/bin/steam"
-    if [ -f "$steam_wb" ] && grep -q "GTK_IM_MODULE=xim" "$steam_wb" 2>/dev/null; then
+    if [ -f "$steam_wb" ] && grep -q "GTK_IM_MODULE=xim" "$steam_wb" 2>/dev/null && grep -q "XMODIFIERS=@im=fcitx" "$steam_wb" 2>/dev/null; then
         rm -f "$steam_wb"
         steam_cleaned=1
     fi
@@ -500,10 +500,19 @@ run_uninstall() {
         fi
     done
 
-    # restore original fcitx5 config backup if available
-    if [ -f "${target_home}/.config/fcitx5/config.bak-clak" ]; then
-        mv "${target_home}/.config/fcitx5/config.bak-clak" "${target_home}/.config/fcitx5/config" 2>/dev/null || true
-        log_step "$lbl_clean" "Đã khôi phục file cấu hình Fcitx5 gốc (~/.config/fcitx5/config)"
+    # restore original fcitx5 config backup only if user has not modified config
+    local cur_cfg="${target_home}/.config/fcitx5/config"
+    local bak_cfg="${target_home}/.config/fcitx5/config.bak-clak"
+    if [ -f "$bak_cfg" ]; then
+        if [ ! -f "$cur_cfg" ]; then
+            mv "$bak_cfg" "$cur_cfg" 2>/dev/null || true
+            log_step "$lbl_clean" "Đã khôi phục file cấu hình Fcitx5 gốc (~/.config/fcitx5/config)"
+        elif cmp -s "$cur_cfg" "$bak_cfg" 2>/dev/null; then
+            rm -f "$bak_cfg"
+        else
+            rm -f "$bak_cfg"
+            log_step "$lbl_clean" "Giữ nguyên cấu hình Fcitx5 hiện tại (~/.config/fcitx5/config) và dọn file sao lưu cũ"
+        fi
     fi
 
     local prof="${target_home}/.config/fcitx5/profile"
