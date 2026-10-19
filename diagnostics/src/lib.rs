@@ -82,13 +82,13 @@ pub fn run_diagnostics() -> DiagnosticReport {
             warnings.push(DiagnosticWarning {
                 title: "Đang dùng XTest fallback cho phím ảo".to_string(),
                 message: "Thiếu quyền ghi /dev/uinput, đang tạm dùng XTest trên X11/XWayland. Khuyên dùng uinput để hỗ trợ toàn diện trên Wayland và terminal".to_string(),
-                fix_command: Some("echo 'KERNEL==\"uinput\", SUBSYSTEM==\"misc\", TAG+=\"uaccess\"' | sudo tee /etc/udev/rules.d/99-uinput.rules && sudo udevadm trigger /dev/uinput".to_string()),
+                fix_command: Some("clak doctor --fix".to_string()),
             });
         } else {
             issues.push(DiagnosticIssue {
                 title: "Thiếu quyền /dev/uinput".to_string(),
                 message: "Người dùng chưa có quyền ghi vào /dev/uinput để gửi phím ảo khi cần".to_string(),
-                fix_command: Some("echo 'KERNEL==\"uinput\", SUBSYSTEM==\"misc\", TAG+=\"uaccess\"' | sudo tee /etc/udev/rules.d/99-uinput.rules && sudo udevadm trigger /dev/uinput".to_string()),
+                fix_command: Some("clak doctor --fix".to_string()),
             });
         }
     }
@@ -97,7 +97,7 @@ pub fn run_diagnostics() -> DiagnosticReport {
         warnings.push(DiagnosticWarning {
             title: "Không đọc được /dev/input".to_string(),
             message: "Thiếu quyền đọc chuột để tự động reset buffer khi click chuột".to_string(),
-            fix_command: Some("sudo usermod -aG input $USER".to_string()),
+            fix_command: Some("clak doctor --fix".to_string()),
         });
     }
 
