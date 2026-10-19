@@ -540,6 +540,11 @@ bool ClakState::handleKey(const fcitx::Key& key) {
         case CLAK_ACTION_REPLACE:
         case CLAK_ACTION_REPLACE_SURROUNDING: {
             size_t real_bs = action.delete_count;
+            int delete_offset = action.delete_offset;
+            if (delete_offset == 0 && action.action_type != CLAK_ACTION_REPLACE_SURROUNDING && real_bs > 0) {
+                delete_offset = -static_cast<int>(real_bs);
+            }
+            size_t backward_bs = (delete_offset < 0) ? static_cast<size_t>(-delete_offset) : 0;
 
             bool is_address_bar = (currentProfile() && currentProfile()->name() == "address-bar") ||
                                   (ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Url));
@@ -547,7 +552,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
             bool is_autofill = (action.action_type == CLAK_ACTION_ADDRESS_BAR_FIX) ||
                                address_bar_autofill ||
                                (isBrowser() && isAutofillCertain(surr));
-            if (real_bs > 0 && surr.isValid() && surr.cursor() < real_bs) {
+            if (backward_bs > 0 && surr.isValid() && surr.cursor() < backward_bs) {
                 use_surrounding = false;
                 verifier_.setDraftJsEditor(true);
                 verifier_.setRichTextEditor(true);
@@ -609,19 +614,24 @@ bool ClakState::handleKey(const fcitx::Key& key) {
 
             if (real_bs > 0) {
                 if (use_surrounding) {
-                    if (surr.cursor() < real_bs) {
+                    if (surr.cursor() < backward_bs) {
                         utils::clakLog("WARNING: surr.cursor()=" + std::to_string(surr.cursor()) +
-                                       " < real_bs=" + std::to_string(real_bs) +
+                                       " < backward_bs=" + std::to_string(backward_bs) +
                                        ", skipping deleteSurroundingText to prevent compositor crash!");
                         for (size_t i = 0; i < real_bs; ++i) {
                             ic_->forwardKey(fcitx::Key(FcitxKey_BackSpace));
                         }
                     } else {
-                        std::string wordBefore = utils::extractWordBeforeCursor(surr.text(), surr.cursor());
-                        verifier_.setExpectation(wordBefore, real_bs, action.commit_str ? action.commit_str : "");
-                        utils::clakLog("surrounding delete: -" + std::to_string(real_bs) + " commit='" +
+                        if (action.action_type == CLAK_ACTION_REPLACE_SURROUNDING) {
+                            verifier_.clearPending();
+                        } else {
+                            std::string wordBefore = utils::extractWordBeforeCursor(surr.text(), surr.cursor());
+                            verifier_.setExpectation(wordBefore, real_bs, action.commit_str ? action.commit_str : "");
+                        }
+                        utils::clakLog("surrounding delete: offset=" + std::to_string(delete_offset) +
+                                       " size=" + std::to_string(real_bs) + " commit='" +
                                        (action.commit_str ? action.commit_str : "") + "' app=" + app + " site='" + site + "'");
-                        ic_->deleteSurroundingText(-static_cast<int>(real_bs),
+                        ic_->deleteSurroundingText(delete_offset,
                                                    static_cast<unsigned int>(real_bs));
                     }
                 } else if (currentProfile()->hasCustomDeletion()) {

@@ -581,5 +581,69 @@ TEST_F(ClakStateTest, GivenShiftHeldWithMouseClick_DoesNotTriggerAutoFix) {
     EXPECT_TRUE(ic.commits.empty());
 }
 
+TEST_F(ClakStateTest, GivenMidWordCursor_TypingToneRetonesWord) {
+    MockInputContext ic(instance_->inputContextManager(), "google-chrome");
+    ic.auto_update_surrounding = true;
+    ic.setSurrounding("xin nhanh nhe", 7, 7);
+    ime::ClakState state(engine_.get(), &ic);
+
+    ic.typeChar('s', &state);
+
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "nhánh");
+    ASSERT_FALSE(ic.deletions.empty());
+    EXPECT_EQ(ic.deletions.back().first, -3);
+    EXPECT_EQ(ic.deletions.back().second, 5u);
+    EXPECT_EQ(ic.surroundingText().text(), "xin nhánh nhe");
+}
+
+TEST_F(ClakStateTest, GivenStartOfWordCursor_TypingToneRetonesWord) {
+    MockInputContext ic(instance_->inputContextManager(), "google-chrome");
+    ic.auto_update_surrounding = true;
+    ic.setSurrounding("xin nhanh nhe", 4, 4);
+    ime::ClakState state(engine_.get(), &ic);
+
+    ic.typeChar('s', &state);
+
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "nhánh");
+    ASSERT_FALSE(ic.deletions.empty());
+    EXPECT_EQ(ic.deletions.back().first, 0);
+    EXPECT_EQ(ic.deletions.back().second, 5u);
+    EXPECT_EQ(ic.surroundingText().text(), "xin nhánh nhe");
+}
+
+TEST_F(ClakStateTest, GivenMidWordCursor_ChangingToneRetonesWord) {
+    MockInputContext ic(instance_->inputContextManager(), "google-chrome");
+    ic.auto_update_surrounding = true;
+    ic.setSurrounding("xin nhánh nhe", 7, 7);
+    ime::ClakState state(engine_.get(), &ic);
+
+    ic.typeChar('f', &state);
+
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "nhành");
+    ASSERT_FALSE(ic.deletions.empty());
+    EXPECT_EQ(ic.deletions.back().first, -3);
+    EXPECT_EQ(ic.deletions.back().second, 5u);
+    EXPECT_EQ(ic.surroundingText().text(), "xin nhành nhe");
+}
+
+TEST_F(ClakStateTest, GivenMidWordCursor_UntoningRemovesTone) {
+    MockInputContext ic(instance_->inputContextManager(), "google-chrome");
+    ic.auto_update_surrounding = true;
+    ic.setSurrounding("xin nhánh nhe", 7, 7);
+    ime::ClakState state(engine_.get(), &ic);
+
+    ic.typeChar('z', &state);
+
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "nhanh");
+    ASSERT_FALSE(ic.deletions.empty());
+    EXPECT_EQ(ic.deletions.back().first, -3);
+    EXPECT_EQ(ic.deletions.back().second, 5u);
+    EXPECT_EQ(ic.surroundingText().text(), "xin nhanh nhe");
+}
+
 } // namespace test
 } // namespace clak

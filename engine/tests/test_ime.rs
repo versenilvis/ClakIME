@@ -692,3 +692,92 @@ fn test_delayed_circumflex_and_auto_restore() {
     assert_eq!(simulate_typing("chatas "), "chất ");
     assert_eq!(simulate_typing_fallback("chatas "), "chất ");
 }
+
+#[test]
+fn test_mid_word_click_to_retone_telex() {
+    let mut ctx = ClakContext::new(Method::Telex);
+    // surrounding: "xin nhanh nhe", cursor at 7 (nha|nh)
+    let action = ctx.process_key(b's' as u32, "s", false, Some("xin nhanh nhe"), 7, 7);
+    assert_eq!(action.action_type, ACTION_REPLACE_SURROUNDING);
+    assert_eq!(action.delete_offset, -3);
+    assert_eq!(action.delete_count, 5);
+    let commit = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
+    assert_eq!(commit, "nhánh");
+}
+
+#[test]
+fn test_start_of_word_click_to_retone_telex() {
+    let mut ctx = ClakContext::new(Method::Telex);
+    // surrounding: "xin nhanh nhe", cursor at 4 (|nhanh)
+    let action = ctx.process_key(b's' as u32, "s", false, Some("xin nhanh nhe"), 4, 4);
+    assert_eq!(action.action_type, ACTION_REPLACE_SURROUNDING);
+    assert_eq!(action.delete_offset, 0);
+    assert_eq!(action.delete_count, 5);
+    let commit = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
+    assert_eq!(commit, "nhánh");
+}
+
+#[test]
+fn test_mid_word_change_tone_telex() {
+    let mut ctx = ClakContext::new(Method::Telex);
+    // surrounding: "xin nhánh nhe", cursor at 7 (nhá|nh), type 'f' to change to huyền
+    let action = ctx.process_key(b'f' as u32, "f", false, Some("xin nhánh nhe"), 7, 7);
+    assert_eq!(action.action_type, ACTION_REPLACE_SURROUNDING);
+    assert_eq!(action.delete_offset, -3);
+    assert_eq!(action.delete_count, 5);
+    let commit = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
+    assert_eq!(commit, "nhành");
+}
+
+#[test]
+fn test_mid_word_remove_tone_telex() {
+    let mut ctx = ClakContext::new(Method::Telex);
+    // surrounding: "xin nhánh nhe", cursor at 7 (nhá|nh), type 'z' to remove tone
+    let action = ctx.process_key(b'z' as u32, "z", false, Some("xin nhánh nhe"), 7, 7);
+    assert_eq!(action.action_type, ACTION_REPLACE_SURROUNDING);
+    assert_eq!(action.delete_offset, -3);
+    assert_eq!(action.delete_count, 5);
+    let commit = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
+    assert_eq!(commit, "nhanh");
+}
+
+#[test]
+fn test_mid_word_horn_w_telex() {
+    let mut ctx = ClakContext::new(Method::Telex);
+    // surrounding: "đang làm việc", cursor at 1 (đ|ang), type 'w' to get đăng
+    let action = ctx.process_key(b'w' as u32, "w", false, Some("đang làm việc"), 1, 1);
+    assert_eq!(action.action_type, ACTION_REPLACE_SURROUNDING);
+    assert_eq!(action.delete_offset, -1);
+    assert_eq!(action.delete_count, 4);
+    let commit = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
+    assert_eq!(commit, "đăng");
+}
+
+#[test]
+fn test_mid_word_english_word_safety() {
+    let mut ctx = ClakContext::new(Method::Telex);
+    // surrounding: "this is a test text", cursor at 12 (te|st), type 's'
+    let action = ctx.process_key(b's' as u32, "s", false, Some("this is a test text"), 12, 12);
+    // tests is not a valid vietnamese cvc syllable, so it must not replace
+    assert_eq!(action.action_type, ACTION_FORWARD);
+}
+
+#[test]
+fn test_mid_word_non_modifier_key_forwards() {
+    let mut ctx = ClakContext::new(Method::Telex);
+    // surrounding: "xin nhanh nhe", cursor at 7 (nha|nh), type 'm'
+    let action = ctx.process_key(b'm' as u32, "m", false, Some("xin nhanh nhe"), 7, 7);
+    assert_eq!(action.action_type, ACTION_FORWARD);
+}
+
+#[test]
+fn test_mid_word_vni_retone() {
+    let mut ctx = ClakContext::new(Method::Vni);
+    // surrounding: "xin nhanh nhe", cursor at 7 (nha|nh), type '1' for sắc
+    let action = ctx.process_key(b'1' as u32, "1", false, Some("xin nhanh nhe"), 7, 7);
+    assert_eq!(action.action_type, ACTION_REPLACE_SURROUNDING);
+    assert_eq!(action.delete_offset, -3);
+    assert_eq!(action.delete_count, 5);
+    let commit = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
+    assert_eq!(commit, "nhánh");
+}

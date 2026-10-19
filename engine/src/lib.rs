@@ -97,7 +97,11 @@ impl ClakCore {
         self.user_bases.clear();
     }
 
-    fn dict_known(&self, word: &str) -> bool {
+    pub fn method(&self) -> Method {
+        self.method
+    }
+
+    pub(crate) fn dict_known(&self, word: &str) -> bool {
         let base = charset::remove_tone(word);
         if base != word {
             if self.user_words.contains(word) || dict().binary_search(&word).is_ok() {
