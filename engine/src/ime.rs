@@ -212,31 +212,6 @@ impl ClakContext {
                 self.stale_surr = None;
                 return self.replace(del_count, &del_str, &commit_text);
             }
-            if self.autocorrect
-                && self.engine.method() == Method::Telex
-                && !self.raw_buffer.is_empty()
-                && (self.last_composed == self.raw_buffer
-                    || !crate::spelling::is_valid_cvc(&self.last_composed))
-            {
-                if let Some(corrected) = crate::autocorrect::try_autocorrect_telex(
-                    &self.raw_buffer,
-                    self.engine.modern(),
-                    self.engine.short_w(),
-                ) {
-                    let del_count = self.last_composed.chars().count();
-                    let del_str = self.last_composed.clone();
-                    let mut commit_text = corrected;
-                    if key_sym == 0xff09 {
-                        commit_text.push('\t');
-                    } else {
-                        commit_text.push('\n');
-                    }
-                    self.reset();
-                    self.just_deleted = false;
-                    self.stale_surr = None;
-                    return self.replace(del_count, &del_str, &commit_text);
-                }
-            }
             self.reset();
             self.just_deleted = false;
             self.stale_surr = None;

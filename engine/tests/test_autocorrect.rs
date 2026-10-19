@@ -162,6 +162,23 @@ fn test_code_and_acronyms_never_autocorrected() {
 }
 
 #[test]
+fn test_foreign_consonant_clusters_never_autocorrected() {
+    assert_eq!(try_autocorrect_telex("thre", true, false), None);
+    assert_eq!(try_autocorrect_telex("thread", true, false), None);
+    assert_eq!(try_autocorrect_telex("threads", true, false), None);
+    assert_eq!(try_autocorrect_telex("three", true, false), None);
+    assert_eq!(try_autocorrect_telex("thro", true, false), None);
+    assert_eq!(try_autocorrect_telex("pro", true, false), None);
+    assert_eq!(try_autocorrect_telex("pre", true, false), None);
+    assert_eq!(try_autocorrect_telex("bro", true, false), None);
+    assert_eq!(try_autocorrect_telex("cro", true, false), None);
+    assert_eq!(try_autocorrect_telex("drop", true, false), None);
+    assert_eq!(try_autocorrect_telex("group", true, false), None);
+    assert_eq!(try_autocorrect_telex("slow", true, false), None);
+    assert_eq!(try_autocorrect_telex("class", true, false), None);
+}
+
+#[test]
 fn test_benchmark_on_repo_identifiers_zero_false_positives() {
     let repo_words = include_str!("repo_identifiers.txt");
     let mut false_positives = Vec::new();

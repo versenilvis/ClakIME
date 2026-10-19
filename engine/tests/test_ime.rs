@@ -542,6 +542,17 @@ fn test_macro_enter_trigger() {
 }
 
 #[test]
+fn test_enter_key_does_not_autocorrect_foreign_clusters() {
+    let mut ctx = ClakContext::new(Method::Telex);
+    ctx.process_key(b't' as u32, "t", false, None, 0, 0);
+    ctx.process_key(b'h' as u32, "h", false, None, 1, 1);
+    ctx.process_key(b'r' as u32, "r", false, None, 2, 2);
+    ctx.process_key(b'e' as u32, "e", false, None, 3, 3);
+    let act = ctx.process_key(0xff0d, "\n", false, None, 4, 4);
+    assert_eq!(act.action_type, ACTION_FORWARD);
+}
+
+#[test]
 fn test_macro_raw_buffer_trigger() {
     let mut ctx = ClakContext::new(Method::Telex);
     ctx.macros.insert("ddc".to_string(), "được".to_string());

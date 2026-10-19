@@ -255,8 +255,40 @@ pub fn try_autocorrect_telex(raw: &str, modern: bool, short_w: bool) -> Option<S
         return None;
     };
 
+    // foreign consonant clusters never occur in vietnamese
+    if lower.starts_with("thr")
+        || lower.starts_with("shr")
+        || lower.starts_with("str")
+        || lower.starts_with("spr")
+        || lower.starts_with("scr")
+        || lower.starts_with("spl")
+        || lower.starts_with("br")
+        || lower.starts_with("cr")
+        || lower.starts_with("dr")
+        || lower.starts_with("gr")
+        || lower.starts_with("pr")
+        || lower.starts_with("fr")
+        || lower.starts_with("bl")
+        || lower.starts_with("cl")
+        || lower.starts_with("gl")
+        || lower.starts_with("pl")
+        || lower.starts_with("sl")
+        || lower.starts_with("fl")
+        || lower.starts_with("wr")
+        || lower.starts_with("kn")
+        || lower.starts_with("ps")
+        || lower.starts_with("phr")
+    {
+        return None;
+    }
+
     let rest = &lower[ic_len..];
     if rest.is_empty() {
+        return None;
+    }
+
+    // tone marker or non-coda consonant cannot precede vowels in vietnamese syllable
+    if rest.starts_with(|c: char| matches!(c, 's' | 'f' | 'r' | 'x' | 'j' | 'l')) {
         return None;
     }
 
@@ -273,7 +305,7 @@ pub fn try_autocorrect_telex(raw: &str, modern: bool, short_w: bool) -> Option<S
 
     // if raw itself already converts to an english word, skip
     let direct_conv = engine::convert_telex(&lower, modern, short_w);
-    if is_english(&direct_conv) {
+    if is_english(&direct_conv) || is_english(&lower) {
         return None;
     }
 
