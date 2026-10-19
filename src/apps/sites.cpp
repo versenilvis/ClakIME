@@ -18,7 +18,7 @@ bool isMetaSite(const std::string& site) {
 
 bool isDraftJsSite(const std::string& site) {
     static const std::vector<std::string> draftjs_sites = {
-        "x.com", "twitter.com", "tiktok.com", "threads.net"
+        "x.com", "twitter.com", "threads.net"
     };
     for (const auto& s : draftjs_sites) {
         if (site == s || site.find(s) != std::string::npos) return true;

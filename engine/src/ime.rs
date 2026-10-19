@@ -8,7 +8,6 @@ pub struct ImeAction {
     pub delete_count: usize,
     pub commit_str: *const c_char,
     pub delete_str: *const c_char,
-    pub delete_offset: i32,
 }
 
 pub const ACTION_FORWARD: i32 = 0;
@@ -421,22 +420,20 @@ impl ClakContext {
                 }
             }
 
+            // word seeding from surrounding text only when cursor is at word end
+            let is_at_word_end = cur == chars.len() || is_word_break(chars[cur] as u32);
             let is_telex_mod = matches!(
                 key_ch.to_ascii_lowercase(),
-                'a' | 'e' | 'o' | 'd' | 'w' | 's' | 'f' | 'r' | 'x' | 'j' | 'z'
+                'a' | 'e' | 'o' | 'd' | 'w' | 's' | 'f' | 'r' | 'x' | 'j'
             );
-            let is_vni_mod = matches!(key_ch, '0'..='9');
-            let is_modifier = match self.engine.method() {
-                Method::Vni | Method::TeipVni => is_vni_mod,
-                _ => is_telex_mod,
-            };
-
             if !just_del
                 && !is_stale
                 && !has_autocomplete
                 && cursor == anchor
                 && self.last_composed.is_empty()
-                && is_modifier
+                && cur > 0
+                && is_telex_mod
+                && is_at_word_end
             {
                 let mut start = cur;
                 while start > 0 {
@@ -446,61 +443,10 @@ impl ClakContext {
                     }
                     start -= 1;
                 }
-                let mut end = cur;
-                while end < chars.len() {
-                    let next_char = chars[end];
-                    if is_word_break(next_char as u32) {
-                        break;
-                    }
-                    end += 1;
-                }
-
-                if start < end {
-                    let target_word: String = chars[start..end].iter().collect();
-                    if !target_word.is_empty() && target_word.chars().all(|c| c.is_alphabetic()) {
-                        let before_chars = cur - start;
-                        let after_chars = end - cur;
-                        let total_chars = end - start;
-
-                        if after_chars == 0 {
-                            // word-end seeding for standard pipeline
-                            self.raw_buffer = match self.engine.method() {
-                                Method::Vni | Method::TeipVni => decompose_to_vni(&target_word),
-                                _ => decompose_to_telex(&target_word),
-                            };
-                            self.last_composed = target_word;
-                        } else {
-                            // mid-word or word-start retone
-                            let raw = match self.engine.method() {
-                                Method::Vni | Method::TeipVni => decompose_to_vni(&target_word),
-                                _ => decompose_to_telex(&target_word),
-                            };
-                            let mut cand_raw = raw;
-                            cand_raw.push_str(key_str);
-                            let new_word = self.engine.transform(&cand_raw);
-
-                            if new_word != target_word
-                                && (crate::spelling::is_valid_cvc(&new_word)
-                                    || (self.engine.auto_restore()
-                                        && self.engine.dict_known(&new_word.to_lowercase())))
-                            {
-                                self.raw_buffer = cand_raw;
-                                self.last_composed = new_word.clone();
-                                self.prev_composed = target_word.clone();
-                                if let Some(text) = surrounding_text {
-                                    self.last_surr = Some((text.to_string(), cursor));
-                                }
-                                let delete_offset = -(before_chars as i32);
-                                let delete_count = total_chars;
-                                return self.replace_surrounding(
-                                    delete_offset,
-                                    delete_count,
-                                    &target_word,
-                                    &new_word,
-                                );
-                            }
-                        }
-                    }
+                let old_word: String = chars[start..cur].iter().collect();
+                if !old_word.is_empty() && old_word.chars().all(|c| c.is_alphabetic()) {
+                    self.raw_buffer = decompose_to_telex(&old_word);
+                    self.last_composed = old_word;
                 }
             }
         } else {
@@ -572,7 +518,6 @@ impl ClakContext {
             delete_count: 0,
             commit_str: std::ptr::null(),
             delete_str: std::ptr::null(),
-            delete_offset: 0,
         }
     }
 
@@ -584,7 +529,6 @@ impl ClakContext {
             delete_count,
             commit_str: self.commit_buf.as_ptr(),
             delete_str: self.delete_buf.as_ptr(),
-            delete_offset: -(delete_count as i32),
         }
     }
 
@@ -613,25 +557,6 @@ impl ClakContext {
             delete_count,
             commit_str: self.commit_buf.as_ptr(),
             delete_str: self.delete_buf.as_ptr(),
-            delete_offset: -(delete_count as i32),
-        }
-    }
-
-    fn replace_surrounding(
-        &mut self,
-        delete_offset: i32,
-        delete_count: usize,
-        deleted_str: &str,
-        text: &str,
-    ) -> ImeAction {
-        self.commit_buf = CString::new(text).unwrap_or_default();
-        self.delete_buf = CString::new(deleted_str).unwrap_or_default();
-        ImeAction {
-            action_type: ACTION_REPLACE_SURROUNDING,
-            delete_count,
-            commit_str: self.commit_buf.as_ptr(),
-            delete_str: self.delete_buf.as_ptr(),
-            delete_offset,
         }
     }
 }
@@ -857,169 +782,6 @@ pub fn decompose_to_telex(word: &str) -> String {
     result
 }
 
-fn decompose_char_to_vni(c: char) -> (&'static str, Option<char>) {
-    match c {
-        'á' => ("a", Some('1')),
-        'à' => ("a", Some('2')),
-        'ả' => ("a", Some('3')),
-        'ã' => ("a", Some('4')),
-        'ạ' => ("a", Some('5')),
-        'Á' => ("A", Some('1')),
-        'À' => ("A", Some('2')),
-        'Ả' => ("A", Some('3')),
-        'Ã' => ("A", Some('4')),
-        'Ạ' => ("A", Some('5')),
-        'â' => ("a6", None),
-        'ấ' => ("a6", Some('1')),
-        'ầ' => ("a6", Some('2')),
-        'ẩ' => ("a6", Some('3')),
-        'ẫ' => ("a6", Some('4')),
-        'ậ' => ("a6", Some('5')),
-        'Â' => ("A6", None),
-        'Ấ' => ("A6", Some('1')),
-        'Ầ' => ("A6", Some('2')),
-        'Ẩ' => ("A6", Some('3')),
-        'Ẫ' => ("A6", Some('4')),
-        'Ậ' => ("A6", Some('5')),
-        'ă' => ("a8", None),
-        'ắ' => ("a8", Some('1')),
-        'ằ' => ("a8", Some('2')),
-        'ẳ' => ("a8", Some('3')),
-        'ẵ' => ("a8", Some('4')),
-        'ặ' => ("a8", Some('5')),
-        'Ă' => ("A8", None),
-        'Ắ' => ("A8", Some('1')),
-        'Ằ' => ("A8", Some('2')),
-        'Ẳ' => ("A8", Some('3')),
-        'Ẵ' => ("A8", Some('4')),
-        'Ặ' => ("A8", Some('5')),
-        'é' => ("e", Some('1')),
-        'è' => ("e", Some('2')),
-        'ẻ' => ("e", Some('3')),
-        'ẽ' => ("e", Some('4')),
-        'ẹ' => ("e", Some('5')),
-        'É' => ("E", Some('1')),
-        'È' => ("E", Some('2')),
-        'Ẻ' => ("E", Some('3')),
-        'Ẽ' => ("E", Some('4')),
-        'Ẹ' => ("E", Some('5')),
-        'ê' => ("e6", None),
-        'ế' => ("e6", Some('1')),
-        'ề' => ("e6", Some('2')),
-        'ể' => ("e6", Some('3')),
-        'ễ' => ("e6", Some('4')),
-        'ệ' => ("e6", Some('5')),
-        'Ê' => ("E6", None),
-        'Ế' => ("E6", Some('1')),
-        'Ề' => ("E6", Some('2')),
-        'Ể' => ("E6", Some('3')),
-        'Ễ' => ("E6", Some('4')),
-        'Ệ' => ("E6", Some('5')),
-        'í' => ("i", Some('1')),
-        'ì' => ("i", Some('2')),
-        'ỉ' => ("i", Some('3')),
-        'ĩ' => ("i", Some('4')),
-        'ị' => ("i", Some('5')),
-        'Í' => ("I", Some('1')),
-        'Ì' => ("I", Some('2')),
-        'Ỉ' => ("I", Some('3')),
-        'Ĩ' => ("I", Some('4')),
-        'Ị' => ("I", Some('5')),
-        'ó' => ("o", Some('1')),
-        'ò' => ("o", Some('2')),
-        'ỏ' => ("o", Some('3')),
-        'õ' => ("o", Some('4')),
-        'ọ' => ("o", Some('5')),
-        'Ó' => ("O", Some('1')),
-        'Ò' => ("O", Some('2')),
-        'Ỏ' => ("O", Some('3')),
-        'Õ' => ("O", Some('4')),
-        'Ọ' => ("O", Some('5')),
-        'ô' => ("o6", None),
-        'ố' => ("o6", Some('1')),
-        'ồ' => ("o6", Some('2')),
-        'ổ' => ("o6", Some('3')),
-        'ỗ' => ("o6", Some('4')),
-        'ộ' => ("o6", Some('5')),
-        'Ô' => ("O6", None),
-        'Ố' => ("O6", Some('1')),
-        'Ồ' => ("O6", Some('2')),
-        'Ổ' => ("O6", Some('3')),
-        'Ỗ' => ("O6", Some('4')),
-        'Ộ' => ("O6", Some('5')),
-        'ơ' => ("o7", None),
-        'ớ' => ("o7", Some('1')),
-        'ờ' => ("o7", Some('2')),
-        'ở' => ("o7", Some('3')),
-        'ỡ' => ("o7", Some('4')),
-        'ợ' => ("o7", Some('5')),
-        'Ơ' => ("O7", None),
-        'Ớ' => ("O7", Some('1')),
-        'Ờ' => ("O7", Some('2')),
-        'Ở' => ("O7", Some('3')),
-        'Ỡ' => ("O7", Some('4')),
-        'Ợ' => ("O7", Some('5')),
-        'ú' => ("u", Some('1')),
-        'ù' => ("u", Some('2')),
-        'ủ' => ("u", Some('3')),
-        'ũ' => ("u", Some('4')),
-        'ụ' => ("u", Some('5')),
-        'Ú' => ("U", Some('1')),
-        'Ù' => ("U", Some('2')),
-        'Ủ' => ("U", Some('3')),
-        'Ũ' => ("U", Some('4')),
-        'Ụ' => ("U", Some('5')),
-        'ư' => ("u7", None),
-        'ứ' => ("u7", Some('1')),
-        'ừ' => ("u7", Some('2')),
-        'ử' => ("u7", Some('3')),
-        'ữ' => ("u7", Some('4')),
-        'ự' => ("u7", Some('5')),
-        'Ư' => ("U7", None),
-        'Ứ' => ("U7", Some('1')),
-        'Ừ' => ("U7", Some('2')),
-        'Ử' => ("U7", Some('3')),
-        'Ữ' => ("U7", Some('4')),
-        'Ự' => ("U7", Some('5')),
-        'ý' => ("y", Some('1')),
-        'ỳ' => ("y", Some('2')),
-        'ỷ' => ("y", Some('3')),
-        'ỹ' => ("y", Some('4')),
-        'ỵ' => ("y", Some('5')),
-        'Ý' => ("Y", Some('1')),
-        'Ỳ' => ("Y", Some('2')),
-        'Ỷ' => ("Y", Some('3')),
-        'Ỹ' => ("Y", Some('4')),
-        'Ỵ' => ("Y", Some('5')),
-        'đ' => ("d9", None),
-        'Đ' => ("D9", None),
-        _ => ("", None),
-    }
-}
-
-pub fn decompose_to_vni(word: &str) -> String {
-    let mut result = String::with_capacity(word.len() + 4);
-    let mut trailing_tone: Option<char> = None;
-
-    for ch in word.chars() {
-        let (base, tone) = decompose_char_to_vni(ch);
-        if !base.is_empty() {
-            result.push_str(base);
-            if tone.is_some() {
-                trailing_tone = tone;
-            }
-        } else {
-            result.push(ch);
-        }
-    }
-
-    if let Some(t) = trailing_tone {
-        result.push(t);
-    }
-
-    result
-}
-
 pub fn compare_and_split(a: &str, b: &str) -> (String, String) {
     let a_chars: Vec<char> = a.chars().collect();
     let b_chars: Vec<char> = b.chars().collect();
@@ -1101,7 +863,6 @@ pub unsafe extern "C" fn clak_process_key(
                     delete_count: 0,
                     commit_str: std::ptr::null(),
                     delete_str: std::ptr::null(),
-                    delete_offset: 0,
                 }
             }
         };
@@ -1175,7 +936,6 @@ pub unsafe extern "C" fn clak_process_key(
             delete_count: 0,
             commit_str: std::ptr::null(),
             delete_str: std::ptr::null(),
-            delete_offset: 0,
         },
     }
 }
