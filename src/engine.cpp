@@ -194,18 +194,16 @@ void ClakEngine::activate(const fcitx::InputMethodEntry& entry, fcitx::InputCont
         int ret = system("command -v notify-send >/dev/null 2>&1 && notify-send -u normal -a Clak -i org.fcitx.Fcitx5 'Clak có bản cập nhật mới' 'Đã cài đặt bản mới thành công. Hãy khởi động lại Fcitx5 để áp dụng.' &");
         (void)ret;
     }
-    if (state && state->allRealBackspacesReceived()) {
-        // complete uinput deletion early if all real backspaces were already processed before text-input reactivation
-        utils::clakLog("engine::activate: completing uinput deletion early during text-input reactivation (real backspaces: " +
-                       std::to_string(state->currentBackspaceCount()) + "/" + std::to_string(state->expectedBackspaces()) + ")");
-        state->finishUinputDeletion();
-    }
 }
 
 void ClakEngine::deactivate(const fcitx::InputMethodEntry& entry, fcitx::InputContextEvent& event) {
     FCITX_UNUSED(entry);
     auto* ic = event.inputContext();
     utils::clakLog("engine::deactivate: ic program='" + (ic ? ic->program() : "") + "'");
+    auto* state = ic ? ic->propertyFor(&factory_) : nullptr;
+    if (state) {
+        state->cancelRepeat();
+    }
 }
 
 void ClakEngine::reset(const fcitx::InputMethodEntry& entry, fcitx::InputContextEvent& event) {

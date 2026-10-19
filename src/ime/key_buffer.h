@@ -15,7 +15,8 @@ public:
   KeyBuffer() = default;
 
   bool push(const fcitx::Key& key);
-  void replay(const std::function<bool(const fcitx::Key&)>& handle_key_fn,
+  void replay(const std::string& initial_batch,
+              const std::function<bool(const fcitx::Key&)>& handle_key_fn,
               const std::function<void(const std::string&)>& commit_fn,
               const std::function<void(const fcitx::Key&)>& forward_fn,
               const std::function<bool()>& is_deleting_fn);

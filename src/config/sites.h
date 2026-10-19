@@ -21,6 +21,7 @@ using apps::isChromiumApp;
 using apps::isSteamApp;
 using apps::isWpsOfficeApp;
 using apps::isMetaSite;
+using apps::isTikTokSite;
 using apps::isDraftJsSite;
 using apps::isForceUinputSite;
 using apps::extractDomain;

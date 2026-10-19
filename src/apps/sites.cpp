@@ -16,6 +16,16 @@ bool isMetaSite(const std::string& site) {
     return false;
 }
 
+bool isTikTokSite(const std::string& site) {
+    static const std::vector<std::string> tiktok_sites = {
+        "tiktok.com", "tiktok"
+    };
+    for (const auto& s : tiktok_sites) {
+        if (site == s || site.find(s) != std::string::npos) return true;
+    }
+    return false;
+}
+
 bool isDraftJsSite(const std::string& site) {
     static const std::vector<std::string> draftjs_sites = {
         "x.com", "twitter.com", "threads.net"
@@ -37,7 +47,7 @@ bool isGoogleDocsSite(const std::string& site) {
 }
 
 bool isForceUinputSite(const std::string& site) {
-    return isGoogleDocsSite(site) || isDraftJsSite(site);
+    return isGoogleDocsSite(site) || isDraftJsSite(site) || isTikTokSite(site);
 }
 
 namespace {
@@ -48,6 +58,17 @@ public:
     bool allowsSurroundingText() const override { return true; }
     bool preventsUinput() const override { return true; }
     bool allowsAutofillHeuristic() const override { return false; }
+};
+
+class TikTokProfile : public AppProfile {
+public:
+    std::string name() const override { return "TikTok-Uinput"; }
+    bool allowsSurroundingText() const override { return true; }
+    bool forcesUinput() const override { return true; }
+    bool allowsAutofillHeuristic() const override { return false; }
+    UinputPacing uinputPacing() const override {
+        return {config::kDraftJsPostDelayMs, config::kDraftJsGapMs};
+    }
 };
 
 class DraftJsProfile : public AppProfile {
@@ -82,6 +103,10 @@ public:
 
 std::unique_ptr<AppProfile> createMetaSiteProfile() {
     return std::make_unique<MetaSiteProfile>();
+}
+
+std::unique_ptr<AppProfile> createTikTokProfile() {
+    return std::make_unique<TikTokProfile>();
 }
 
 std::unique_ptr<AppProfile> createDraftJsProfile() {

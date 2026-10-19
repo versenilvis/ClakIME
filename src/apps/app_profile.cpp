@@ -39,6 +39,9 @@ std::unique_ptr<AppProfile> createAppProfile(
     if (isGoogleDocsSite(site)) {
         return createGoogleDocsProfile();
     }
+    if (isTikTokSite(site)) {
+        return createTikTokProfile();
+    }
     if (is_draftjs || isDraftJsSite(site)) {
         return createDraftJsProfile();
     }

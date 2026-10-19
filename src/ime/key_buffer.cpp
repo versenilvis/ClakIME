@@ -14,18 +14,12 @@ bool KeyBuffer::push(const fcitx::Key& key) {
     return false;
 }
 
-void KeyBuffer::replay(const std::function<bool(const fcitx::Key&)>& handle_key_fn,
+void KeyBuffer::replay(const std::string& initial_batch,
+                       const std::function<bool(const fcitx::Key&)>& handle_key_fn,
                        const std::function<void(const std::string&)>& commit_fn,
                        const std::function<void(const fcitx::Key&)>& forward_fn,
                        const std::function<bool()>& is_deleting_fn) {
-    if (keys_.empty()) {
-        return;
-    }
-    auto pending = std::move(keys_);
-    keys_.clear();
-    utils::clakLog("replayBufferedKeys: " + std::to_string(pending.size()) + " keys");
-
-    std::string batch_commit;
+    std::string batch_commit = initial_batch;
     auto flush_batch = [&batch_commit, &commit_fn]() {
         if (!batch_commit.empty()) {
             utils::clakLog("replay batch commit: '" + batch_commit + "'");
@@ -35,6 +29,14 @@ void KeyBuffer::replay(const std::function<bool(const fcitx::Key&)>& handle_key_
             batch_commit.clear();
         }
     };
+
+    if (keys_.empty()) {
+        flush_batch();
+        return;
+    }
+    auto pending = std::move(keys_);
+    keys_.clear();
+    utils::clakLog("replayBufferedKeys: " + std::to_string(pending.size()) + " keys");
 
     for (size_t i = 0; i < pending.size(); ++i) {
         const auto& k = pending[i];

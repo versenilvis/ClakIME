@@ -9,11 +9,13 @@ namespace clak {
 namespace apps {
 
 bool isMetaSite(const std::string& site);
+bool isTikTokSite(const std::string& site);
 bool isDraftJsSite(const std::string& site);
 bool isGoogleDocsSite(const std::string& site);
 bool isForceUinputSite(const std::string& site);
 
 std::unique_ptr<AppProfile> createMetaSiteProfile();
+std::unique_ptr<AppProfile> createTikTokProfile();
 std::unique_ptr<AppProfile> createDraftJsProfile();
 std::unique_ptr<AppProfile> createGoogleDocsProfile();
 std::unique_ptr<AppProfile> createAddressBarProfile();

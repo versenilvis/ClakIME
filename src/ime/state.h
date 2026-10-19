@@ -54,6 +54,7 @@ public:
   void onRepeatTimer() { repeat_handler_.onTimer(); }
   bool isRepeating() const { return repeat_handler_.isRepeating(); }
   fcitx::Key heldKey() const { return repeat_handler_.heldKey(); }
+  void cancelRepeat() { repeat_handler_.cancel(); }
   void setEnableRepeatForMock(bool enable) { repeat_handler_.setEnableRepeatForMock(enable); }
   apps::AppProfile* currentProfile();
 
@@ -61,7 +62,7 @@ private:
   void arm_safety_timer();
   bool handleKey(const fcitx::Key& key);
   bool triggerShiftAutoFix();
-  void replayBufferedKeys();
+  void replayBufferedKeys(const std::string& initial_batch = "");
   std::string activeSite();
   void doCommitString(const std::string& text);
   std::string classifyGroup(const std::string& app, const std::string& site, bool is_autofill, bool used_uinput);

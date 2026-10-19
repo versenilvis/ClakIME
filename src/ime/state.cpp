@@ -141,7 +141,14 @@ std::string ClakState::activeSite() {
                                 ? "terminal"
                                 : ((ic_ && !ic_->program().empty() && ic_->program() != "gnome-shell") ? ic_->program() : "");
     platform::WindowInfo win = platform::getActiveWindow(fallback);
-    cached_site_ = config::extractDomain(win.win_class, win.win_title);
+    std::string new_site = config::extractDomain(win.win_class, win.win_title);
+    if (!new_site.empty() && !cached_site_.empty() && new_site != cached_site_) {
+        // clear rich text and draftjs editor flags when switching sites
+        verifier_.setDraftJsEditor(false);
+        verifier_.setRichTextEditor(false);
+        verifier_.setCanvasEditor(false);
+    }
+    cached_site_ = new_site;
     return cached_site_;
 }
 
@@ -302,18 +309,17 @@ void ClakState::arm_safety_timer() {
                                std::to_string(current_backspace_count_) + "/" + std::to_string(expected_backspaces_) +
                                 " BS returned! force committing '" + pending_commit_string_ + "' app=" + app +
                                " site='" + site + "'");
+                if (expected_backspaces_ > current_backspace_count_) {
+                    in_flight_sentinel_count_ = expected_backspaces_ - current_backspace_count_;
+                    sentinel_grace_until_us_ = fcitx::now(CLOCK_MONOTONIC) + 500000;
+                }
                 is_deleting_ = false;
                 is_address_bar_fix_ = false;
                 is_selection_deletion_ = false;
                 expected_backspaces_ = 0;
-                current_backspace_count_ = 0;
-                in_flight_sentinel_count_ = 0;
-                sentinel_grace_until_us_ = 0;
-                replayBufferedKeys();
-                if (!pending_commit_string_.empty()) {
-                    doCommitString(pending_commit_string_);
-                    pending_commit_string_.clear();
-                }
+                std::string to_commit = pending_commit_string_;
+                pending_commit_string_.clear();
+                replayBufferedKeys(to_commit);
                 uinput::UinputTool::instance().consume_sentinel_emit_time_us();
                 logCsv(0, "TIMEOUT");
                 logLatency(op_group_, op_start_us_, "REPLACE_TIMEOUT");
@@ -331,7 +337,7 @@ void ClakState::finishUinputDeletion(uint64_t rtt_us) {
     }
     if (expected_backspaces_ > current_backspace_count_) {
         in_flight_sentinel_count_ = expected_backspaces_ - current_backspace_count_;
-        sentinel_grace_until_us_ = fcitx::now(CLOCK_MONOTONIC) + 100000;
+        sentinel_grace_until_us_ = fcitx::now(CLOCK_MONOTONIC) + 500000;
     }
     is_deleting_ = false;
     is_address_bar_fix_ = false;
@@ -347,15 +353,14 @@ void ClakState::finishUinputDeletion(uint64_t rtt_us) {
     logCsv(rtt_us, "UINPUT");
     logLatency(op_group_, op_start_us_, "REPLACE");
     op_start_us_ = 0;
-    replayBufferedKeys();
-    if (!pending_commit_string_.empty()) {
-        doCommitString(pending_commit_string_);
-        pending_commit_string_.clear();
-    }
+    std::string to_commit = pending_commit_string_;
+    pending_commit_string_.clear();
+    replayBufferedKeys(to_commit);
 }
 
-void ClakState::replayBufferedKeys() {
+void ClakState::replayBufferedKeys(const std::string& initial_batch) {
     key_buffer_.replay(
+        initial_batch,
         [this](const fcitx::Key& k) { return handleKey(k); },
         [this](const std::string& str) { doCommitString(str); },
         [this](const fcitx::Key& k) { ic_->forwardKey(k); },
@@ -416,7 +421,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
         }
     }
 
-    if (is_meta) {
+    if (is_meta || currentProfile()->preventsUinput()) {
         verifier_.setCanvasEditor(false);
         verifier_.setRichTextEditor(false);
         verifier_.setDraftJsEditor(false);
@@ -443,7 +448,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                            currentProfile()->allowsSurroundingText();
 
     // detect frozen surrounding cursor (e.g. xterm.js in vscode integrated terminal)
-    if (config::isVSCodeApp(app) && use_surrounding && !key_str.empty() && sym < 0xff00 && !has_ctrl_alt) {
+    if (!currentProfile()->preventsUinput() && config::isVSCodeApp(app) && use_surrounding && !key_str.empty() && sym < 0xff00 && !has_ctrl_alt) {
         if (surr_keystroke_count_ >= 2 &&
             last_surr_cursor_ == surr.cursor() &&
             last_surr_text_len_ == surr.text().size()) {
@@ -457,7 +462,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
         surr_keystroke_count_++;
     }
 
-    bool skip_verify = is_gecko || is_meta;
+    bool skip_verify = is_gecko || is_meta || currentProfile()->preventsUinput();
     if (verifier_.isPending() && use_surrounding && !skip_verify) {
         verifier_.verify(surr);
         is_draftjs = isDraftJsEditor();
@@ -494,7 +499,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                    " site='" + site + "' -> " + action_name + " del=" + std::to_string(action.delete_count) +
                    " commit='" + std::string(action.commit_str ? action.commit_str : "") + "'");
 
-    if (!pending_commit_string_.empty() && action.action_type != CLAK_ACTION_FORWARD) {
+    if (!pending_commit_string_.empty()) {
         doCommitString(pending_commit_string_);
         pending_commit_string_.clear();
     }
@@ -505,17 +510,6 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                 last_text_len_ = surr.cursor() + 1;
             } else {
                 last_text_len_ = 1;
-            }
-            if (!pending_commit_string_.empty()) {
-                if (!has_ctrl_alt && !key_str.empty() && sym < 0xff00) {
-                    pending_commit_string_ += key_str;
-                    logLatency(classifyGroup(app, site, false, false), op_start_us_, "FORWARD");
-                    op_start_us_ = 0;
-                    return true;
-                } else {
-                    doCommitString(pending_commit_string_);
-                    pending_commit_string_.clear();
-                }
             }
             if (currentProfile()->directCommitPrintableKey() && !has_ctrl_alt && !key_str.empty() && sym < 0xff00) {
                 doCommitString(key_str);
@@ -548,10 +542,12 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                                address_bar_autofill ||
                                (isBrowser() && isAutofillCertain(surr));
             if (real_bs > 0 && surr.isValid() && surr.cursor() < real_bs) {
-                use_surrounding = false;
-                verifier_.setDraftJsEditor(true);
-                verifier_.setRichTextEditor(true);
-                is_draftjs = isDraftJsEditor();
+                if (!currentProfile()->preventsUinput()) {
+                    use_surrounding = false;
+                    verifier_.setDraftJsEditor(true);
+                    verifier_.setRichTextEditor(true);
+                    is_draftjs = isDraftJsEditor();
+                }
             }
 
             if (currentProfile()->erasesWithCommittedDel() && real_bs > 0) {
@@ -919,14 +915,17 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
             }
             if (expected_backspaces_ > current_backspace_count_) {
                 in_flight_sentinel_count_ = expected_backspaces_ - current_backspace_count_;
-                sentinel_grace_until_us_ = fcitx::now(CLOCK_MONOTONIC) + 100000;
+                sentinel_grace_until_us_ = fcitx::now(CLOCK_MONOTONIC) + 500000;
             }
             is_deleting_ = false;
             is_address_bar_fix_ = false;
             is_selection_deletion_ = false;
             expected_backspaces_ = 0;
             current_backspace_count_ = 0;
-            pending_commit_string_.clear();
+            if (!pending_commit_string_.empty()) {
+                doCommitString(pending_commit_string_);
+                pending_commit_string_.clear();
+            }
             key_buffer_.clear();
         }
         reset(/*force=*/true);

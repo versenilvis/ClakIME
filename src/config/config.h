@@ -15,7 +15,7 @@ constexpr uint32_t kAddressBarPostDelayMs = 20;
 constexpr uint32_t kTerminalPostDelayMs = 12;
 constexpr uint32_t kTerminalGapMs = 3;
 constexpr uint32_t kDraftJsPostDelayMs = 16;
-constexpr uint32_t kDraftJsGapMs = 4;
+constexpr uint32_t kDraftJsGapMs = 8;
 constexpr uint64_t kCacheCheckIntervalUs = 500000;
 
 } // namespace config

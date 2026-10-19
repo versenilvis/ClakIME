@@ -385,14 +385,13 @@ TEST_F(RegressionCorpusTest, test_regression_twitter_draftjs_inss) {
     // simulate chromium deactivate/activate during in-flight deletion
     engine_->deactivate(entry, deact_event);
     engine_->activate(entry, act_event);
-    // all real backspaces arrived so activate completes deletion early without waiting 150ms timeout
-    EXPECT_FALSE(state->isDeleting());
-    ASSERT_FALSE(ic.commits.empty());
-    EXPECT_EQ(ic.commits.back(), "ín");
+    // deletion must remain in flight until sentinel arrives
+    EXPECT_TRUE(state->isDeleting());
 
-    // late sentinel backspace is safely absorbed by grace window without deleting committed character
+    // sentinel backspace arrives, completing deletion cleanly
     ic.sendCleanBackspace(state);
     EXPECT_FALSE(state->isDeleting());
+    ASSERT_FALSE(ic.commits.empty());
     EXPECT_EQ(ic.commits.back(), "ín");
 
     // simulate post-commit deactivate/activate pulse
@@ -933,24 +932,26 @@ TEST_F(RegressionCorpusTest, test_regression_twitter_early_completion_preserves_
     ic.sendCleanBackspace(state);
     ic.sendCleanBackspace(state);
 
-    // Text-input reactivates, completing deletion early
+    // Text-input reactivates during in-flight deletion
     fcitx::InputContextEvent act_event(&ic, fcitx::EventType::InputContextFocusIn);
     fcitx::InputMethodEntry dummy_entry("clak", "Clak", "vi", "clak");
     engine_->activate(dummy_entry, act_event);
+    EXPECT_TRUE(state->isDeleting());
 
-    EXPECT_EQ(ic.commits.back(), "ài");
-
-    // Deactivate / reset event fires from compositor
+    // Deactivate / reset event fires from compositor during in-flight deletion
     fcitx::InputContextEvent deact_event(&ic, fcitx::EventType::InputContextFocusOut);
     engine_->deactivate(dummy_entry, deact_event);
-    state->reset(/*force=*/true);
+    state->reset(/*force=*/false);
+    EXPECT_TRUE(state->isDeleting());
 
-    // The trailing sentinel backspace arrives from uinput
+    // The trailing sentinel backspace arrives from uinput, completing deletion cleanly
     ic.clearHistory();
     bool filtered = ic.sendCleanBackspace(state);
 
-    // The sentinel backspace MUST have been absorbed (filtered), not leaked!
     EXPECT_TRUE(filtered);
+    EXPECT_FALSE(state->isDeleting());
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "ài");
     EXPECT_TRUE(ic.forwarded_keys.empty());
 }
 
@@ -958,7 +959,7 @@ TEST_F(RegressionCorpusTest, test_regression_buffered_forward_key_batches_with_p
     // When typing fast in browsers/DraftJS, a vowel or space typed during uinput deletion
     // must be batched into a single commitString with the pending replacement, preventing
     // the second commit from overwriting the first in Wayland/Chromium.
-    platform::setMockActiveWindow(platform::WindowInfo{"helium", "tiktok.com", 1234});
+    platform::setMockActiveWindow(platform::WindowInfo{"helium", "x.com", 1234});
     MockInputContext ic(instance_->inputContextManager(), "helium");
     auto* state = ic.propertyFor(&engine_->factory());
 
@@ -1004,6 +1005,57 @@ TEST_F(RegressionCorpusTest, test_regression_buffered_forward_key_batches_with_p
     EXPECT_FALSE(state->isDeleting());
     ASSERT_EQ(ic.commits.size(), 1u);
     EXPECT_EQ(ic.commits[0], "án ");
+}
+
+TEST_F(RegressionCorpusTest, test_regression_tiktok_uses_uinput_with_draftjs_pacing) {
+    // tiktok comment box uses react contenteditable where surrounding text freezes at cursor 0
+    // clak must use uinput with draftjs pacing to ensure reliable deletions without compositor crash or key swallowing
+    platform::setMockActiveWindow(platform::WindowInfo{"helium", "tiktok.com", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "helium");
+    auto* state = ic.propertyFor(&engine_->factory());
+
+    size_t uinput_calls = 0;
+    uint32_t last_post_delay = 0;
+    uint32_t last_gap_ms = 0;
+    uinput::UinputTool::instance().setMockHandler([&](size_t, uint32_t post_delay, uint32_t, uint32_t gap_ms) {
+        uinput_calls++;
+        last_post_delay = post_delay;
+        last_gap_ms = gap_ms;
+        return true;
+    });
+
+    ic.setSurrounding("m", 1, 1);
+    ic.typeChar('o', state);
+    ic.setSurrounding("mo", 2, 2);
+    ic.typeChar('o', state); // REPLACE del=1, commit="ô"
+
+    // uses uinput with draftjs pacing
+    EXPECT_TRUE(state->isDeleting());
+    EXPECT_EQ(uinput_calls, 1u);
+    EXPECT_EQ(last_post_delay, config::kDraftJsPostDelayMs);
+    EXPECT_EQ(last_gap_ms, config::kDraftJsGapMs);
+
+    // complete backspaces
+    ic.sendCleanBackspace(state);
+    ic.sendCleanBackspace(state);
+    EXPECT_FALSE(state->isDeleting());
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "ô");
+
+    // typing with frozen cursor 0 (react contenteditable): must route via uinput and never get stuck
+    ic.clearHistory();
+    state->reset(/*force=*/true);
+    ic.setSurrounding("\n", 0, 0);
+    ic.typeChar('d', state);
+    ic.setSurrounding("\n", 0, 0);
+    ic.typeChar('d', state);
+
+    EXPECT_TRUE(state->isDeleting());
+    ic.sendCleanBackspace(state);
+    ic.sendCleanBackspace(state);
+    EXPECT_FALSE(state->isDeleting());
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "đ");
 }
 
 } // namespace test
