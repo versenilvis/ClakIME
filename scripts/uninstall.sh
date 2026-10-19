@@ -208,8 +208,8 @@ run_simulation() {
     [ -n "$(find /usr/share/icons -name '*clak*' -print -quit 2>/dev/null)" ] && has_system=1
 
     [ -f "${HOME}/.config/environment.d/99-clak-wps.conf" ] && has_wps=1
-    [ -f "${HOME}/.local/share/applications/steam.desktop" ] && grep -q "GTK_IM_MODULE=xim" "${HOME}/.local/share/applications/steam.desktop" 2>/dev/null && grep -q "XMODIFIERS=@im=fcitx" "${HOME}/.local/share/applications/steam.desktop" 2>/dev/null && has_steam=1
-    [ -f "${HOME}/.local/bin/steam" ] && grep -q "GTK_IM_MODULE=xim" "${HOME}/.local/bin/steam" 2>/dev/null && grep -q "XMODIFIERS=@im=fcitx" "${HOME}/.local/bin/steam" 2>/dev/null && has_steam=1
+    [ -f "${HOME}/.local/share/applications/steam.desktop" ] && grep -q "GTK_IM_MODULE=xim" "${HOME}/.local/share/applications/steam.desktop" 2>/dev/null && grep -qE "XMODIFIERS=@im=(fcitx|ibus)" "${HOME}/.local/share/applications/steam.desktop" 2>/dev/null && has_steam=1
+    [ -f "${HOME}/.local/bin/steam" ] && grep -q "GTK_IM_MODULE=xim" "${HOME}/.local/bin/steam" 2>/dev/null && grep -qE "XMODIFIERS=@im=(fcitx|ibus)" "${HOME}/.local/bin/steam" 2>/dev/null && has_steam=1
     [ -d "${HOME}/.config/clak" ] && [ "$purge_config" -eq 1 ] && has_config=1
     [ -f "${HOME}/.config/autostart/clak-autostart.desktop" ] && has_autostart=1
     [ -f "${HOME}/.config/environment.d/99-clak-im.conf" ] && has_autostart=1
@@ -340,8 +340,8 @@ run_uninstall() {
     [ -f "${HOME}/.config/autostart/clak-autostart.desktop" ] && has_autostart=1
     [ -f "${HOME}/.config/environment.d/99-clak-im.conf" ] && has_autostart=1
     [ -f "${HOME}/.config/environment.d/99-clak-wps.conf" ] && has_wps=1
-    [ -f "${HOME}/.local/share/applications/steam.desktop" ] && grep -q "GTK_IM_MODULE=xim" "${HOME}/.local/share/applications/steam.desktop" 2>/dev/null && grep -q "XMODIFIERS=@im=fcitx" "${HOME}/.local/share/applications/steam.desktop" 2>/dev/null && has_steam=1
-    [ -f "${HOME}/.local/bin/steam" ] && grep -q "GTK_IM_MODULE=xim" "${HOME}/.local/bin/steam" 2>/dev/null && grep -q "XMODIFIERS=@im=fcitx" "${HOME}/.local/bin/steam" 2>/dev/null && has_steam=1
+    [ -f "${HOME}/.local/share/applications/steam.desktop" ] && grep -q "GTK_IM_MODULE=xim" "${HOME}/.local/share/applications/steam.desktop" 2>/dev/null && grep -qE "XMODIFIERS=@im=(fcitx|ibus)" "${HOME}/.local/share/applications/steam.desktop" 2>/dev/null && has_steam=1
+    [ -f "${HOME}/.local/bin/steam" ] && grep -q "GTK_IM_MODULE=xim" "${HOME}/.local/bin/steam" 2>/dev/null && grep -qE "XMODIFIERS=@im=(fcitx|ibus)" "${HOME}/.local/bin/steam" 2>/dev/null && has_steam=1
     [ -f "${HOME}/.config/fcitx5/config.bak-clak" ] && has_fcitx_bak=1
     [ -d "${HOME}/.config/clak" ] && [ "$purge_config" -eq 1 ] && has_config=1
     if [ -f "${HOME}/.config/fcitx5/profile" ] && grep -q "clak" "${HOME}/.config/fcitx5/profile" 2>/dev/null; then
@@ -464,12 +464,12 @@ run_uninstall() {
     # 6. cleanup steam compatibility overrides
     local steam_cleaned=0
     local steam_df="${HOME}/.local/share/applications/steam.desktop"
-    if [ -f "$steam_df" ] && grep -q "GTK_IM_MODULE=xim" "$steam_df" 2>/dev/null && grep -q "XMODIFIERS=@im=fcitx" "$steam_df" 2>/dev/null; then
+    if [ -f "$steam_df" ] && grep -q "GTK_IM_MODULE=xim" "$steam_df" 2>/dev/null && grep -qE "XMODIFIERS=@im=(fcitx|ibus)" "$steam_df" 2>/dev/null; then
         rm -f "$steam_df"
         steam_cleaned=1
     fi
     local steam_wb="${HOME}/.local/bin/steam"
-    if [ -f "$steam_wb" ] && grep -q "GTK_IM_MODULE=xim" "$steam_wb" 2>/dev/null && grep -q "XMODIFIERS=@im=fcitx" "$steam_wb" 2>/dev/null; then
+    if [ -f "$steam_wb" ] && grep -q "GTK_IM_MODULE=xim" "$steam_wb" 2>/dev/null && grep -qE "XMODIFIERS=@im=(fcitx|ibus)" "$steam_wb" 2>/dev/null; then
         rm -f "$steam_wb"
         steam_cleaned=1
     fi

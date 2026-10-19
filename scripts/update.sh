@@ -420,7 +420,7 @@ configure_steam_compatibility() {
             mkdir -p "${HOME}/.local/share/applications"
             local patched_desktop=0
             if [ -f /usr/share/applications/steam.desktop ]; then
-                sed -E 's#^Exec=(/usr/bin/steam|/usr/games/steam|steam)#Exec=env GTK_IM_MODULE=xim XMODIFIERS=@im=fcitx SDL_VIDEODRIVER=x11 \1#g' \
+                sed -E 's#^Exec=(/usr/bin/steam|/usr/games/steam|steam)#Exec=env GTK_IM_MODULE=xim XMODIFIERS=@im=ibus SDL_VIDEODRIVER=x11 \1#g' \
                     /usr/share/applications/steam.desktop > "${HOME}/.local/share/applications/steam.desktop"
                 patched_desktop=1
             fi
@@ -443,13 +443,13 @@ done
 if [ -z "$real_steam" ]; then
     real_steam="/usr/bin/steam"
 fi
-exec env GTK_IM_MODULE=xim XMODIFIERS=@im=fcitx SDL_VIDEODRIVER=x11 "$real_steam" "$@"
+exec env GTK_IM_MODULE=xim XMODIFIERS=@im=ibus SDL_VIDEODRIVER=x11 "$real_steam" "$@"
 EOF
             chmod +x "${HOME}/.local/bin/steam"
             log_step "$lbl_steam" "Đã tạo wrapper tương thích tại ${c_accent}~/.local/bin/steam${c_reset}"
 
             if [ "$is_flatpak" -eq 1 ]; then
-                flatpak override --user --env=GTK_IM_MODULE=xim --env=XMODIFIERS=@im=fcitx --env=SDL_VIDEODRIVER=x11 com.valvesoftware.Steam 2>/dev/null || true
+                flatpak override --user --env=GTK_IM_MODULE=xim --env=XMODIFIERS=@im=ibus --env=SDL_VIDEODRIVER=x11 com.valvesoftware.Steam 2>/dev/null || true
                 log_step "$lbl_steam" "Đã tối ưu biến môi trường cho Steam Flatpak"
             fi
         fi
