@@ -454,7 +454,6 @@ impl ClakContext {
 
         self.raw_buffer.push_str(key_str_to_use);
         let new_word = self.engine.transform(&self.raw_buffer);
-
         let (deleted_part, added_part) = compare_and_split(&self.last_composed, &new_word);
 
         if deleted_part.is_empty() && added_part == key_str {

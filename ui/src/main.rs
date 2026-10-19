@@ -844,7 +844,11 @@ fn shortcut_id_to_display(id: &str) -> String {
 }
 
 fn shortcut_display_to_id(display: &str) -> String {
-    let s = display.trim().to_lowercase().replace(" + ", "_").replace(' ', "_");
+    let s = display
+        .trim()
+        .to_lowercase()
+        .replace(" + ", "_")
+        .replace(' ', "_");
     if s.is_empty() {
         "ctrl_shift".to_string()
     } else {
@@ -859,8 +863,7 @@ fn format_recorded_shortcut(
     shift: bool,
     meta: bool,
 ) -> Option<(String, String)> {
-    let is_space = key_text == " "
-        || key_text.eq_ignore_ascii_case("space");
+    let is_space = key_text == " " || key_text.eq_ignore_ascii_case("space");
 
     // Case 1: Super / Meta (Windows key) combinations (e.g. Super + Space)
     if meta {
@@ -879,7 +882,10 @@ fn format_recorded_shortcut(
     // Case 2: Ctrl + Shift
     if ctrl && shift {
         if is_space {
-            return Some(("Ctrl + Shift + Space".to_string(), "ctrl_shift_space".to_string()));
+            return Some((
+                "Ctrl + Shift + Space".to_string(),
+                "ctrl_shift_space".to_string(),
+            ));
         }
         return Some(("Ctrl + Shift".to_string(), "ctrl_shift".to_string()));
     }
@@ -895,7 +901,11 @@ fn format_recorded_shortcut(
             return Some(("Ctrl + Space".to_string(), "ctrl_space".to_string()));
         }
         let clean = key_text.trim();
-        if !clean.is_empty() && clean.chars().any(|c| c.is_alphanumeric() || c.is_ascii_punctuation()) {
+        if !clean.is_empty()
+            && clean
+                .chars()
+                .any(|c| c.is_alphanumeric() || c.is_ascii_punctuation())
+        {
             let u = clean.to_uppercase();
             let l = clean.to_lowercase();
             return Some((format!("Ctrl + {}", u), format!("ctrl_{}", l)));
@@ -909,7 +919,11 @@ fn format_recorded_shortcut(
             return Some(("Alt + Space".to_string(), "alt_space".to_string()));
         }
         let clean = key_text.trim();
-        if !clean.is_empty() && clean.chars().any(|c| c.is_alphanumeric() || c.is_ascii_punctuation()) {
+        if !clean.is_empty()
+            && clean
+                .chars()
+                .any(|c| c.is_alphanumeric() || c.is_ascii_punctuation())
+        {
             let u = clean.to_uppercase();
             let l = clean.to_lowercase();
             return Some((format!("Alt + {}", u), format!("alt_{}", l)));
@@ -1210,13 +1224,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     w.set_doctor_has_scanned(true);
                     w.set_doctor_is_scanning(false);
                     let is_deleted = report_for_ui.memory.is_deleted_inode;
-                    let addon_not_loaded = report_for_ui.daemon.fcitx5_running && !report_for_ui.memory.clak_loaded;
-                    let profile_needs = !report_for_ui.profile.clak_in_profile || !report_for_ui.profile.is_default_im;
+                    let addon_not_loaded =
+                        report_for_ui.daemon.fcitx5_running && !report_for_ui.memory.clak_loaded;
+                    let profile_needs = !report_for_ui.profile.clak_in_profile
+                        || !report_for_ui.profile.is_default_im;
                     let autostart_needs = !report_for_ui.autostart.is_enabled;
-                    let permissions_needs = !report_for_ui.permissions.uinput_writable || report_for_ui.permissions.input_readable_count == 0;
+                    let permissions_needs = !report_for_ui.permissions.uinput_writable
+                        || report_for_ui.permissions.input_readable_count == 0;
                     let wps_fix = report_for_ui.wps.installed && !report_for_ui.wps.configured;
-                    let jb_fix = report_for_ui.jetbrains.installed && !report_for_ui.jetbrains.unconfigured_ides.is_empty();
-                    let has_fixable = is_deleted || addon_not_loaded || profile_needs || autostart_needs || permissions_needs || wps_fix || jb_fix;
+                    let jb_fix = report_for_ui.jetbrains.installed
+                        && !report_for_ui.jetbrains.unconfigured_ides.is_empty();
+                    let has_fixable = is_deleted
+                        || addon_not_loaded
+                        || profile_needs
+                        || autostart_needs
+                        || permissions_needs
+                        || wps_fix
+                        || jb_fix;
 
                     w.set_reload_needed(is_deleted);
                     w.set_addon_needs_load(addon_not_loaded && !is_deleted);
@@ -1713,10 +1737,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let addon_not_loaded = report.daemon.fcitx5_running && !report.memory.clak_loaded;
         let needs_setup = !report.profile.clak_in_profile || !report.profile.is_default_im;
         let autostart_needs = !report.autostart.is_enabled;
-        let permissions_needs = !report.permissions.uinput_writable || report.permissions.input_readable_count == 0;
+        let permissions_needs =
+            !report.permissions.uinput_writable || report.permissions.input_readable_count == 0;
         let wps_fix = report.wps.installed && !report.wps.configured;
         let jb_fix = report.jetbrains.installed && !report.jetbrains.unconfigured_ides.is_empty();
-        let has_fixable = is_deleted || addon_not_loaded || needs_setup || autostart_needs || permissions_needs || wps_fix || jb_fix;
+        let has_fixable = is_deleted
+            || addon_not_loaded
+            || needs_setup
+            || autostart_needs
+            || permissions_needs
+            || wps_fix
+            || jb_fix;
 
         let report_for_ui = report.clone();
         let _ = slint::invoke_from_event_loop(move || {

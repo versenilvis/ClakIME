@@ -3,7 +3,9 @@ pub mod report;
 
 use serde::{Deserialize, Serialize};
 
-pub use checks::autostart::{check_autostart, disable_autostart, enable_autostart, AutostartStatus};
+pub use checks::autostart::{
+    check_autostart, disable_autostart, enable_autostart, AutostartStatus,
+};
 pub use checks::compatibility::{
     check_jetbrains, check_profile, check_wps, fix_fcitx5_profile, fix_jetbrains_compatibility,
     fix_wps_compatibility, restart_fcitx5_daemon, JetBrainsStatus, ProfileStatus, WpsStatus,
@@ -87,7 +89,8 @@ pub fn run_diagnostics() -> DiagnosticReport {
         } else {
             issues.push(DiagnosticIssue {
                 title: "Thiếu quyền /dev/uinput".to_string(),
-                message: "Người dùng chưa có quyền ghi vào /dev/uinput để gửi phím ảo khi cần".to_string(),
+                message: "Người dùng chưa có quyền ghi vào /dev/uinput để gửi phím ảo khi cần"
+                    .to_string(),
                 fix_command: Some("clak doctor --fix".to_string()),
             });
         }
@@ -293,21 +296,31 @@ pub fn auto_fix_all(include_permissions: bool) -> AutoFixSummary {
     }
 
     // 2. Restart daemon if addon not loaded or deleted inode
-    if pre_report.daemon.fcitx5_running && (!pre_report.memory.clak_loaded || pre_report.memory.is_deleted_inode) {
+    if pre_report.daemon.fcitx5_running
+        && (!pre_report.memory.clak_loaded || pre_report.memory.is_deleted_inode)
+    {
         if restart_fcitx5_daemon() {
             summary.fcitx5_restarted = true;
         } else {
-            summary.errors.push("Khởi động lại Fcitx5 không thành công".to_string());
+            summary
+                .errors
+                .push("Khởi động lại Fcitx5 không thành công".to_string());
         }
-    } else if pre_report.daemon.fcitx5_running && pre_report.daemon.current_im.as_deref() != Some("clak") {
-        let _ = std::process::Command::new("fcitx5-remote").args(["-s", "clak"]).status();
+    } else if pre_report.daemon.fcitx5_running
+        && pre_report.daemon.current_im.as_deref() != Some("clak")
+    {
+        let _ = std::process::Command::new("fcitx5-remote")
+            .args(["-s", "clak"])
+            .status();
     }
 
     // 3. Enable autostart if disabled
     if !pre_report.autostart.is_enabled {
         match enable_autostart() {
             Ok(_) => summary.autostart_enabled = true,
-            Err(e) => summary.errors.push(format!("Lỗi bật khởi động cùng hệ thống: {}", e)),
+            Err(e) => summary
+                .errors
+                .push(format!("Lỗi bật khởi động cùng hệ thống: {}", e)),
         }
     }
 
@@ -323,15 +336,22 @@ pub fn auto_fix_all(include_permissions: bool) -> AutoFixSummary {
     if pre_report.jetbrains.installed && !pre_report.jetbrains.unconfigured_ides.is_empty() {
         match fix_jetbrains_compatibility() {
             Ok(count) => summary.jetbrains_patched = count,
-            Err(e) => summary.errors.push(format!("Lỗi cấu hình JetBrains: {}", e)),
+            Err(e) => summary
+                .errors
+                .push(format!("Lỗi cấu hình JetBrains: {}", e)),
         }
     }
 
     // 6. Fix permissions if requested and needed
-    if include_permissions && (!pre_report.permissions.uinput_writable || pre_report.permissions.input_readable_count == 0) {
+    if include_permissions
+        && (!pre_report.permissions.uinput_writable
+            || pre_report.permissions.input_readable_count == 0)
+    {
         match fix_input_permissions() {
             Ok(_) => summary.permissions_fixed = true,
-            Err(e) => summary.errors.push(format!("Lỗi cấp quyền thiết bị: {}", e)),
+            Err(e) => summary
+                .errors
+                .push(format!("Lỗi cấp quyền thiết bị: {}", e)),
         }
     }
 

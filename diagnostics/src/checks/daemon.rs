@@ -22,10 +22,7 @@ pub fn check_daemon() -> DaemonStatus {
                 if let Ok(content) = fs::read(&cmdline_path) {
                     if let Some(first_null) = content.iter().position(|&b| b == 0) {
                         let arg0 = String::from_utf8_lossy(&content[..first_null]);
-                        if Path::new(&*arg0)
-                            .file_name()
-                            .is_some_and(|n| n == "fcitx5")
-                        {
+                        if Path::new(&*arg0).file_name().is_some_and(|n| n == "fcitx5") {
                             fcitx5_pids.push(pid);
                         }
                     }
