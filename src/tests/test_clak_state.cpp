@@ -581,5 +581,103 @@ TEST_F(ClakStateTest, GivenShiftHeldWithMouseClick_DoesNotTriggerAutoFix) {
     EXPECT_TRUE(ic.commits.empty());
 }
 
+TEST_F(ClakStateTest, GivenAutocorrectInGecko_BuffersSubsequentKeystrokesAndReplaysCleanly) {
+    clak_config_set_autocorrect(const_cast<ClakConfig*>(engine_->config()), true);
+    platform::setMockActiveWindow(platform::WindowInfo{"zen", "Zen Browser", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "zen");
+    ime::ClakState state(engine_.get(), &ic);
+
+    size_t uinput_bs_sent = 0;
+    uinput::UinputTool::instance().setMockHandler([&](size_t count, uint32_t, uint32_t, uint32_t) {
+        uinput_bs_sent = count;
+        return true;
+    });
+
+    ic.setSurrounding("", 0, 0);
+    // type scrambled word: nheiuef, looping back any intermediate modifier sentinels
+    for (char c : std::string("nheiuef")) {
+        ic.typeChar(c, &state);
+        while (state.isDeleting()) {
+            ic.sendCleanBackspace(&state);
+        }
+    }
+    EXPECT_FALSE(state.isDeleting());
+
+    // type space to trigger autocorrect
+    ic.typeChar(' ', &state);
+    EXPECT_TRUE(state.isDeleting());
+    // 6 backspaces for nheìue + 1 sentinel = 7 backspaces
+    EXPECT_EQ(uinput_bs_sent, 7);
+
+    // user rapidly types next keys while uinput deletion is in flight
+    ic.typeChar('v', &state);
+    ic.typeChar('a', &state);
+    EXPECT_EQ(state.bufferedKeysCount(), 2);
+
+    // sentinel loopback backspaces arrive
+    for (size_t i = 0; i < uinput_bs_sent; ++i) {
+        ic.sendCleanBackspace(&state);
+    }
+
+    EXPECT_FALSE(state.isDeleting());
+    // batched commit contains corrected word with space and the buffered forward keys ("va")
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "nhiều va");
+}
+
+TEST_F(ClakStateTest, GivenAutocorrect_ShiftTapUndoesAndRestoresOriginalWord) {
+    clak_config_set_autocorrect(const_cast<ClakConfig*>(engine_->config()), true);
+    clak_config_set_shift_autofix(const_cast<ClakConfig*>(engine_->config()), true);
+
+    MockInputContext ic(instance_->inputContextManager(), "test-app");
+    ic.auto_update_surrounding = true;
+    ime::ClakState state(engine_.get(), &ic);
+
+    ic.setSurrounding("", 0, 0);
+    // type scrambled word + space
+    for (char c : std::string("nheiuef ")) {
+        ic.typeChar(c, &state);
+    }
+
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "nhiều ");
+
+    // update surrounding to reflect autocorrect
+    ic.setSurrounding("nhiều ", 6, 6);
+
+    // tap Shift to undo autocorrect
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyStates(), false, &state);
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyStates(), true, &state);
+
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "nheìue ");
+}
+
+TEST_F(ClakStateTest, GivenAutocorrect_BackspaceAfterSpaceIsNotHijacked) {
+    clak_config_set_autocorrect(const_cast<ClakConfig*>(engine_->config()), true);
+
+    MockInputContext ic(instance_->inputContextManager(), "test-app");
+    ic.auto_update_surrounding = true;
+    ime::ClakState state(engine_.get(), &ic);
+
+    ic.setSurrounding("", 0, 0);
+    for (char c : std::string("nheiuef ")) {
+        ic.typeChar(c, &state);
+    }
+    EXPECT_EQ(ic.commits.back(), "nhiều ");
+    ic.setSurrounding("nhiều ", 6, 6);
+
+    // backspace after space should behave normally (delete the space character, not hijack to restore)
+    ic.clearHistory();
+    ic.sendKey(FcitxKey_BackSpace, fcitx::KeyStates(), false, &state);
+    ic.sendKey(FcitxKey_BackSpace, fcitx::KeyStates(), true, &state);
+
+    // must not commit original scrambled word
+    for (const auto& c : ic.commits) {
+        EXPECT_NE(c, "nheiuef ");
+        EXPECT_NE(c, "nheiuef");
+    }
+}
+
 } // namespace test
 } // namespace clak

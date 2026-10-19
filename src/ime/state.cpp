@@ -69,6 +69,11 @@ void ClakState::reset(bool force) {
             return;
         }
     }
+    if (force) {
+        last_autofix_original_.clear();
+        last_autofix_converted_chars_ = 0;
+        last_autofix_time_us_ = 0;
+    }
     last_text_len_ = 0;
     if (safety_timer_) {
         safety_timer_.reset();
@@ -506,6 +511,8 @@ bool ClakState::handleKey(const fcitx::Key& key) {
 
     switch (action.action_type) {
         case CLAK_ACTION_FORWARD:
+            last_autofix_original_.clear();
+            last_autofix_time_us_ = 0;
             if (valid_surr) {
                 last_text_len_ = surr.cursor() + 1;
             } else {
@@ -522,6 +529,8 @@ bool ClakState::handleKey(const fcitx::Key& key) {
             return false;
 
         case CLAK_ACTION_COMMIT:
+            last_autofix_original_.clear();
+            last_autofix_time_us_ = 0;
             if (action.commit_str && action.commit_str[0] != '\0') {
                 doCommitString(action.commit_str);
             }
@@ -530,6 +539,16 @@ bool ClakState::handleKey(const fcitx::Key& key) {
             last_text_len_ = 0;
             return true;
 
+        case CLAK_ACTION_AUTOCORRECT: {
+            if (action.delete_str && action.commit_str) {
+                last_autofix_original_ = action.delete_str;
+                last_autofix_converted_chars_ = utils::utf8CharCount(action.commit_str);
+                last_autofix_time_us_ = fcitx::now(CLOCK_MONOTONIC);
+                utils::clakLog("handleKey: autocorrect applied: '" + std::string(action.delete_str) +
+                               "' -> '" + std::string(action.commit_str) + "' (tap Shift to undo)");
+            }
+            [[fallthrough]];
+        }
         case CLAK_ACTION_ADDRESS_BAR_FIX:
         case CLAK_ACTION_REPLACE:
         case CLAK_ACTION_REPLACE_SURROUNDING: {
