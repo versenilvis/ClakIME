@@ -53,7 +53,7 @@ public:
 class DraftJsProfile : public AppProfile {
 public:
     std::string name() const override { return "DraftJS-Uinput"; }
-    bool allowsSurroundingText() const override { return false; }
+    bool allowsSurroundingText() const override { return true; }
     bool forcesUinput() const override { return true; }
     UinputPacing uinputPacing() const override {
         return {config::kDraftJsPostDelayMs, config::kDraftJsGapMs};

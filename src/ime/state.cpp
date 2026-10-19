@@ -81,11 +81,11 @@ void ClakState::reset(bool force) {
     sentinel_grace_until_us_ = 0;
     pending_commit_string_.clear();
     key_buffer_.clear();
+    last_surr_cursor_ = 0;
+    last_surr_text_len_ = 0;
+    surr_keystroke_count_ = 0;
     if (force) {
         verifier_.reset();
-        last_surr_cursor_ = 0;
-        last_surr_text_len_ = 0;
-        surr_keystroke_count_ = 0;
     } else {
         verifier_.clearPending();
     }
@@ -398,12 +398,12 @@ bool ClakState::handleKey(const fcitx::Key& key) {
 
     bool valid_surr = has_surrounding && surr.isValid() &&
                       surr.cursor() <= surr.text().size() &&
-                      !verifier_.isCanvasEditor() &&
-                      !verifier_.isRichTextEditor();
-    bool use_surrounding = valid_surr && currentProfile()->allowsSurroundingText();
+                      !verifier_.isCanvasEditor();
+    bool use_surrounding = valid_surr && !verifier_.isRichTextEditor() &&
+                           currentProfile()->allowsSurroundingText();
 
     // detect frozen surrounding cursor (e.g. xterm.js in vscode integrated terminal)
-    if (use_surrounding && !key_str.empty() && sym < 0xff00 && !has_ctrl_alt) {
+    if (config::isVSCodeApp(app) && use_surrounding && !key_str.empty() && sym < 0xff00 && !has_ctrl_alt) {
         if (surr_keystroke_count_ >= 2 &&
             last_surr_cursor_ == surr.cursor() &&
             last_surr_text_len_ == surr.text().size()) {
