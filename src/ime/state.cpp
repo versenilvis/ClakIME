@@ -493,6 +493,21 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                 verifier_.setRichTextEditor(true);
                 is_draftjs = isDraftJsEditor();
             }
+
+            if (currentProfile()->erasesWithCommittedDel() && real_bs > 0) {
+                std::string del_str(real_bs, '\x7f');
+                if (action.commit_str && action.commit_str[0] != '\0') {
+                    del_str += action.commit_str;
+                }
+                doCommitString(del_str);
+                utils::clakLog("vte del commit: count=" + std::to_string(real_bs) +
+                               " commit='" + (action.commit_str ? action.commit_str : "") + "' app=" + app);
+                logLatency(currentProfile()->name(), op_start_us_, "COMMIT_DEL");
+                op_start_us_ = 0;
+                last_text_len_ = 0;
+                return true;
+            }
+
             bool use_uinput = is_autofill || shouldUseUinput(use_surrounding, action.action_type, surr);
 
             if (use_uinput && real_bs > 0) {

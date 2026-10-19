@@ -10,8 +10,19 @@
 namespace clak {
 namespace apps {
 
+bool isVteTerminalApp(const std::string& app) {
+    static const std::vector<std::string> vte_terms = {
+        "ptyxis", "kgx", "gnome-console", "blackbox"
+    };
+    for (const auto& t : vte_terms) {
+        if (app.find(t) != std::string::npos) return true;
+    }
+    return false;
+}
+
 bool isTerminalApp(const std::string& app) {
     if (isJetBrainsApp(app)) return true;
+    if (isVteTerminalApp(app)) return true;
     static const std::vector<std::string> terms = {
         "kitty", "ghostty", "alacritty", "foot", "wezterm", "xterm",
         "gnome-terminal", "konsole", "tilix", "terminator", "urxvt",
@@ -36,7 +47,8 @@ std::string detectRunningTerminalApp() {
 
     static const char* const kTerminals[] = {
         "kitty", "x-terminal-emulator", "x-terminal-emul", "alacritty", "ghostty", "foot",
-        "wezterm", "gnome-terminal", "konsole", "xterm", "terminator", "tilix"
+        "wezterm", "gnome-terminal", "konsole", "xterm", "terminator", "tilix",
+        "ptyxis", "kgx", "gnome-console", "blackbox"
     };
 
     DIR* proc_dir = opendir("/proc");
@@ -85,10 +97,22 @@ public:
     }
 };
 
+class VteTerminalProfile : public AppProfile {
+public:
+    std::string name() const override { return "VTE-Terminal"; }
+    bool allowsSurroundingText() const override { return false; }
+    bool forcesUinput() const override { return false; }
+    bool erasesWithCommittedDel() const override { return true; }
+};
+
 } // namespace
 
 std::unique_ptr<AppProfile> createTerminalProfile() {
     return std::make_unique<TerminalProfile>();
+}
+
+std::unique_ptr<AppProfile> createVteTerminalProfile() {
+    return std::make_unique<VteTerminalProfile>();
 }
 
 } // namespace apps

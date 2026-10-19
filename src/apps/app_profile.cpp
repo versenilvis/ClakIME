@@ -27,6 +27,9 @@ std::unique_ptr<AppProfile> createAppProfile(
     if (isJetBrainsApp(app)) {
         return createJetBrainsProfile();
     }
+    if (isVteTerminalApp(app)) {
+        return createVteTerminalProfile();
+    }
     if (isTerminalApp(app)) {
         return createTerminalProfile();
     }

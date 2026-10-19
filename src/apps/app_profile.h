@@ -28,6 +28,7 @@ public:
     virtual bool preventsUinput() const { return false; }
     virtual bool allowsAutofillHeuristic() const { return true; }
     virtual bool directCommitPrintableKey() const { return false; }
+    virtual bool erasesWithCommittedDel() const { return false; }
 
     // uinput delay settings
     virtual UinputPacing uinputPacing() const { return {6, 2}; }

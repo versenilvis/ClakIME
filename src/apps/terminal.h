@@ -9,8 +9,10 @@ namespace clak {
 namespace apps {
 
 bool isTerminalApp(const std::string& app);
+bool isVteTerminalApp(const std::string& app);
 std::string detectRunningTerminalApp();
 std::unique_ptr<AppProfile> createTerminalProfile();
+std::unique_ptr<AppProfile> createVteTerminalProfile();
 
 } // namespace apps
 } // namespace clak
