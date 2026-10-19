@@ -28,9 +28,18 @@ private:
 
     bool init_direct_uinput();
     bool send_backspace_direct(size_t count, uint32_t post_delay_ms, uint32_t pre_delay_ms, uint32_t gap_ms);
+    bool send_select_direct(size_t count);
+
+    bool init_xtest();
+    bool send_backspace_xtest(size_t count, uint32_t post_delay_ms, uint32_t pre_delay_ms, uint32_t gap_ms);
+    bool send_select_xtest(size_t count);
 
     int direct_fd_{-1};
     std::mutex uinput_mutex_;
+    void* xcb_lib_{nullptr};
+    void* xtest_lib_{nullptr};
+    void* xcb_conn_{nullptr};
+    std::mutex xtest_mutex_;
     BackspaceHook mock_handler_;
 };
 
