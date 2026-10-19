@@ -354,6 +354,9 @@ run_uninstall() {
     fi
 
     # check package manager ownership of system files before proceeding
+    local pkg_manager_owner=""
+    local pkg_manager_pm=""
+    local pkg_manager_file=""
     if [ "$has_sys_files" -eq 1 ] && ([ "$target_mode" = "system" ] || [ "$target_mode" = "auto" ]); then
         local check_targets=("/usr/bin/clak" "/usr/bin/clak-gui" "/usr/share/fcitx5/addon/clak.conf" "/usr/share/fcitx5/inputmethod/clak.conf")
         for d in $(get_system_addon_dirs); do
@@ -363,25 +366,13 @@ run_uninstall() {
             if [ -f "$f" ]; then
                 local owner_res
                 if owner_res=$(check_package_owner "$f"); then
-                    local pm="${owner_res%%:*}"
-                    local pkg="${owner_res#*:}"
+                    pkg_manager_pm="${owner_res%%:*}"
+                    pkg_manager_owner="${owner_res#*:}"
+                    pkg_manager_file="$f"
                     echo ""
-                    log_step "$lbl_err" "File ${c_accent}${f}${c_reset} được quản lý bởi trình quản lý gói ${c_purple}${pm}${c_reset} (gói: ${c_bold}${pkg}${c_reset})"
-                    echo -e "  ${c_red}Không được xóa file thủ công để tránh làm hỏng cơ sở dữ liệu gói của hệ thống.${c_reset}"
-                    echo -e "  Vui lòng gỡ bỏ bằng lệnh chính thức của distro:"
-                    case "$pm" in
-                        pacman)
-                            echo -e "    ${c_bold}sudo pacman -R ${pkg}${c_reset} (hoặc ${c_bold}yay -R ${pkg}${c_reset} / ${c_bold}paru -R ${pkg}${c_reset})"
-                            ;;
-                        dpkg)
-                            echo -e "    ${c_bold}sudo apt remove ${pkg}${c_reset} (hoặc ${c_bold}sudo dpkg -r ${pkg}${c_reset})"
-                            ;;
-                        rpm)
-                            echo -e "    ${c_bold}sudo dnf remove ${pkg}${c_reset} (hoặc ${c_bold}sudo rpm -e ${pkg}${c_reset})"
-                            ;;
-                    esac
-                    echo ""
-                    exit 1
+                    log_step "$lbl_warn" "File ${c_accent}${f}${c_reset} thuộc quản lý của gói ${c_purple}${pkg_manager_owner}${c_reset} (${pkg_manager_pm})"
+                    echo -e "  ${c_yellow}Script sẽ dọn sạch toàn bộ cấu hình người dùng, và bỏ qua file hệ thống để bảo toàn cơ sở dữ liệu gói.${c_reset}"
+                    break
                 fi
             fi
         done
@@ -389,7 +380,7 @@ run_uninstall() {
 
     # 2. confirm prompt if interactive
     if [ "$assume_yes" -ne 1 ] && [ -t 0 ]; then
-        echo -e "${c_bold}Bạn có chắc chắn muốn gỡ bỏ hoàn toàn bộ gõ Clak khỏi máy?${c_reset}"
+        echo -e "${c_bold}Bạn có chắc chắn muốn gỡ bỏ hoàn toàn cấu hình bộ gõ Clak khỏi máy?${c_reset}"
         read -r -p "Xác nhận gỡ bỏ? [y/N]: " confirm_choice
         case "$confirm_choice" in
             [yY][eE][sS]|[yY])
@@ -421,23 +412,26 @@ run_uninstall() {
 
     # 4. remove system binaries if requested or detected
     if [ "$has_sys_files" -eq 1 ] && ([ "$target_mode" = "system" ] || [ "$target_mode" = "auto" ]); then
-        spin_step "Đang xóa file Clak toàn hệ thống (/usr)..."
-        run_sudo rm -f "/usr/bin/clak"
-        run_sudo rm -f "/usr/bin/clak-gui"
-        run_sudo rm -f "/usr/share/applications/clak-gui.desktop"
-        for d in $(get_system_addon_dirs); do
-            run_sudo rm -f "$d/libclak.so"
-        done
-        run_sudo rm -f "/usr/share/fcitx5/addon/clak.conf"
-        run_sudo rm -f "/usr/share/fcitx5/inputmethod/clak.conf"
-        run_sudo find "/usr/share/icons" -type f -name "*clak*" -delete 2>/dev/null || true
-        if command -v gtk-update-icon-cache >/dev/null 2>&1; then
-            run_sudo gtk-update-icon-cache -f -q -t "/usr/share/icons/hicolor" 2>/dev/null || true
+        if [ -n "$pkg_manager_owner" ]; then
+            log_step "$lbl_warn" "Bỏ qua xóa file /usr vì thuộc quyền quản lý của gói ${c_purple}${pkg_manager_owner}${c_reset}"
+        else
+            spin_step "Đang xóa file Clak toàn hệ thống (/usr)..."
+            run_sudo rm -f "/usr/bin/clak"
+            run_sudo rm -f "/usr/bin/clak-gui"
+            run_sudo rm -f "/usr/share/applications/clak-gui.desktop"
+            for d in $(get_system_addon_dirs); do
+                run_sudo rm -f "$d/libclak.so"
+            done
+            run_sudo rm -f "/usr/share/fcitx5/addon/clak.conf"
+            run_sudo rm -f "/usr/share/fcitx5/inputmethod/clak.conf"
+            run_sudo find "/usr/share/icons" -type f -name "*clak*" -delete 2>/dev/null || true
+            if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+                run_sudo gtk-update-icon-cache -f -q -t "/usr/share/icons/hicolor" 2>/dev/null || true
+            fi
+            if command -v update-desktop-database >/dev/null 2>&1; then
+                run_sudo update-desktop-database "/usr/share/applications" 2>/dev/null || true
+            fi
         fi
-        if command -v update-desktop-database >/dev/null 2>&1; then
-            run_sudo update-desktop-database "/usr/share/applications" 2>/dev/null || true
-        fi
-        log_step "$lbl_remove" "Đã xóa file Clak trong hệ thống (/usr)"
     fi
 
     # 5. cleanup wps office compatibility overrides
@@ -590,8 +584,26 @@ except Exception:
     log_step "$lbl_fcitx" "Đã khởi động lại Fcitx5 và làm mới danh sách bộ gõ thành công"
 
     printf "\r\033[K\n"
-    echo -e "${c_green}✔ Đã gỡ bỏ hoàn toàn bộ gõ Clak khỏi hệ thống!${c_reset}"
-    echo ""
+    if [ -n "$pkg_manager_owner" ]; then
+        echo -e "${c_green}✔ Đã dọn dẹp sạch toàn bộ cấu hình, phím tắt và profile người dùng của Clak!${c_reset}"
+        echo ""
+        echo -e "  ${c_yellow}Lưu ý: Để gỡ bỏ gói cài đặt hệ thống (/usr), hãy chạy lệnh:${c_reset}"
+        case "$pkg_manager_pm" in
+            pacman)
+                echo -e "    ${c_bold}sudo pacman -R ${pkg_manager_owner}${c_reset} (hoặc ${c_bold}yay -R ${pkg_manager_owner}${c_reset} / ${c_bold}paru -R ${pkg_manager_owner}${c_reset})"
+                ;;
+            dpkg)
+                echo -e "    ${c_bold}sudo apt remove ${pkg_manager_owner}${c_reset} (hoặc ${c_bold}sudo dpkg -r ${pkg_manager_owner}${c_reset})"
+                ;;
+            rpm)
+                echo -e "    ${c_bold}sudo dnf remove ${pkg_manager_owner}${c_reset} (hoặc ${c_bold}sudo rpm -e ${pkg_manager_owner}${c_reset})"
+                ;;
+        esac
+        echo ""
+    else
+        echo -e "${c_green}✔ Đã gỡ bỏ hoàn toàn bộ gõ Clak khỏi hệ thống!${c_reset}"
+        echo ""
+    fi
 }
 
 # main router
