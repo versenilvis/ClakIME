@@ -66,6 +66,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install system dependencies for UI
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y libfontconfig1-dev
+
       - name: Install MSRV toolchains
         run: |
           rustup toolchain install 1.85.0 --profile minimal
@@ -93,8 +98,8 @@ jobs:
             setup: |
               pacman -Syu --noconfirm --needed \
                 base-devel cmake ninja extra-cmake-modules fcitx5 libinput rustup git nodejs
-              rustup toolchain install 1.94.1 --profile minimal
-              rustup default 1.94.1
+              rustup default stable
+              rustup show
             cmake_args: "-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr"
             test_gui: true
           - distro: ubuntu
@@ -105,8 +110,10 @@ jobs:
                 build-essential cmake ninja-build extra-cmake-modules pkg-config \
                 libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev \
                 libinput-dev libudev-dev curl git
-              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.94.1 --profile minimal
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
               echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+              export PATH="$HOME/.cargo/bin:$PATH"
+              rustup show
             cmake_args: "-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DENABLE_GUI=OFF"
             test_gui: false
           - distro: fedora
@@ -115,8 +122,10 @@ jobs:
               dnf install -y \
                 gcc-c++ cmake ninja-build extra-cmake-modules fcitx5-devel \
                 libinput-devel systemd-devel pkgconfig curl git
-              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.94.1 --profile minimal
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
               echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+              export PATH="$HOME/.cargo/bin:$PATH"
+              rustup show
             cmake_args: "-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DENABLE_GUI=OFF"
             test_gui: false
     container:
@@ -131,6 +140,7 @@ jobs:
       - name: Build Clak
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
+          export RUSTUP_AUTO_INSTALL=0
           cmake -B build -G Ninja ${{ matrix.cmake_args }}
           cmake --build build -j$(nproc)
 
