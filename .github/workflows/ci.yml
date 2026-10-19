@@ -142,7 +142,7 @@ jobs:
           export PATH="$HOME/.cargo/bin:$PATH"
           export RUSTUP_AUTO_INSTALL=0
           cmake -B build -G Ninja ${{ matrix.cmake_args }}
-          cmake --build build -j$(nproc)
+          cmake --build build -j$(nproc) --target all clak_cpp_tests
 
       - name: Run C++ test suite
         run: ./build/src/tests/clak_cpp_tests
