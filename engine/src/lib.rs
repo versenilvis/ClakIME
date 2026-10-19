@@ -596,6 +596,12 @@ mod tests {
         assert_eq!(e.transform("khoong"), "không");
         assert_eq!(e.transform("Vieetj"), "Việt");
         assert_eq!(e.transform("luoojcw"), "lược");
+        assert_eq!(e.transform("ginf"), "gìn");
+        assert_eq!(e.transform("gifn"), "gìn");
+
+        let e_rule = eng(true, false);
+        assert_eq!(e_rule.transform("ginf"), "gìn");
+        assert_eq!(e_rule.transform("gifn"), "gìn");
     }
 
     #[test]

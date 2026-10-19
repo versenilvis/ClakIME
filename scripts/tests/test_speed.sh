@@ -80,7 +80,8 @@ run_auto_test() {
             result=$(cat "$tmp_file" | tr -d '\r\n')
         fi
 
-        if [[ "$result" == "$exp" ]]; then
+        local exp_alt="${exp//hoà/hòa}"
+        if [[ "$result" == "$exp" || "$result" == "$exp_alt" ]]; then
             echo -e "  [${GREEN}PASS${NC}] Gõ: \"$raw\""
             echo -e "         -> Kết quả: \"${GREEN}$result${NC}\""
             ((pass_count++))

@@ -445,10 +445,11 @@ pub fn is_valid_cvc(s: &str) -> bool {
     let (fc, vo, lc) = split_cvc(s);
 
     // gi + i (+ consonant) → invalid: gi digraph requires a different vowel
+    // exception: "gìn" (in "giữ gìn") is standard vietnamese with lc = 'n'
     // qu + u (+ consonant) → invalid: qu digraph requires a different vowel
     if vo.is_empty()
         && !lc.is_empty()
-        && ((fc.len() == 2 && fc[0] == 'g' && fc[1] == 'i')
+        && ((fc.len() == 2 && fc[0] == 'g' && fc[1] == 'i' && lc != ['n'])
             || (fc.len() == 2 && fc[0] == 'q' && fc[1] == 'u'))
     {
         return false;
@@ -532,6 +533,8 @@ mod tests {
         assert!(is_valid_cvc("că"));
         assert!(is_valid_cvc("mơ"));
         assert!(is_valid_cvc("ngoăn"));
+        assert!(is_valid_cvc("gìn"));
+        assert!(is_valid_cvc("gì"));
     }
 
     #[test]
@@ -543,6 +546,8 @@ mod tests {
         assert!(!is_valid_cvc("alô")); // aloo
         assert!(!is_valid_cvc("world")); // world
         assert!(!is_valid_cvc("wỏld")); // world (with tone)
+        assert!(!is_valid_cvc("gim"));
+        assert!(!is_valid_cvc("git"));
     }
 
     #[test]
