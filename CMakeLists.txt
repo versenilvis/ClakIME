@@ -159,6 +159,7 @@ set_target_properties(clak_core PROPERTIES
 target_include_directories(clak_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/engine
+    /usr/include/Fcitx5/Module
 )
 target_link_libraries(clak_core PUBLIC
     Fcitx5::Core

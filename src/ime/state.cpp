@@ -8,6 +8,9 @@
 #include "utils/text_utils.h"
 
 #include <fcitx/inputcontext.h>
+#include <fcitx/instance.h>
+#include <fcitx/addonmanager.h>
+#include <fcitx-module/clipboard/clipboard_public.h>
 #include <fcitx-utils/keysym.h>
 #include <fcitx-utils/utf8.h>
 
@@ -1039,18 +1042,16 @@ bool ClakState::triggerShiftAutoFix() {
     }
 
     const auto& surr = ic_->surroundingText();
-    if (!surr.isValid()) {
-        utils::clakLog("triggerShiftAutoFix: surroundingText is invalid");
-        return false;
-    }
-
     uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
-    unsigned int cur = surr.cursor();
-    unsigned int anch = surr.anchor();
+    unsigned int cur = surr.isValid() ? surr.cursor() : 0;
+    unsigned int anch = surr.isValid() ? surr.anchor() : 0;
+    bool is_address_bar = (currentProfile() && currentProfile()->name() == "address-bar") ||
+                          (ic_->capabilityFlags().test(fcitx::CapabilityFlag::Url));
     utils::clakLog("triggerShiftAutoFix: cur=" + std::to_string(cur) + " anch=" + std::to_string(anch) +
-                   " text_len=" + std::to_string(surr.text().size()));
+                   " text_len=" + std::to_string(surr.isValid() ? surr.text().size() : 0) +
+                   " is_addr_bar=" + std::to_string(is_address_bar));
 
-    // 1. Quick Undo check: if user tapped Shift within 2s of previous autofix
+    // quick undo check within 2s of previous autofix
     if (!last_autofix_original_.empty() && last_autofix_time_us_ > 0 &&
         (now_us - last_autofix_time_us_ < 2000000)) {
         utils::clakLog("triggerShiftAutoFix: undo requested to restore '" + last_autofix_original_ + "'");
@@ -1061,7 +1062,9 @@ bool ClakState::triggerShiftAutoFix() {
         last_autofix_time_us_ = 0;
 
         if (converted_chars > 0) {
-            ic_->deleteSurroundingText(-static_cast<int>(converted_chars), converted_chars);
+            if (cur >= converted_chars) {
+                ic_->deleteSurroundingText(-static_cast<int>(converted_chars), converted_chars);
+            }
             doCommitString(restore_text);
             return true;
         }
@@ -1069,35 +1072,63 @@ bool ClakState::triggerShiftAutoFix() {
 
     int method = clak_config_get_method(engine_->config());
 
-    // 2. Selection mode: cursor != anchor
-    if (cur != anch) {
-        std::string selected = utils::extractSelection(surr.text(), cur, anch);
-        if (selected.empty()) {
-            return false;
+    // selection mode: surrounding selection or primary selection fallback
+    std::string selected;
+    if (surr.isValid() && cur != anch) {
+        selected = utils::extractSelection(surr.text(), cur, anch);
+    } else if (is_address_bar || cur == 0 || !surr.isValid()) {
+        if (engine_ && engine_->instance()) {
+            auto* cb = engine_->instance()->addonManager().addon("clipboard");
+            if (cb) {
+                try {
+                    selected = cb->call<fcitx::IClipboard::primary>(ic_);
+                } catch (...) {
+                    selected.clear();
+                }
+            }
         }
+        if (selected.empty()) {
+            FILE* fp = popen("wl-paste --primary 2>/dev/null", "r");
+            if (fp) {
+                char buf[512];
+                while (fgets(buf, sizeof(buf), fp)) {
+                    selected += buf;
+                    if (selected.size() > 4096) break;
+                }
+                pclose(fp);
+                while (!selected.empty() && (selected.back() == '\n' || selected.back() == '\r')) {
+                    selected.pop_back();
+                }
+            }
+        }
+        if (!selected.empty()) {
+            utils::clakLog("triggerShiftAutoFix: retrieved primary selection: '" + selected + "'");
+        }
+    }
+
+    if (!selected.empty()) {
         int changed = 0;
         char* fixed = clak_autofix_text(selected.c_str(), method, 1, &changed);
-        if (!fixed) {
-            return false;
-        }
-        std::string fixed_str = fixed;
-        clak_free_string(fixed);
+        if (fixed) {
+            std::string fixed_str = fixed;
+            clak_free_string(fixed);
 
-        if (changed != 0 && fixed_str != selected) {
-            last_autofix_original_ = selected;
-            last_autofix_converted_chars_ = utils::utf8CharCount(fixed_str);
-            last_autofix_time_us_ = now_us;
+            if (changed != 0 && fixed_str != selected) {
+                last_autofix_original_ = selected;
+                last_autofix_converted_chars_ = utils::utf8CharCount(fixed_str);
+                last_autofix_time_us_ = now_us;
 
-            utils::clakLog("triggerShiftAutoFix (selection): '" + selected + "' -> '" + fixed_str + "'");
-            // commit string replaces selection directly in wayland and x11
-            doCommitString(fixed_str);
-            return true;
+                utils::clakLog("triggerShiftAutoFix (selection): '" + selected + "' -> '" + fixed_str + "'");
+                // commit string replaces selection directly in wayland and x11
+                doCommitString(fixed_str);
+                return true;
+            }
         }
         return false;
     }
 
-    // 3. Word-before-cursor mode: cursor == anchor
-    if (cur > 0) {
+    // word-before-cursor mode: cursor == anchor and cur > 0
+    if (surr.isValid() && cur > 0) {
         std::string wordBefore = utils::extractWordBeforeCursor(surr.text(), cur);
         if (wordBefore.empty()) {
             return false;
