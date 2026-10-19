@@ -758,6 +758,12 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
         return;
     }
 
+    std::string fallback = (ic_ && !ic_->program().empty()) ? ic_->program() : "";
+    modal_handler_.updateStatus(fallback);
+    if (modal_handler_.handleKey(key, [this]() { reset(); })) {
+        return;
+    }
+
     bool is_cursor_move = key.isCursorMove() || (sym >= FcitxKey_Home && sym <= FcitxKey_End);
     bool is_special_nav = sym == FcitxKey_Escape ||
                           sym == FcitxKey_Delete || sym == FcitxKey_KP_Delete ||

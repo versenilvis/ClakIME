@@ -1,5 +1,6 @@
 #include "apps/modal_editor.h"
 #include "apps/terminal.h"
+#include "apps/ide.h"
 #include <vector>
 #include <unordered_set>
 #include <fstream>
@@ -98,7 +99,7 @@ bool isEditorActive(const window::WindowInfo& win) {
     std::string lower_class = win.win_class;
     for (char& c : lower_class) c = tolower(c);
 
-    bool is_term = apps::isTerminalApp(lower_class);
+    bool is_term = apps::isTerminalApp(lower_class) || apps::isVSCodeApp(lower_class);
     bool is_gui_editor = (lower_class.find("neovide") != std::string::npos ||
                           lower_class.find("gvim") != std::string::npos);
     if (!is_term && !is_gui_editor) {
