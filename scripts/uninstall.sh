@@ -156,7 +156,7 @@ run_simulation() {
     [ -d "${HOME}/.local/share/clak" ] && has_user=1
     [ -n "$(find "${HOME}/.local/share/icons" -name '*clak*' -print -quit 2>/dev/null)" ] && has_user=1
 
-    [ -f "/usr/lib/fcitx5/libclak.so" ] && has_system=1
+    ([ -f "/usr/lib/fcitx5/libclak.so" ] || [ -f "/usr/lib64/fcitx5/libclak.so" ] || [ -f "/usr/lib/x86_64-linux-gnu/fcitx5/libclak.so" ]) && has_system=1
     [ -f "/usr/bin/clak" ] && has_system=1
     [ -f "/usr/bin/clak-gui" ] && has_system=1
     [ -f "/usr/share/applications/clak-gui.desktop" ] && has_system=1
@@ -251,7 +251,7 @@ run_uninstall() {
     [ -d "${HOME}/.local/share/clak" ] && has_user_files=1
     [ -n "$(find "${HOME}/.local/share/icons" -name '*clak*' -print -quit 2>/dev/null)" ] && has_user_files=1
 
-    [ -f "/usr/lib/fcitx5/libclak.so" ] && has_sys_files=1
+    ([ -f "/usr/lib/fcitx5/libclak.so" ] || [ -f "/usr/lib64/fcitx5/libclak.so" ] || [ -f "/usr/lib/x86_64-linux-gnu/fcitx5/libclak.so" ]) && has_sys_files=1
     [ -f "/usr/bin/clak" ] && has_sys_files=1
     [ -f "/usr/bin/clak-gui" ] && has_sys_files=1
     [ -f "/usr/share/applications/clak-gui.desktop" ] && has_sys_files=1
@@ -314,6 +314,7 @@ run_uninstall() {
         run_sudo rm -f "/usr/share/applications/clak-gui.desktop"
         run_sudo rm -f "/usr/lib/fcitx5/libclak.so"
         run_sudo rm -f "/usr/lib/x86_64-linux-gnu/fcitx5/libclak.so"
+        run_sudo rm -f "/usr/lib64/fcitx5/libclak.so"
         run_sudo rm -f "/usr/share/fcitx5/addon/clak.conf"
         run_sudo rm -f "/usr/share/fcitx5/inputmethod/clak.conf"
         run_sudo find "/usr/share/icons" -type f -name "*clak*" -delete 2>/dev/null || true

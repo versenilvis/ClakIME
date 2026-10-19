@@ -302,7 +302,7 @@ detect_install_source() {
     fi
 
     # 5. system wide directory
-    if [ -f "/usr/lib/fcitx5/libclak.so" ] || [ -f "/usr/local/lib/fcitx5/libclak.so" ] || [ -f "/usr/lib/x86_64-linux-gnu/fcitx5/libclak.so" ]; then
+    if [ -f "/usr/lib/fcitx5/libclak.so" ] || [ -f "/usr/lib64/fcitx5/libclak.so" ] || [ -f "/usr/local/lib/fcitx5/libclak.so" ] || [ -f "/usr/lib/x86_64-linux-gnu/fcitx5/libclak.so" ]; then
         echo "system"
         return
     fi
@@ -754,6 +754,12 @@ run_update() {
         # symlink into debian/ubuntu multiarch path for fcitx5
         run_sudo mkdir -p "/usr/lib/x86_64-linux-gnu/fcitx5"
         run_sudo ln -sf "${lib_dest}/libclak.so" "/usr/lib/x86_64-linux-gnu/fcitx5/libclak.so" 2>/dev/null || true
+
+        # symlink into fedora/rhel/suse 64-bit library path for fcitx5
+        if [ -d "/usr/lib64" ]; then
+            run_sudo mkdir -p "/usr/lib64/fcitx5"
+            run_sudo ln -sf "${lib_dest}/libclak.so" "/usr/lib64/fcitx5/libclak.so" 2>/dev/null || true
+        fi
 
         if [ -f "$cli_src" ]; then
             run_sudo mkdir -p "/usr/bin"

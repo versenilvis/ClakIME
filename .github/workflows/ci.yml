@@ -90,7 +90,9 @@ jobs:
             setup: |
               dnf install -y \
                 gcc-c++ cmake ninja-build extra-cmake-modules fcitx5-devel \
-                libinput-devel systemd-devel pkgconfig cargo rust git
+                libinput-devel systemd-devel pkgconfig curl git
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+              echo "$HOME/.cargo/bin" >> $GITHUB_PATH
             cmake_args: "-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DENABLE_GUI=OFF"
             test_gui: false
     container:
