@@ -742,6 +742,7 @@ fn test_smart_autocorrect_in_ime() {
     assert_eq!(simulate_typing_autocorrect("bnja "), "bạn ");
     assert_eq!(simulate_typing_autocorrect("khnog "), "không ");
     assert_eq!(simulate_typing_autocorrect("kieur "), "kiểu ");
+    assert_eq!(simulate_typing_autocorrect("dudowjc "), "được ");
 
     // english words must never be autocorrected
     assert_eq!(simulate_typing_autocorrect("chief "), "chief ");
@@ -769,4 +770,36 @@ fn test_smart_autocorrect_action_and_no_backspace_hijack() {
     // backspace after space is NOT hijacked (normal backspace behavior)
     let act_bs = ctx.process_key(0xff08, "", false, None, 0, 0);
     assert_eq!(act_bs.action_type, ACTION_FORWARD);
+}
+
+#[test]
+fn test_typing_dudowjc_with_default_config() {
+    let mut ctx = ClakContext::new(Method::Telex);
+    let cfg = clak_engine::config::ClakConfig::load();
+    ctx.apply_config(&cfg);
+    let mut doc = String::new();
+    for ch in "dudowjc ".chars() {
+        let key_str = ch.to_string();
+        let cur = doc.chars().count();
+        let action = ctx.process_key(ch as u32, &key_str, false, Some(&doc), cur, cur);
+        match action.action_type {
+            ACTION_FORWARD => doc.push(ch),
+            ACTION_COMMIT => {
+                let s = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
+                doc.push_str(s);
+            }
+            ACTION_REPLACE | ACTION_REPLACE_SURROUNDING | ACTION_ADDRESS_BAR_FIX | ACTION_AUTOCORRECT => {
+                let del = action.delete_count;
+                let s = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
+                let mut doc_chars: Vec<char> = doc.chars().collect();
+                for _ in 0..del {
+                    doc_chars.pop();
+                }
+                doc = doc_chars.into_iter().collect();
+                doc.push_str(s);
+            }
+            _ => {}
+        }
+    }
+    assert_eq!(doc, "được ");
 }

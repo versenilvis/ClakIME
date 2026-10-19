@@ -191,6 +191,7 @@ pub(crate) fn has_consecutive_modifiers(input: &str) -> bool {
 pub(crate) fn has_vn_markers(input: &str) -> bool {
     let lower = input.to_lowercase();
     let dd_marker = lower.starts_with("dd")
+        || (lower.starts_with("dud") && lower.contains('o'))
         || lower.match_indices("dd").any(|(i, _)| {
             i > 0
                 && !matches!(

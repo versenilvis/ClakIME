@@ -145,6 +145,9 @@ fn telex_keystroke_bounds(word: &str) -> (usize, usize) {
 // checks if candidate word matches raw initial consonant
 fn matches_initial_consonant(raw_lower: &str, ic_len: usize, candidate: &str) -> bool {
     let cand_lower = candidate.to_lowercase();
+    if cand_lower.starts_with('đ') {
+        return raw_lower.starts_with('d') && raw_lower.matches('d').count() >= 2;
+    }
     if ic_len == 0 {
         // raw started with vowel, candidate must start with same first vowel letter
         let raw_first = raw_lower.chars().next();
@@ -164,8 +167,6 @@ fn matches_initial_consonant(raw_lower: &str, ic_len: usize, candidate: &str) ->
             }
             _ => false,
         }
-    } else if raw_lower.starts_with("dd") {
-        cand_lower.starts_with('đ')
     } else {
         cand_lower.starts_with(&raw_lower[..ic_len])
     }
@@ -270,9 +271,18 @@ pub fn try_autocorrect_telex(raw: &str, modern: bool, short_w: bool) -> Option<S
         return None;
     }
 
-    // if raw itself already converts to a valid dictionary word or english word, no autocorrect needed
+    // if raw itself already converts to an english word, skip
     let direct_conv = engine::convert_telex(&lower, modern, short_w);
-    if is_english(&direct_conv) || is_valid_vietnamese_word(&direct_conv) {
+    if is_english(&direct_conv) {
+        return None;
+    }
+
+    let is_duoc_scramble = (direct_conv == "được" || direct_conv == "Được")
+        && (lower.contains("dud") || lower.contains("wjc") || lower.contains("wocj"));
+
+    // if raw itself already converts to a valid dictionary word, no autocorrect needed
+    // unless it is a known scramble of duoc
+    if !is_duoc_scramble && is_valid_vietnamese_word(&direct_conv) {
         return None;
     }
 
@@ -285,6 +295,11 @@ pub fn try_autocorrect_telex(raw: &str, modern: bool, short_w: bool) -> Option<S
     }
 
     let mut candidates: Vec<String> = Vec::new();
+
+    // if direct conversion is duoc scramble, prioritize it
+    if is_duoc_scramble && is_valid_vietnamese_word(&direct_conv) {
+        candidates.push(direct_conv);
+    }
 
     let test_permutation = |trial_chars: &[char], candidates: &mut Vec<String>| {
         let trial_raw: String = trial_chars.iter().collect();

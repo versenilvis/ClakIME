@@ -57,6 +57,14 @@ fn test_scrambled_triphthong_kieur_and_nhieuf() {
 }
 
 #[test]
+fn test_scrambled_dudowjc_to_duoc() {
+    assert_eq!(try_autocorrect_telex("dudowjc", true, false), Some("được".to_string()));
+    assert_eq!(try_autocorrect_telex("Dudowjc", true, false), Some("Được".to_string()));
+    assert_eq!(try_autocorrect_telex("dduowjc", true, false), Some("được".to_string()));
+    assert_eq!(try_autocorrect_telex("Dduowjc", true, false), Some("Được".to_string()));
+}
+
+#[test]
 fn test_scrambled_nguwoif_engine_native() {
     // answering the user's question: "nguwoif (thiếu một w), mình chưa biết engine có ra người không"
     // YES: clak engine horn propagation automatically handles nguwoif natively!
