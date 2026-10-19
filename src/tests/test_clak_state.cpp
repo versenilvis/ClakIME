@@ -452,7 +452,7 @@ TEST_F(ClakStateTest, GivenSteamApp_StaggersMultipleBackspacesWithTimers) {
     EXPECT_EQ(ic.commits.back(), "ương");
 }
 
-TEST_F(ClakStateTest, GivenSelection_WhenCursorMoveKeyReceived_ForwardsKeyDirectly) {
+TEST_F(ClakStateTest, GivenSelection_WhenCursorMoveKeyReceived_DoesNotFilterForNativeSelection) {
     MockInputContext ic(instance_->inputContextManager(), "test-app");
     ime::ClakState state(engine_.get(), &ic);
 
@@ -461,19 +461,16 @@ TEST_F(ClakStateTest, GivenSelection_WhenCursorMoveKeyReceived_ForwardsKeyDirect
     fcitx::KeyEvent event_right(&ic, key_right, false);
     state.keyEvent(event_right);
 
-    EXPECT_TRUE(event_right.filtered());
-    ASSERT_EQ(ic.forwarded_keys.size(), 1);
-    EXPECT_EQ(ic.forwarded_keys[0].sym(), FcitxKey_Right);
-    EXPECT_TRUE(ic.forwarded_keys[0].states().test(fcitx::KeyState::Shift));
+    // cursor move and selection keys must pass through natively so app handles Shift-selection
+    EXPECT_FALSE(event_right.filtered());
+    EXPECT_TRUE(ic.forwarded_keys.empty());
 
     fcitx::Key key_down(FcitxKey_Down, fcitx::KeyState::Shift);
     fcitx::KeyEvent event_down(&ic, key_down, false);
     state.keyEvent(event_down);
 
-    EXPECT_TRUE(event_down.filtered());
-    ASSERT_EQ(ic.forwarded_keys.size(), 2);
-    EXPECT_EQ(ic.forwarded_keys[1].sym(), FcitxKey_Down);
-    EXPECT_TRUE(ic.forwarded_keys[1].states().test(fcitx::KeyState::Shift));
+    EXPECT_FALSE(event_down.filtered());
+    EXPECT_TRUE(ic.forwarded_keys.empty());
 }
 
 } // namespace test

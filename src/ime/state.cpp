@@ -913,10 +913,6 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
         }
 
         if (is_cursor_move) {
-            // forward cursor move keys directly to avoid dropped events in wayland/chromium
-            utils::clakLog("forward cursor move: sym=" + std::to_string(sym) + " shift=" + std::to_string(is_shift));
-            ic_->forwardKey(key);
-            keyEvent.filterAndAccept();
             return;
         }
 
