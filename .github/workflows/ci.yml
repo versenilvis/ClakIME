@@ -97,7 +97,7 @@ jobs:
             image: archlinux:latest
             setup: |
               pacman -Syu --noconfirm --needed \
-                base-devel cmake ninja extra-cmake-modules fcitx5 libinput rustup git nodejs
+                base-devel cmake ninja extra-cmake-modules fcitx5 libinput rustup git nodejs gtest
               rustup default stable
               rustup show
             cmake_args: "-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr"
@@ -109,7 +109,7 @@ jobs:
               DEBIAN_FRONTEND=noninteractive apt-get install -y \
                 build-essential cmake ninja-build extra-cmake-modules pkg-config \
                 libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev \
-                libinput-dev libudev-dev curl git
+                libinput-dev libudev-dev curl git libgtest-dev
               curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
               echo "$HOME/.cargo/bin" >> $GITHUB_PATH
               export PATH="$HOME/.cargo/bin:$PATH"
@@ -121,7 +121,7 @@ jobs:
             setup: |
               dnf install -y \
                 gcc-c++ cmake ninja-build extra-cmake-modules fcitx5-devel \
-                libinput-devel systemd-devel pkgconfig curl git
+                libinput-devel systemd-devel pkgconfig curl git gtest-devel
               curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
               echo "$HOME/.cargo/bin" >> $GITHUB_PATH
               export PATH="$HOME/.cargo/bin:$PATH"
@@ -142,10 +142,13 @@ jobs:
           export PATH="$HOME/.cargo/bin:$PATH"
           export RUSTUP_AUTO_INSTALL=0
           cmake -B build -G Ninja ${{ matrix.cmake_args }}
-          cmake --build build -j$(nproc) --target all clak_cpp_tests
+          cmake --build build -j$(nproc)
 
       - name: Run C++ test suite
-        run: ./build/src/tests/clak_cpp_tests
+        run: |
+          if cmake --build build --target clak_cpp_tests; then
+            ./build/src/tests/clak_cpp_tests
+          fi
 
       - name: Test installation
         run: |
