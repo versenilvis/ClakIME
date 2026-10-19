@@ -362,7 +362,8 @@ bool ClakState::handleKey(const fcitx::Key& key) {
     bool is_draftjs = isDraftJsEditor();
     bool is_gecko = config::isGeckoApp(app);
 
-    bool has_surrounding = ic_->capabilityFlags().test(fcitx::CapabilityFlag::SurroundingText);
+    bool has_surrounding = currentProfile()->allowsSurroundingText() &&
+                           ic_->capabilityFlags().test(fcitx::CapabilityFlag::SurroundingText);
     const auto& surr = ic_->surroundingText();
 
     if (sym == FcitxKey_BackSpace && has_surrounding && surr.isValid()) {
@@ -662,7 +663,8 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
     syncConfig();
 
     utils::clakLog("keyEvent: sym=" + std::to_string(key.sym()) + " ('" + key_str + "') app='" + app +
-                   "' enabled=" + std::to_string(engine_->isAppEnabled(app)) +
+                   "' term_cap=" + std::to_string(ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal)) +
+                   " enabled=" + std::to_string(engine_->isAppEnabled(app)) +
                    " ctrl=" + std::to_string(is_ctrl) + " shift=" + std::to_string(is_shift) +
                    " alt=" + std::to_string(is_alt) + " super=" + std::to_string(is_super) +
                    " shortcut='" + shortcut + "'");
