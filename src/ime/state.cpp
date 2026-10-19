@@ -1084,15 +1084,12 @@ bool ClakState::triggerShiftAutoFix() {
         clak_free_string(fixed);
 
         if (changed != 0 && fixed_str != selected) {
-            size_t sel_len = (cur > anch) ? (cur - anch) : (anch - cur);
-            int offset = (cur > anch) ? -static_cast<int>(sel_len) : 0;
-
             last_autofix_original_ = selected;
             last_autofix_converted_chars_ = utils::utf8CharCount(fixed_str);
             last_autofix_time_us_ = now_us;
 
             utils::clakLog("triggerShiftAutoFix (selection): '" + selected + "' -> '" + fixed_str + "'");
-            ic_->deleteSurroundingText(offset, sel_len);
+            // commit string replaces selection directly in wayland and x11
             doCommitString(fixed_str);
             return true;
         }

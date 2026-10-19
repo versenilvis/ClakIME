@@ -486,6 +486,27 @@ TEST_F(ClakStateTest, GivenSelection_WhenShiftTapped_AutoFixesSelection) {
 
     ASSERT_FALSE(ic.commits.empty());
     EXPECT_EQ(ic.commits.back(), "đây là một bài toán khó");
+    EXPECT_TRUE(ic.deletions.empty());
+}
+
+TEST_F(ClakStateTest, GivenMultilinePartialSelection_WhenShiftTapped_ReplacesOnlySelectedRange) {
+    clak_config_set_shift_autofix(const_cast<ClakConfig*>(engine_->config()), true);
+
+    MockInputContext ic(instance_->inputContextManager(), "test-app");
+    ic.auto_update_surrounding = true;
+    std::string initial = "ddaay laf moot tinhs nawng hay\nddaay laf";
+    // anchor at 31 (start of 2nd line), cursor at 40 (end of 2nd line)
+    ic.setSurrounding(initial, 40, 31);
+    ime::ClakState state(engine_.get(), &ic);
+
+    // tap Shift
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyStates(), false, &state);
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyStates(), true, &state);
+
+    EXPECT_TRUE(ic.deletions.empty());
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "đây là");
+    EXPECT_EQ(ic.surroundingText().text(), "ddaay laf moot tinhs nawng hay\nđây là");
 }
 
 TEST_F(ClakStateTest, GivenRecentAutoFix_WhenShiftTappedAgain_UndoesToOriginal) {

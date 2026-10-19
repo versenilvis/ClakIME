@@ -20,16 +20,27 @@ void MockInputContext::commitStringImpl(const std::string& text) {
     if (auto_update_surrounding && surroundingText().isValid()) {
         const std::string& cur_text = surroundingText().text();
         unsigned int cur = surroundingText().cursor();
-        std::string new_text;
-        auto it = cur_text.begin();
-        for (unsigned int i = 0; i < cur && it != cur_text.end(); ++i) {
+        unsigned int anch = surroundingText().anchor();
+        unsigned int start_char = std::min(cur, anch);
+        unsigned int end_char = std::max(cur, anch);
+
+        auto it_start = cur_text.begin();
+        for (unsigned int i = 0; i < start_char && it_start != cur_text.end(); ++i) {
             uint32_t c = 0;
-            it = fcitx::utf8::getNextChar(it, cur_text.end(), &c);
+            it_start = fcitx::utf8::getNextChar(it_start, cur_text.end(), &c);
         }
-        size_t byte_idx = std::distance(cur_text.begin(), it);
-        new_text = cur_text.substr(0, byte_idx) + text + cur_text.substr(byte_idx);
+        size_t byte_start = std::distance(cur_text.begin(), it_start);
+
+        auto it_end = it_start;
+        for (unsigned int i = start_char; i < end_char && it_end != cur_text.end(); ++i) {
+            uint32_t c = 0;
+            it_end = fcitx::utf8::getNextChar(it_end, cur_text.end(), &c);
+        }
+        size_t byte_end = std::distance(cur_text.begin(), it_end);
+
+        std::string new_text = cur_text.substr(0, byte_start) + text + cur_text.substr(byte_end);
         size_t added_chars = fcitx::utf8::length(text);
-        surroundingText().setText(new_text, cur + added_chars, cur + added_chars);
+        surroundingText().setText(new_text, start_char + added_chars, start_char + added_chars);
     }
     if (on_commit) {
         on_commit(text);
