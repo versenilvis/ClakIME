@@ -509,9 +509,39 @@ pub fn is_valid_cvc(s: &str) -> bool {
         }
     }
     if lc_mask != 0 {
-        return is_valid_vc(vo_mask, lc_mask);
+        if !is_valid_vc(vo_mask, lc_mask) {
+            return false;
+        }
+        // stop codas (c, ch, p, t) cannot take tone 1, 3, or 4
+        let is_stop = matches!(lc.as_slice(), ['c'] | ['c', 'h'] | ['p'] | ['t']);
+        if is_stop {
+            let has_invalid_tone = s.chars().any(|c| {
+                let t = tone_of(c);
+                t == 1 || t == 3 || t == 4
+            });
+            if has_invalid_tone {
+                return false;
+            }
+        }
+        return true;
     }
     true
+}
+
+pub fn is_incomplete_stop_coda(s: &str) -> bool {
+    let (_, vo, lc) = split_cvc(s);
+    if vo.is_empty() {
+        return false;
+    }
+    let is_stop = matches!(lc.as_slice(), ['c'] | ['c', 'h'] | ['p'] | ['t']);
+    if !is_stop {
+        return false;
+    }
+    let has_valid_tone = s.chars().any(|c| {
+        let t = tone_of(c);
+        t == 2 || t == 5
+    });
+    !has_valid_tone
 }
 
 #[cfg(test)]

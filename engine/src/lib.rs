@@ -75,6 +75,9 @@ impl ClakCore {
     pub fn set_auto_restore(&mut self, v: bool) {
         self.auto_restore = v;
     }
+    pub fn auto_restore(&self) -> bool {
+        self.auto_restore
+    }
     pub fn set_dict(&mut self, v: bool) {
         self.dict = v;
     }
@@ -166,6 +169,10 @@ pub(crate) fn has_consecutive_modifiers(input: &str) -> bool {
         || lower.contains("xx")
         || lower.contains("jj")
         || lower.contains("ww")
+        || lower.contains("aa")
+        || lower.contains("ee")
+        || lower.contains("oo")
+        || lower.contains("dd")
 }
 
 pub(crate) fn has_vn_markers(input: &str) -> bool {

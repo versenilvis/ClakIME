@@ -249,7 +249,9 @@ fn simulate_typing(input: &str) -> String {
                 let s = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
                 doc.push_str(s);
             }
-            ACTION_REPLACE_SURROUNDING | ACTION_ADDRESS_BAR_FIX | ACTION_UINPUT_REPLACE => {
+            ACTION_REPLACE
+                | ACTION_REPLACE_SURROUNDING
+                | ACTION_ADDRESS_BAR_FIX => {
                 let del = action.delete_count;
                 let s = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
                 let mut doc_chars: Vec<char> = doc.chars().collect();
@@ -279,7 +281,9 @@ fn simulate_typing_fallback(input: &str) -> String {
                 let s = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
                 doc.push_str(s);
             }
-            ACTION_REPLACE_SURROUNDING | ACTION_ADDRESS_BAR_FIX | ACTION_UINPUT_REPLACE => {
+            ACTION_REPLACE
+                | ACTION_REPLACE_SURROUNDING
+                | ACTION_ADDRESS_BAR_FIX => {
                 let del = action.delete_count;
                 let s = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
                 let mut doc_chars: Vec<char> = doc.chars().collect();
@@ -644,4 +648,47 @@ fn test_twitter_draftjs_uppercase_dd_to_capital_d_stroke() {
     let act2 = ctx.process_key(b'D' as u32, "D", false, Some("D\n"), 1, 1);
     assert_eq!(act2.action_type, ACTION_REPLACE);
     assert_eq!(ctx.last_composed, "Đ");
+}
+
+#[test]
+fn test_delayed_circumflex_and_auto_restore() {
+    // detej produces dệt
+    assert_eq!(simulate_typing("detej"), "dệt");
+    assert_eq!(simulate_typing_fallback("detej"), "dệt");
+
+    // detec auto-restores to detec, detect produces detect
+    assert_eq!(simulate_typing("detect"), "detect");
+    assert_eq!(simulate_typing_fallback("detect"), "detect");
+
+    // detee cleanly unmerges to dete without triple e
+    assert_eq!(simulate_typing("detee"), "dete");
+    assert_eq!(simulate_typing_fallback("detee"), "dete");
+
+    // space after incomplete stop coda restores to dete 
+    assert_eq!(simulate_typing("dete "), "dete ");
+    assert_eq!(simulate_typing_fallback("dete "), "dete ");
+
+    // enter after incomplete stop coda restores to dete\n
+    assert_eq!(simulate_typing("dete\n"), "dete\n");
+    assert_eq!(simulate_typing_fallback("dete\n"), "dete\n");
+
+    // completed stop codas keep their vietnamese form on space
+    assert_eq!(simulate_typing("detej "), "dệt ");
+    assert_eq!(simulate_typing_fallback("detej "), "dệt ");
+
+    assert_eq!(simulate_typing("detes "), "dết ");
+    assert_eq!(simulate_typing_fallback("detes "), "dết ");
+
+    // non-stop codas keep valid vietnamese words on space
+    assert_eq!(simulate_typing("tooi "), "tôi ");
+    assert_eq!(simulate_typing_fallback("tooi "), "tôi ");
+
+    assert_eq!(simulate_typing("ddi "), "đi ");
+    assert_eq!(simulate_typing_fallback("ddi "), "đi ");
+
+    assert_eq!(simulate_typing("chata "), "chata ");
+    assert_eq!(simulate_typing_fallback("chata "), "chata ");
+
+    assert_eq!(simulate_typing("chatas "), "chất ");
+    assert_eq!(simulate_typing_fallback("chatas "), "chất ");
 }

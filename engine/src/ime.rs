@@ -178,6 +178,24 @@ impl ClakContext {
                     return self.replace(del_count, &del_str, &commit_text);
                 }
             }
+            if self.engine.auto_restore()
+                && !self.last_composed.is_empty()
+                && self.last_composed != self.raw_buffer
+                && crate::spelling::is_incomplete_stop_coda(&self.last_composed)
+            {
+                let del_count = self.last_composed.chars().count();
+                let del_str = self.last_composed.clone();
+                let mut commit_text = self.raw_buffer.clone();
+                if key_sym == 0xff09 {
+                    commit_text.push('\t');
+                } else {
+                    commit_text.push('\n');
+                }
+                self.reset();
+                self.just_deleted = false;
+                self.stale_surr = None;
+                return self.replace(del_count, &del_str, &commit_text);
+            }
             self.reset();
             self.just_deleted = false;
             self.stale_surr = None;
@@ -269,6 +287,21 @@ impl ClakContext {
                         return self.replace(1, " ", ". ");
                     }
                 }
+            }
+
+            if self.engine.auto_restore()
+                && !self.last_composed.is_empty()
+                && self.last_composed != self.raw_buffer
+                && crate::spelling::is_incomplete_stop_coda(&self.last_composed)
+            {
+                let del_count = self.last_composed.chars().count();
+                let del_str = self.last_composed.clone();
+                let mut commit_text = self.raw_buffer.clone();
+                commit_text.push_str(key_str);
+                self.reset();
+                self.just_deleted = false;
+                self.stale_surr = None;
+                return self.replace(del_count, &del_str, &commit_text);
             }
 
             self.reset();
