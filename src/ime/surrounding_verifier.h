@@ -22,7 +22,7 @@ public:
 
   void setExpectation(const std::string& wordBefore, size_t delChars, const std::string& added);
   void verify(const fcitx::SurroundingText& surr);
-  void reset();
+  void reset(bool hard_reset = false);
 
   bool isPending() const { return verify_.pending; }
   void clearPending() { verify_.pending = false; }

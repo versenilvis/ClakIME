@@ -26,6 +26,7 @@ public:
 
   void keyEvent(fcitx::KeyEvent& keyEvent);
   void reset(bool force = false);
+  void resetHard();
   bool isBrowser() const;
   bool isGecko() const;
   bool isSteam() const;
@@ -46,7 +47,7 @@ public:
   bool allRealBackspacesReceived() const {
     return is_deleting_ && expected_backspaces_ > 0 && current_backspace_count_ >= (expected_backspaces_ - 1);
   }
-  void finishUinputDeletion();
+  void finishUinputDeletion(uint64_t rtt_us = 0);
   const std::string& pendingCommitString() const { return pending_commit_string_; }
   uint64_t adaptiveExtraWaitUs() const { return adaptive_extra_us_; }
   void observeTransactionLatency(uint64_t elapsed_us);
@@ -64,6 +65,7 @@ private:
   void doCommitString(const std::string& text);
   std::string classifyGroup(const std::string& app, const std::string& site, bool is_autofill, bool used_uinput);
   void logLatency(const std::string& group, uint64_t start_us, const std::string& action_type);
+  void logCsv(uint64_t rtt_us, const std::string& action);
 
   ClakEngine* engine_;
   fcitx::InputContext* ic_;
@@ -97,6 +99,7 @@ private:
   bool alt_pressed_first_{false};
   bool alt_shift_armed_{false};
   uint64_t last_selection_time_us_{0};
+  bool address_bar_has_space_{false};
 
   RepeatHandler repeat_handler_;
   ModalHandler modal_handler_;

@@ -45,12 +45,16 @@ void ClakState::reset(bool force) {
                        " pending='" + pending_commit_string_ + "' app=" + app + " site='" + site + "')");
         return;
     }
+    uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
     if (!force) {
         // guard against false reset from web apps within 50ms post-commit window
-        uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
         if (last_commit_time_us_ > 0 && (now_us - last_commit_time_us_) < 50000) {
             utils::clakLog("reset: ignored false reset within 50ms post-commit window (delta=" +
                            std::to_string(now_us - last_commit_time_us_) + "us) app=" + app + " site='" + site + "'");
+            return;
+        }
+        if (in_flight_sentinel_count_ > 0 && now_us <= sentinel_grace_until_us_) {
+            utils::clakLog("reset: ignored false reset while sentinel in flight app=" + app + " site='" + site + "'");
             return;
         }
         if (!key_buffer_.empty()) {
@@ -77,15 +81,18 @@ void ClakState::reset(bool force) {
     is_selection_deletion_ = false;
     expected_backspaces_ = 0;
     current_backspace_count_ = 0;
-    in_flight_sentinel_count_ = 0;
-    sentinel_grace_until_us_ = 0;
+    if (now_us > sentinel_grace_until_us_) {
+        in_flight_sentinel_count_ = 0;
+        sentinel_grace_until_us_ = 0;
+    }
     pending_commit_string_.clear();
     key_buffer_.clear();
     last_surr_cursor_ = 0;
     last_surr_text_len_ = 0;
     surr_keystroke_count_ = 0;
     if (force) {
-        verifier_.reset();
+        verifier_.reset(/*hard_reset=*/false);
+        address_bar_has_space_ = false;
     } else {
         verifier_.clearPending();
     }
@@ -96,16 +103,24 @@ void ClakState::reset(bool force) {
     }
 }
 
+void ClakState::resetHard() {
+    verifier_.reset(/*hard_reset=*/true);
+    reset(/*force=*/true);
+}
+
 std::string ClakState::appKey() {
-    if (ic_ && !ic_->program().empty()) {
+    if (ic_ && !ic_->program().empty() && ic_->program() != "gnome-shell") {
         return ic_->program();
     }
     if (ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal)) {
         return "terminal";
     }
     platform::WindowInfo win = platform::getActiveWindow();
-    if (!win.win_class.empty()) {
+    if (!win.win_class.empty() && win.win_class != "gnome-shell") {
         return win.win_class;
+    }
+    if (ic_ && !ic_->program().empty()) {
+        return ic_->program();
     }
     return "default";
 }
@@ -116,7 +131,9 @@ std::string ClakState::activeSite() {
         return cached_site_;
     }
     last_site_check_us_ = now_us;
-    std::string fallback = (ic_ && !ic_->program().empty()) ? ic_->program() : "";
+    std::string fallback = (ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal))
+                                ? "terminal"
+                                : ((ic_ && !ic_->program().empty() && ic_->program() != "gnome-shell") ? ic_->program() : "");
     platform::WindowInfo win = platform::getActiveWindow(fallback);
     cached_site_ = config::extractDomain(win.win_class, win.win_title);
     return cached_site_;
@@ -229,6 +246,16 @@ void ClakState::logLatency(const std::string& group, uint64_t start_us, const st
     utils::clakLog("[LATENCY] group=" + group + " delta_ms=" + std::to_string(delta_ms) + " action=" + action_type);
 }
 
+void ClakState::logCsv(uint64_t rtt_us, const std::string& action) {
+    if (op_start_us_ == 0) return;
+    uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
+    double delta_ms = (now_us >= op_start_us_) ? static_cast<double>(now_us - op_start_us_) / 1000.0 : 0.0;
+    std::string frontend = (ic_ && ic_->frontend()) ? ic_->frontend() : "unknown";
+    std::string app = appKey();
+    std::string group = op_group_.empty() ? (currentProfile() ? currentProfile()->name() : "unknown") : op_group_;
+    utils::logRttCsv(rtt_us, delta_ms, frontend, group, app, action);
+}
+
 void ClakState::observeTransactionLatency(uint64_t elapsed_us) {
     if (elapsed_us >= 35000) {
         if (adaptive_extra_us_ < 100000) {
@@ -276,27 +303,29 @@ void ClakState::arm_safety_timer() {
                 current_backspace_count_ = 0;
                 in_flight_sentinel_count_ = 0;
                 sentinel_grace_until_us_ = 0;
+                replayBufferedKeys();
                 if (!pending_commit_string_.empty()) {
                     doCommitString(pending_commit_string_);
                     pending_commit_string_.clear();
                 }
+                uinput::UinputTool::instance().consume_sentinel_emit_time_us();
+                logCsv(0, "TIMEOUT");
                 logLatency(op_group_, op_start_us_, "REPLACE_TIMEOUT");
                 op_start_us_ = 0;
-                replayBufferedKeys();
             }
             return true;
         }
     );
 }
 
-void ClakState::finishUinputDeletion() {
+void ClakState::finishUinputDeletion(uint64_t rtt_us) {
     if (!is_deleting_) return;
     if (safety_timer_) {
         safety_timer_.reset();
     }
     if (expected_backspaces_ > current_backspace_count_) {
         in_flight_sentinel_count_ = expected_backspaces_ - current_backspace_count_;
-        sentinel_grace_until_us_ = fcitx::now(CLOCK_MONOTONIC) + 50000;
+        sentinel_grace_until_us_ = fcitx::now(CLOCK_MONOTONIC) + 100000;
     }
     is_deleting_ = false;
     is_address_bar_fix_ = false;
@@ -304,18 +333,19 @@ void ClakState::finishUinputDeletion() {
     expected_backspaces_ = 0;
     current_backspace_count_ = 0;
 
-    if (!pending_commit_string_.empty()) {
-        doCommitString(pending_commit_string_);
-        pending_commit_string_.clear();
-    }
     if (op_start_us_ > 0) {
         uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
         uint64_t roundtrip_us = (now_us > op_start_us_) ? (now_us - op_start_us_) : 0;
         observeTransactionLatency(roundtrip_us);
     }
+    logCsv(rtt_us, "UINPUT");
     logLatency(op_group_, op_start_us_, "REPLACE");
     op_start_us_ = 0;
     replayBufferedKeys();
+    if (!pending_commit_string_.empty()) {
+        doCommitString(pending_commit_string_);
+        pending_commit_string_.clear();
+    }
 }
 
 void ClakState::replayBufferedKeys() {
@@ -351,6 +381,10 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                         has_ctrl_alt;
 
     if (is_reset_key) {
+        if (!pending_commit_string_.empty()) {
+            doCommitString(pending_commit_string_);
+            pending_commit_string_.clear();
+        }
         reset(/*force=*/false);
         return false;
     }
@@ -454,12 +488,28 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                    " site='" + site + "' -> " + action_name + " del=" + std::to_string(action.delete_count) +
                    " commit='" + std::string(action.commit_str ? action.commit_str : "") + "'");
 
+    if (!pending_commit_string_.empty() && action.action_type != CLAK_ACTION_FORWARD) {
+        doCommitString(pending_commit_string_);
+        pending_commit_string_.clear();
+    }
+
     switch (action.action_type) {
         case CLAK_ACTION_FORWARD:
             if (valid_surr) {
                 last_text_len_ = surr.cursor() + 1;
             } else {
                 last_text_len_ = 1;
+            }
+            if (!pending_commit_string_.empty()) {
+                if (!has_ctrl_alt && !key_str.empty() && sym < 0xff00) {
+                    pending_commit_string_ += key_str;
+                    logLatency(classifyGroup(app, site, false, false), op_start_us_, "FORWARD");
+                    op_start_us_ = 0;
+                    return true;
+                } else {
+                    doCommitString(pending_commit_string_);
+                    pending_commit_string_.clear();
+                }
             }
             if (currentProfile()->directCommitPrintableKey() && !has_ctrl_alt && !key_str.empty() && sym < 0xff00) {
                 doCommitString(key_str);
@@ -485,7 +535,11 @@ bool ClakState::handleKey(const fcitx::Key& key) {
         case CLAK_ACTION_REPLACE_SURROUNDING: {
             size_t real_bs = action.delete_count;
 
+            bool is_address_bar = (currentProfile() && currentProfile()->name() == "address-bar") ||
+                                  (ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Url));
+            bool address_bar_autofill = is_address_bar && (surr.isValid() ? isAutofillCertain(surr) : !address_bar_has_space_);
             bool is_autofill = (action.action_type == CLAK_ACTION_ADDRESS_BAR_FIX) ||
+                               address_bar_autofill ||
                                (isBrowser() && isAutofillCertain(surr));
             if (real_bs > 0 && surr.isValid() && surr.cursor() < real_bs) {
                 use_surrounding = false;
@@ -581,6 +635,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                             [this]() {
                                 pending_commit_string_.clear();
                                 is_deleting_ = false;
+                                logCsv(0, "SURROUNDING");
                                 logLatency(currentProfile()->name(), op_start_us_, "REPLACE");
                                 op_start_us_ = 0;
                                 replayBufferedKeys();
@@ -597,6 +652,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                             doCommitString(action.commit_str);
                         }
                     }
+                    logCsv(0, "SURROUNDING");
                     logLatency(currentProfile()->name(), op_start_us_, "REPLACE");
                     op_start_us_ = 0;
                     last_text_len_ = 0;
@@ -612,6 +668,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
             if ((!currentProfile()->hasCustomDeletion() || real_bs == 0) && action.commit_str && action.commit_str[0] != '\0') {
                 doCommitString(action.commit_str);
             }
+            logCsv(0, "COMMIT");
             logLatency(classifyGroup(app, site, false, false), op_start_us_, "REPLACE");
             op_start_us_ = 0;
             last_text_len_ = 0;
@@ -773,7 +830,9 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
         return;
     }
 
-    std::string fallback = (ic_ && !ic_->program().empty()) ? ic_->program() : "";
+    std::string fallback = (ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal))
+                                ? "terminal"
+                                : ((ic_ && !ic_->program().empty() && ic_->program() != "gnome-shell") ? ic_->program() : "");
     modal_handler_.updateStatus(fallback);
     if (modal_handler_.handleKey(key, [this]() { reset(); })) {
         return;
@@ -802,7 +861,15 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
             return;
         }
         keyEvent.filterAndAccept();
-        finishUinputDeletion();
+        uint64_t t0 = uinput::UinputTool::instance().consume_sentinel_emit_time_us();
+        uint64_t rtt_us = 0;
+        if (t0 > 0) {
+            uint64_t t1 = uinput::monotonic_now_us();
+            if (t1 >= t0) {
+                rtt_us = t1 - t0;
+            }
+        }
+        finishUinputDeletion(rtt_us);
         return;
     }
 
@@ -815,13 +882,15 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
             if (safety_timer_) {
                 safety_timer_.reset();
             }
+            if (expected_backspaces_ > current_backspace_count_) {
+                in_flight_sentinel_count_ = expected_backspaces_ - current_backspace_count_;
+                sentinel_grace_until_us_ = fcitx::now(CLOCK_MONOTONIC) + 100000;
+            }
             is_deleting_ = false;
             is_address_bar_fix_ = false;
             is_selection_deletion_ = false;
             expected_backspaces_ = 0;
             current_backspace_count_ = 0;
-            in_flight_sentinel_count_ = 0;
-            sentinel_grace_until_us_ = 0;
             pending_commit_string_.clear();
             key_buffer_.clear();
         }
@@ -887,6 +956,12 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
 
     if (repeat_handler_.heldKey().sym() != 0 && key.sym() != repeat_handler_.heldKey().sym()) {
         repeat_handler_.cancel();
+    }
+
+    if (sym == FcitxKey_space || sym == FcitxKey_KP_Space) {
+        address_bar_has_space_ = true;
+    } else if (sym == FcitxKey_Return || sym == FcitxKey_KP_Enter || sym == FcitxKey_Escape) {
+        address_bar_has_space_ = false;
     }
 
     if (!is_deleting_) {

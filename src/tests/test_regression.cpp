@@ -910,6 +910,102 @@ TEST_F(RegressionCorpusTest, test_regression_brave_fast_typing_stale_surrounding
     }
 }
 
+TEST_F(RegressionCorpusTest, test_regression_twitter_early_completion_preserves_sentinel_absorption) {
+    // When text-input reactivation completes uinput deletion early during DraftJS typing,
+    // subsequent reset or deactivate events must not wipe out in_flight_sentinel_count_,
+    // ensuring trailing sentinel backspaces are absorbed and never leak into the application.
+    platform::setMockActiveWindow(platform::WindowInfo{"google-chrome", "Home / X", 12345});
+    MockInputContext ic(instance_->inputContextManager(), "google-chrome");
+    auto* state = ic.propertyFor(&engine_->factory());
+
+    uinput::UinputTool::instance().setMockHandler([&](size_t, uint32_t, uint32_t, uint32_t) {
+        return true;
+    });
+
+    // Mark as DraftJS editor
+    ic.setSurrounding("\n\n", 2, 2);
+    ic.typeChar('b', state);
+    ic.typeChar('a', state);
+    ic.typeChar('i', state);
+    ic.typeChar('f', state); // REPLACE del=2, commit='ài', expected=3 backspaces (2 real + 1 sentinel)
+
+    // Receive first 2 real backspaces
+    ic.sendCleanBackspace(state);
+    ic.sendCleanBackspace(state);
+
+    // Text-input reactivates, completing deletion early
+    fcitx::InputContextEvent act_event(&ic, fcitx::EventType::InputContextFocusIn);
+    fcitx::InputMethodEntry dummy_entry("clak", "Clak", "vi", "clak");
+    engine_->activate(dummy_entry, act_event);
+
+    EXPECT_EQ(ic.commits.back(), "ài");
+
+    // Deactivate / reset event fires from compositor
+    fcitx::InputContextEvent deact_event(&ic, fcitx::EventType::InputContextFocusOut);
+    engine_->deactivate(dummy_entry, deact_event);
+    state->reset(/*force=*/true);
+
+    // The trailing sentinel backspace arrives from uinput
+    ic.clearHistory();
+    bool filtered = ic.sendCleanBackspace(state);
+
+    // The sentinel backspace MUST have been absorbed (filtered), not leaked!
+    EXPECT_TRUE(filtered);
+    EXPECT_TRUE(ic.forwarded_keys.empty());
+}
+
+TEST_F(RegressionCorpusTest, test_regression_buffered_forward_key_batches_with_pending_commit) {
+    // When typing fast in browsers/DraftJS, a vowel or space typed during uinput deletion
+    // must be batched into a single commitString with the pending replacement, preventing
+    // the second commit from overwriting the first in Wayland/Chromium.
+    platform::setMockActiveWindow(platform::WindowInfo{"helium", "tiktok.com", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "helium");
+    auto* state = ic.propertyFor(&engine_->factory());
+
+    // Initial word typing
+    ic.typeChar('m', state);
+    ic.typeChar('o', state);
+    ic.typeChar('o', state); // triggers REPLACE del=1, commit="ô", expected=2 backspaces
+
+    EXPECT_TRUE(state->isDeleting());
+
+    // User types 'i' while uinput deletion is in flight
+    ic.typeChar('i', state);
+
+    // Now sentinel backspaces arrive from uinput
+    ic.clearHistory();
+    ic.sendCleanBackspace(state);
+    ic.sendCleanBackspace(state); // completes deletion
+
+    EXPECT_FALSE(state->isDeleting());
+    // Must be committed as a single batched commit 'ôi', not separate 'ô' then 'i'
+    ASSERT_EQ(ic.commits.size(), 1u);
+    EXPECT_EQ(ic.commits[0], "ôi");
+
+    // Also test space buffered during replacement: 'toans '
+    state->reset(/*force=*/true);
+    ic.clearHistory();
+    ic.typeChar('t', state);
+    ic.typeChar('o', state);
+    ic.typeChar('a', state);
+    ic.typeChar('n', state);
+    ic.typeChar('s', state); // REPLACE del=2, commit="án"
+    EXPECT_TRUE(state->isDeleting());
+
+    // User buffers space while deletion is in flight
+    ic.typeChar(' ', state);
+
+    // Complete backspaces (2 real + 1 sentinel = 3 backspaces)
+    ic.clearHistory();
+    ic.sendCleanBackspace(state);
+    ic.sendCleanBackspace(state);
+    ic.sendCleanBackspace(state);
+
+    EXPECT_FALSE(state->isDeleting());
+    ASSERT_EQ(ic.commits.size(), 1u);
+    EXPECT_EQ(ic.commits[0], "án ");
+}
+
 } // namespace test
 } // namespace clak
 

@@ -176,9 +176,9 @@ TEST_F(ClakStateTest, GivenKeysBufferedDuringDelete_ReplaysInOriginalOrder) {
     ic.sendCleanBackspace(&state);
 
     EXPECT_FALSE(state.isDeleting());
-    ASSERT_EQ(ic.commits.size(), 2);
-    EXPECT_EQ(ic.commits[0], "đ");
-    EXPECT_EQ(ic.commits[1], " ba");
+    // Pending commit and buffered forward keys are batched into a single commit to prevent Wayland overwrites
+    ASSERT_EQ(ic.commits.size(), 1);
+    EXPECT_EQ(ic.commits[0], "đ ba");
 }
 
 TEST_F(ClakStateTest, GivenChromiumNormalPage_UsesSurroundingText) {

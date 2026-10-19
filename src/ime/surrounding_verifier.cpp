@@ -7,12 +7,14 @@
 namespace clak {
 namespace ime {
 
-void SurroundingVerifier::reset() {
+void SurroundingVerifier::reset(bool hard_reset) {
     verify_.pending = false;
-    mismatch_count_ = 0;
-    is_canvas_editor_ = false;
-    is_rich_text_editor_ = false;
-    is_draftjs_editor_ = false;
+    if (hard_reset) {
+        mismatch_count_ = 0;
+        is_canvas_editor_ = false;
+        is_rich_text_editor_ = false;
+        is_draftjs_editor_ = false;
+    }
 }
 
 bool SurroundingVerifier::isDraftJsEditor(const std::string& site) const {
