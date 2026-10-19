@@ -71,10 +71,16 @@
           devShells.default = pkgs.mkShell {
             packages = with pkgs; [
               cmake
+              ninja
+              pkg-config
               kdePackages.extra-cmake-modules
               fcitx5
+              libinput
+              systemd
               rustc
               cargo
+              rustfmt
+              clippy
               just
               git-cliff
             ];

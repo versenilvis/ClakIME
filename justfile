@@ -106,11 +106,17 @@ test-update args="":
 [group("quality")]
 check:
     cargo fmt --manifest-path engine/Cargo.toml -- --check
+    cargo fmt --manifest-path diagnostics/Cargo.toml -- --check
+    cargo fmt --manifest-path cli/Cargo.toml -- --check
+    cargo fmt --manifest-path ui/Cargo.toml -- --check
     cargo clippy --manifest-path engine/Cargo.toml -- -D warnings
+    cargo clippy --manifest-path diagnostics/Cargo.toml -- -D warnings
+    cargo clippy --manifest-path cli/Cargo.toml -- -D warnings
     cargo test --manifest-path engine/Cargo.toml
     cargo test --manifest-path diagnostics/Cargo.toml
     cargo test --manifest-path cli/Cargo.toml
     cargo test --manifest-path ui/Cargo.toml
+    @if [ ! -f build/build.ninja ] && [ ! -f build/Makefile ]; then cmake -B build; fi
     cmake --build build --target clak_cpp_tests
     ./build/src/tests/clak_cpp_tests
     cmake --build build
