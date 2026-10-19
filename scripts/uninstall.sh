@@ -147,7 +147,7 @@ run_simulation() {
     local has_config=0
     local has_fcitx_bak=0
 
-    [ -f "${HOME}/.local/lib/fcitx5/libclak.so" ] && has_user=1
+    ([ -f "${HOME}/.local/lib/fcitx5/libclak.so" ] || [ -f "${HOME}/.local/lib/x86_64-linux-gnu/fcitx5/libclak.so" ]) && has_user=1
     [ -f "${HOME}/.local/share/fcitx5/addon/clak.conf" ] && has_user=1
     [ -f "${HOME}/.local/share/fcitx5/inputmethod/clak.conf" ] && has_user=1
     [ -f "${HOME}/.local/bin/clak" ] && has_user=1
@@ -242,7 +242,7 @@ run_uninstall() {
     local has_wps=0
     local has_fcitx_bak=0
 
-    [ -f "${HOME}/.local/lib/fcitx5/libclak.so" ] && has_user_files=1
+    ([ -f "${HOME}/.local/lib/fcitx5/libclak.so" ] || [ -f "${HOME}/.local/lib/x86_64-linux-gnu/fcitx5/libclak.so" ]) && has_user_files=1
     [ -f "${HOME}/.local/share/fcitx5/addon/clak.conf" ] && has_user_files=1
     [ -f "${HOME}/.local/share/fcitx5/inputmethod/clak.conf" ] && has_user_files=1
     [ -f "${HOME}/.local/bin/clak" ] && has_user_files=1

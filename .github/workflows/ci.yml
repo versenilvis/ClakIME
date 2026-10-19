@@ -70,7 +70,8 @@ jobs:
             image: archlinux:latest
             setup: |
               pacman -Syu --noconfirm --needed \
-                base-devel cmake ninja extra-cmake-modules fcitx5 libinput rust git nodejs
+                base-devel cmake ninja extra-cmake-modules fcitx5 libinput rustup git nodejs
+              rustup default stable
             cmake_args: "-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr"
             test_gui: true
           - distro: ubuntu
