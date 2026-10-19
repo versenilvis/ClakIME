@@ -59,6 +59,28 @@ jobs:
           cargo test --manifest-path diagnostics/Cargo.toml --verbose
           cargo test --manifest-path cli/Cargo.toml --verbose
 
+  check-msrv:
+    name: Check MSRV (1.85 & 1.92)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install MSRV toolchains
+        run: |
+          rustup toolchain install 1.85.0 --profile minimal
+          rustup toolchain install 1.92.0 --profile minimal
+
+      - name: Check MSRV for engine, cli, diagnostics (1.85.0)
+        run: |
+          for c in engine diagnostics cli; do
+            cargo +1.85.0 test --no-run --locked --all-targets --manifest-path $c/Cargo.toml
+          done
+
+      - name: Check MSRV for ui (1.92.0)
+        run: |
+          cargo +1.92.0 test --no-run --locked --all-targets --manifest-path ui/Cargo.toml
+
   build-distros:
     name: Build & Test (${{ matrix.distro }})
     runs-on: ubuntu-latest
@@ -71,7 +93,8 @@ jobs:
             setup: |
               pacman -Syu --noconfirm --needed \
                 base-devel cmake ninja extra-cmake-modules fcitx5 libinput rustup git nodejs
-              rustup default stable
+              rustup toolchain install 1.94.1 --profile minimal
+              rustup default 1.94.1
             cmake_args: "-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr"
             test_gui: true
           - distro: ubuntu
@@ -82,7 +105,7 @@ jobs:
                 build-essential cmake ninja-build extra-cmake-modules pkg-config \
                 libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev \
                 libinput-dev libudev-dev curl git
-              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.94.1 --profile minimal
               echo "$HOME/.cargo/bin" >> $GITHUB_PATH
             cmake_args: "-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DENABLE_GUI=OFF"
             test_gui: false
@@ -92,7 +115,7 @@ jobs:
               dnf install -y \
                 gcc-c++ cmake ninja-build extra-cmake-modules fcitx5-devel \
                 libinput-devel systemd-devel pkgconfig curl git
-              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.94.1 --profile minimal
               echo "$HOME/.cargo/bin" >> $GITHUB_PATH
             cmake_args: "-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DENABLE_GUI=OFF"
             test_gui: false
@@ -107,6 +130,7 @@ jobs:
 
       - name: Build Clak
         run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
           cmake -B build -G Ninja ${{ matrix.cmake_args }}
           cmake --build build -j$(nproc)
 

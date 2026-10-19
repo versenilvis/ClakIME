@@ -11,6 +11,23 @@ force_update=0
 assume_yes=0
 tmp_dir=""
 
+# load shared path helpers if available
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
+if [ -n "$script_dir" ] && [ -f "${script_dir}/lib/paths.sh" ]; then
+    source "${script_dir}/lib/paths.sh"
+else
+    get_system_addon_dirs() {
+        echo "/usr/lib/fcitx5"
+        echo "/usr/lib/x86_64-linux-gnu/fcitx5"
+        echo "/usr/lib64/fcitx5"
+        echo "/usr/local/lib/fcitx5"
+    }
+    get_user_addon_dirs() {
+        echo "${HOME}/.local/lib/fcitx5"
+        echo "${HOME}/.local/lib/x86_64-linux-gnu/fcitx5"
+    }
+fi
+
 cleanup() {
     if [ -n "${tmp_dir:-}" ] && [ -d "$tmp_dir" ]; then
         rm -rf "$tmp_dir"
@@ -296,16 +313,20 @@ detect_install_source() {
     fi
 
     # 4. user local directory
-    if [ -f "${HOME}/.local/lib/fcitx5/libclak.so" ] || [ -f "${HOME}/.local/lib/x86_64-linux-gnu/fcitx5/libclak.so" ]; then
-        echo "user"
-        return
-    fi
+    for d in $(get_user_addon_dirs); do
+        if [ -f "$d/libclak.so" ]; then
+            echo "user"
+            return
+        fi
+    done
 
     # 5. system wide directory
-    if [ -f "/usr/lib/fcitx5/libclak.so" ] || [ -f "/usr/lib64/fcitx5/libclak.so" ] || [ -f "/usr/local/lib/fcitx5/libclak.so" ] || [ -f "/usr/lib/x86_64-linux-gnu/fcitx5/libclak.so" ]; then
-        echo "system"
-        return
-    fi
+    for d in $(get_system_addon_dirs); do
+        if [ -f "$d/libclak.so" ]; then
+            echo "system"
+            return
+        fi
+    done
 
     echo "unknown"
 }
@@ -751,15 +772,16 @@ run_update() {
         run_sudo chmod 755 "${lib_dest}/libclak.so"
         run_sudo chmod 644 "${addon_dest}/clak.conf" "${im_dest}/clak.conf"
 
-        # symlink into debian/ubuntu multiarch path for fcitx5
-        run_sudo mkdir -p "/usr/lib/x86_64-linux-gnu/fcitx5"
-        run_sudo ln -sf "${lib_dest}/libclak.so" "/usr/lib/x86_64-linux-gnu/fcitx5/libclak.so" 2>/dev/null || true
-
-        # symlink into fedora/rhel/suse 64-bit library path for fcitx5
-        if [ -d "/usr/lib64" ]; then
-            run_sudo mkdir -p "/usr/lib64/fcitx5"
-            run_sudo ln -sf "${lib_dest}/libclak.so" "/usr/lib64/fcitx5/libclak.so" 2>/dev/null || true
-        fi
+        # create symlinks for known system addon directories
+        for d in $(get_system_addon_dirs); do
+            if [ "$d" != "$lib_dest" ]; then
+                parent_dir="$(dirname "$d")"
+                if [ -d "$parent_dir" ]; then
+                    run_sudo mkdir -p "$d"
+                    run_sudo ln -sf "${lib_dest}/libclak.so" "$d/libclak.so" 2>/dev/null || true
+                fi
+            fi
+        done
 
         if [ -f "$cli_src" ]; then
             run_sudo mkdir -p "/usr/bin"
@@ -796,9 +818,7 @@ run_update() {
         # because fcitx5 only resolves relative Library paths against system PKGLIBDIR
         sed -i "s|^Library=.*|Library=${lib_dest}/libclak|" "${addon_dest}/clak.conf"
 
-        # symlink into debian/ubuntu multiarch path for fcitx5
-        mkdir -p "${HOME}/.local/lib/x86_64-linux-gnu/fcitx5"
-        ln -sf "${lib_dest}/libclak.so" "${HOME}/.local/lib/x86_64-linux-gnu/fcitx5/libclak.so" 2>/dev/null || true
+
 
         if [ -f "$cli_src" ]; then
             mkdir -p "${HOME}/.local/bin"
