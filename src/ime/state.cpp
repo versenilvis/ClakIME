@@ -716,7 +716,12 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
         if (is_shift_sym) {
             uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
             uint64_t hold_time_us = (shift_press_time_us_ > 0) ? (now_us - shift_press_time_us_) : 0;
-            bool single_tap = (shift_press_time_us_ > 0) && (hold_time_us < 250000) && !shift_other_key_pressed_ && !shift_mouse_clicked_;
+            bool single_tap = (shift_press_time_us_ > 0) && (hold_time_us < 350000) && !shift_other_key_pressed_ && !shift_mouse_clicked_;
+            utils::clakLog("shift release: hold_ms=" + std::to_string(hold_time_us / 1000) +
+                           " single_tap=" + std::to_string(single_tap) +
+                           " other_key=" + std::to_string(shift_other_key_pressed_) +
+                           " mouse=" + std::to_string(shift_mouse_clicked_) +
+                           " armed=" + std::to_string(ctrl_shift_armed_ || alt_shift_armed_));
             shift_press_time_us_ = 0;
             shift_other_key_pressed_ = false;
             shift_mouse_clicked_ = false;
@@ -1022,20 +1027,28 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
 
 bool ClakState::triggerShiftAutoFix() {
     if (!engine_->config() || !clak_config_get_shift_autofix(engine_->config())) {
+        utils::clakLog("triggerShiftAutoFix: shift_autofix is disabled in config");
         return false;
     }
-    if (!ic_ || ic_->capabilityFlags().test(fcitx::CapabilityFlag::Password)) {
+    if (!ic_) {
+        return false;
+    }
+    if (ic_->capabilityFlags().test(fcitx::CapabilityFlag::Password)) {
+        utils::clakLog("triggerShiftAutoFix: password field, skipping");
         return false;
     }
 
     const auto& surr = ic_->surroundingText();
     if (!surr.isValid()) {
+        utils::clakLog("triggerShiftAutoFix: surroundingText is invalid");
         return false;
     }
 
     uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
     unsigned int cur = surr.cursor();
     unsigned int anch = surr.anchor();
+    utils::clakLog("triggerShiftAutoFix: cur=" + std::to_string(cur) + " anch=" + std::to_string(anch) +
+                   " text_len=" + std::to_string(surr.text().size()));
 
     // 1. Quick Undo check: if user tapped Shift within 2s of previous autofix
     if (!last_autofix_original_.empty() && last_autofix_time_us_ > 0 &&
