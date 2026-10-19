@@ -153,15 +153,27 @@ jobs:
       - name: Test installation
         run: |
           DESTDIR=/tmp/clak-install cmake --install build
-          test -f /tmp/clak-install/usr/lib/fcitx5/libclak.so || test -f /tmp/clak-install/usr/lib/*-linux-gnu/fcitx5/libclak.so || test -f /tmp/clak-install/usr/lib64/fcitx5/libclak.so
+          FCITX5_ADDON_DIR=""
+          if command -v rpm >/dev/null 2>&1; then
+            FCITX5_ADDON_DIR=$(rpm -ql fcitx5 2>/dev/null | grep 'libclassicui\.so' | head -1 | xargs dirname)
+          elif command -v dpkg >/dev/null 2>&1; then
+            FCITX5_ADDON_DIR=$(dpkg -L fcitx5-modules fcitx5 2>/dev/null | grep 'libclassicui\.so' | head -1 | xargs dirname || true)
+          elif command -v pacman >/dev/null 2>&1; then
+            FCITX5_ADDON_DIR=$(pacman -Ql fcitx5 2>/dev/null | grep 'libclassicui\.so' | head -1 | awk '{print $2}' | xargs dirname)
+          fi
+          echo "Distro fcitx5 addon directory: ${FCITX5_ADDON_DIR}"
+          test -n "${FCITX5_ADDON_DIR}"
+          test -f "/tmp/clak-install${FCITX5_ADDON_DIR}/libclak.so"
           test -f /tmp/clak-install/usr/share/fcitx5/addon/clak.conf
           test -f /tmp/clak-install/usr/share/fcitx5/inputmethod/clak.conf
           if [ "${{ matrix.test_gui }}" = "true" ]; then
             test -f /tmp/clak-install/usr/bin/clak-gui
           fi
 
-      - name: Test installer simulation
-        run: bash scripts/install.sh --dry-run
+      - name: Test script simulations
+        run: |
+          bash scripts/install.sh --dry-run
+          bash scripts/uninstall.sh --dry-run
 
   check-nix:
     name: Nix Flake Check & Build

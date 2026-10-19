@@ -22,6 +22,28 @@ else
         echo "${HOME}/.local/lib/fcitx5"
         echo "${HOME}/.local/lib/x86_64-linux-gnu/fcitx5"
     }
+    check_package_owner() {
+        local target="$1"
+        [ -e "$target" ] || return 1
+        if command -v pacman >/dev/null 2>&1; then
+            local pkg
+            pkg=$(pacman -Qo "$target" 2>/dev/null | awk '{print $5}' || true)
+            [ -n "$pkg" ] && echo "pacman:${pkg}" && return 0
+        fi
+        if command -v dpkg >/dev/null 2>&1; then
+            local dpkg_out
+            dpkg_out=$(dpkg -S "$target" 2>/dev/null || true)
+            [ -n "$dpkg_out" ] && echo "dpkg:${dpkg_out%%:*}" && return 0
+        fi
+        if command -v rpm >/dev/null 2>&1; then
+            local rpm_out
+            rpm_out=$(rpm -qf "$target" 2>/dev/null || true)
+            if [ -n "$rpm_out" ] && ! echo "$rpm_out" | grep -q "is not owned"; then
+                echo "rpm:${rpm_out}" && return 0
+            fi
+        fi
+        return 1
+    }
 fi
 
 # parse command-line arguments
@@ -245,6 +267,37 @@ run_simulation() {
         echo -e "  • Thư mục cấu hình cá nhân:         ${c_accent}~/.config/clak/${c_reset}"
     fi
 
+    # check if system files are owned by package manager
+    if [ "$has_system" -eq 1 ]; then
+        local check_targets=("/usr/bin/clak" "/usr/bin/clak-gui" "/usr/share/fcitx5/addon/clak.conf" "/usr/share/fcitx5/inputmethod/clak.conf")
+        for d in $(get_system_addon_dirs); do
+            check_targets+=("$d/libclak.so")
+        done
+        for f in "${check_targets[@]}"; do
+            if [ -f "$f" ]; then
+                local owner_res
+                if owner_res=$(check_package_owner "$f"); then
+                    local pm="${owner_res%%:*}"
+                    local pkg="${owner_res#*:}"
+                    echo ""
+                    log_step "$lbl_warn" "File ($f) thuộc quyền quản lý của gói ${c_purple}${pkg}${c_reset} (${pm})"
+                    case "$pm" in
+                        pacman)
+                            echo -e "  ${c_yellow}Khuyên dùng trình quản lý gói để gỡ sạch: ${c_bold}sudo pacman -R ${pkg}${c_reset}"
+                            ;;
+                        dpkg)
+                            echo -e "  ${c_yellow}Khuyên dùng trình quản lý gói để gỡ sạch: ${c_bold}sudo apt remove ${pkg}${c_reset}"
+                            ;;
+                        rpm)
+                            echo -e "  ${c_yellow}Khuyên dùng trình quản lý gói để gỡ sạch: ${c_bold}sudo dnf remove ${pkg}${c_reset}"
+                            ;;
+                    esac
+                    break
+                fi
+            fi
+        done
+    fi
+
     echo ""
     log_step "$lbl_clean" "[Giả lập] Dọn dẹp cấu hình khởi động và mục Clak trong profile Fcitx5"
     log_step "$lbl_fcitx" "[Giả lập] Tự động nạp lại daemon Fcitx5 để cập nhật khay hệ thống"
@@ -298,6 +351,40 @@ run_uninstall() {
     if [ "$has_user_files" -eq 0 ] && [ "$has_sys_files" -eq 0 ] && [ "$has_profile" -eq 0 ] && [ "$has_autostart" -eq 0 ] && [ "$has_config" -eq 0 ] && [ "$has_wps" -eq 0 ] && [ "$has_steam" -eq 0 ] && [ "$has_fcitx_bak" -eq 0 ] && [ "$target_mode" != "system" ]; then
         log_step "$lbl_warn" "Không tìm thấy file cài đặt hoặc cấu hình Clak nào trên hệ thống"
         exit 0
+    fi
+
+    # check package manager ownership of system files before proceeding
+    if [ "$has_sys_files" -eq 1 ] && ([ "$target_mode" = "system" ] || [ "$target_mode" = "auto" ]); then
+        local check_targets=("/usr/bin/clak" "/usr/bin/clak-gui" "/usr/share/fcitx5/addon/clak.conf" "/usr/share/fcitx5/inputmethod/clak.conf")
+        for d in $(get_system_addon_dirs); do
+            check_targets+=("$d/libclak.so")
+        done
+        for f in "${check_targets[@]}"; do
+            if [ -f "$f" ]; then
+                local owner_res
+                if owner_res=$(check_package_owner "$f"); then
+                    local pm="${owner_res%%:*}"
+                    local pkg="${owner_res#*:}"
+                    echo ""
+                    log_step "$lbl_err" "File ${c_accent}${f}${c_reset} được quản lý bởi trình quản lý gói ${c_purple}${pm}${c_reset} (gói: ${c_bold}${pkg}${c_reset})"
+                    echo -e "  ${c_red}Không được xóa file thủ công để tránh làm hỏng cơ sở dữ liệu gói của hệ thống.${c_reset}"
+                    echo -e "  Vui lòng gỡ bỏ bằng lệnh chính thức của distro:"
+                    case "$pm" in
+                        pacman)
+                            echo -e "    ${c_bold}sudo pacman -R ${pkg}${c_reset} (hoặc ${c_bold}yay -R ${pkg}${c_reset} / ${c_bold}paru -R ${pkg}${c_reset})"
+                            ;;
+                        dpkg)
+                            echo -e "    ${c_bold}sudo apt remove ${pkg}${c_reset} (hoặc ${c_bold}sudo dpkg -r ${pkg}${c_reset})"
+                            ;;
+                        rpm)
+                            echo -e "    ${c_bold}sudo dnf remove ${pkg}${c_reset} (hoặc ${c_bold}sudo rpm -e ${pkg}${c_reset})"
+                            ;;
+                    esac
+                    echo ""
+                    exit 1
+                fi
+            fi
+        done
     fi
 
     # 2. confirm prompt if interactive
