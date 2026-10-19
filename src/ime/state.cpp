@@ -83,6 +83,9 @@ void ClakState::reset(bool force) {
     key_buffer_.clear();
     if (force) {
         verifier_.reset();
+        last_surr_cursor_ = 0;
+        last_surr_text_len_ = 0;
+        surr_keystroke_count_ = 0;
     } else {
         verifier_.clearPending();
     }
@@ -348,7 +351,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                         has_ctrl_alt;
 
     if (is_reset_key) {
-        reset(/*force=*/true);
+        reset(/*force=*/false);
         return false;
     }
 
@@ -385,7 +388,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
             verifier_.setCanvasEditor(false);
         }
         bool is_twitter_placeholder = (text.find("happening") != std::string::npos || text.find("diễn ra") != std::string::npos);
-        if (!config::isVSCodeApp(app) && (config::isDraftJsSite(site) || is_twitter_placeholder) &&
+        if ((config::isDraftJsSite(site) || is_twitter_placeholder) &&
             text.size() >= 2 && text.compare(text.size() - 2, 2, "\n\n") == 0) {
             verifier_.setDraftJsEditor(true);
             verifier_.setRichTextEditor(true);
@@ -395,9 +398,24 @@ bool ClakState::handleKey(const fcitx::Key& key) {
 
     bool valid_surr = has_surrounding && surr.isValid() &&
                       surr.cursor() <= surr.text().size() &&
-                      !verifier_.isCanvasEditor();
-    bool use_surrounding = valid_surr && !verifier_.isRichTextEditor() &&
-                           currentProfile()->allowsSurroundingText();
+                      !verifier_.isCanvasEditor() &&
+                      !verifier_.isRichTextEditor();
+    bool use_surrounding = valid_surr && currentProfile()->allowsSurroundingText();
+
+    // detect frozen surrounding cursor (e.g. xterm.js in vscode integrated terminal)
+    if (use_surrounding && !key_str.empty() && sym < 0xff00 && !has_ctrl_alt) {
+        if (surr_keystroke_count_ >= 2 &&
+            last_surr_cursor_ == surr.cursor() &&
+            last_surr_text_len_ == surr.text().size()) {
+            verifier_.setRichTextEditor(true);
+            valid_surr = false;
+            use_surrounding = false;
+            utils::clakLog("handleKey: detected frozen surrounding cursor in app=" + app + ", auto-switched to uinput");
+        }
+        last_surr_cursor_ = surr.cursor();
+        last_surr_text_len_ = surr.text().size();
+        surr_keystroke_count_++;
+    }
 
     bool skip_verify = is_gecko || is_meta;
     if (verifier_.isPending() && use_surrounding && !skip_verify) {
@@ -471,11 +489,9 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                                (isBrowser() && isAutofillCertain(surr));
             if (real_bs > 0 && surr.isValid() && surr.cursor() < real_bs) {
                 use_surrounding = false;
-                if (!config::isVSCodeApp(app) && (config::isDraftJsSite(site) || config::isBrowserApp(app))) {
-                    verifier_.setDraftJsEditor(true);
-                    verifier_.setRichTextEditor(true);
-                    is_draftjs = isDraftJsEditor();
-                }
+                verifier_.setDraftJsEditor(true);
+                verifier_.setRichTextEditor(true);
+                is_draftjs = isDraftJsEditor();
             }
             bool use_uinput = is_autofill || shouldUseUinput(use_surrounding, action.action_type, surr);
 

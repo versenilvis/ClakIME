@@ -81,6 +81,9 @@ private:
   size_t in_flight_sentinel_count_{0};
   uint64_t sentinel_grace_until_us_{0};
   size_t last_text_len_{0};
+  size_t last_surr_cursor_{0};
+  size_t last_surr_text_len_{0};
+  uint32_t surr_keystroke_count_{0};
   uint64_t op_start_us_{0};
   std::string op_group_;
 
