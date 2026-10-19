@@ -190,23 +190,35 @@ pub fn run_diagnostics() -> DiagnosticReport {
     }
     if let Some(ref qt_im) = environment.qt_im_module {
         if qt_im == "ibus" {
+            let (msg, fix) = if environment.env_file_exists {
+                (
+                    "QT_IM_MODULE trong phiên hiện tại đang nhận từ IBus. File 99-clak-im.conf đã có sẵn, cần đăng xuất và đăng nhập lại để GNOME nạp mới".to_string(),
+                    "Đăng xuất và đăng nhập lại phiên làm việc (hoặc khởi động lại máy)".to_string(),
+                )
+            } else {
+                (
+                    "QT_IM_MODULE đang được đặt là 'ibus', khiến ứng dụng Qt bỏ qua Fcitx5".to_string(),
+                    "Đổi QT_IM_MODULE=fcitx trong ~/.config/environment.d/99-clak-im.conf".to_string(),
+                )
+            };
             issues.push(DiagnosticIssue {
                 title: "QT_IM_MODULE xung đột với IBus".to_string(),
-                message: "QT_IM_MODULE đang được đặt là 'ibus', khiến ứng dụng Qt bỏ qua Fcitx5"
-                    .to_string(),
-                fix_command: Some(
-                    "Đổi QT_IM_MODULE=fcitx trong ~/.config/environment.d/99-clak-im.conf"
-                        .to_string(),
-                ),
+                message: msg,
+                fix_command: Some(fix),
             });
         }
     }
     if let Some(ref xmod) = environment.xmodifiers {
         if xmod.contains("ibus") {
+            let fix = if environment.env_file_exists {
+                "Đăng xuất và đăng nhập lại phiên làm việc (hoặc khởi động lại máy)".to_string()
+            } else {
+                "export XMODIFIERS=@im=fcitx".to_string()
+            };
             warnings.push(DiagnosticWarning {
                 title: "XMODIFIERS xung đột với IBus".to_string(),
                 message: format!("XMODIFIERS đang là '{}', cần đổi thành '@im=fcitx'", xmod),
-                fix_command: Some("export XMODIFIERS=@im=fcitx".to_string()),
+                fix_command: Some(fix),
             });
         }
     }
@@ -314,13 +326,21 @@ pub fn auto_fix_all(include_permissions: bool) -> AutoFixSummary {
             .status();
     }
 
-    // 3. Enable autostart if disabled
-    if !pre_report.autostart.is_enabled {
+    // 3. Enable autostart and configure environment variables
+    let has_env_conflict = pre_report.environment.qt_im_module.as_deref() == Some("ibus")
+        || pre_report
+            .environment
+            .xmodifiers
+            .as_deref()
+            .map_or(false, |x| x.contains("ibus"))
+        || !pre_report.environment.env_file_exists;
+
+    if !pre_report.autostart.is_enabled || has_env_conflict {
         match enable_autostart() {
             Ok(_) => summary.autostart_enabled = true,
             Err(e) => summary
                 .errors
-                .push(format!("Lỗi bật khởi động cùng hệ thống: {}", e)),
+                .push(format!("Lỗi cấu hình khởi động và môi trường: {}", e)),
         }
     }
 

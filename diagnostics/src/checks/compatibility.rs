@@ -295,11 +295,32 @@ pub fn fix_fcitx5_profile() -> Result<(), String> {
     // 1. Tao file bien moi truong 99-clak-im.conf neu chua co
     let env_dir = PathBuf::from(&home).join(".config/environment.d");
     let env_file = env_dir.join("99-clak-im.conf");
+    let env_content =
+        "QT_IM_MODULE=fcitx\nQT_IM_MODULES=\"wayland;fcitx\"\nXMODIFIERS=@im=fcitx\nINPUT_METHOD=fcitx5\nSDL_IM_MODULE=fcitx\n";
     if !env_file.exists() && fs::create_dir_all(&env_dir).is_ok() {
-        let env_content =
-            "QT_IM_MODULE=fcitx\nXMODIFIERS=@im=fcitx\nINPUT_METHOD=fcitx5\nSDL_IM_MODULE=fcitx\n";
         let _ = fs::write(&env_file, env_content);
     }
+    let _ = std::process::Command::new("systemctl")
+        .args([
+            "--user",
+            "set-environment",
+            "QT_IM_MODULE=fcitx",
+            "QT_IM_MODULES=wayland;fcitx",
+            "XMODIFIERS=@im=fcitx",
+            "INPUT_METHOD=fcitx5",
+            "SDL_IM_MODULE=fcitx",
+        ])
+        .status();
+    let _ = std::process::Command::new("dbus-update-activation-environment")
+        .args([
+            "--systemd",
+            "QT_IM_MODULE=fcitx",
+            "QT_IM_MODULES=wayland;fcitx",
+            "XMODIFIERS=@im=fcitx",
+            "INPUT_METHOD=fcitx5",
+            "SDL_IM_MODULE=fcitx",
+        ])
+        .status();
 
     // 2. Kiem tra va dam bao duong dan addon tren Ubuntu
     // Fcitx5 tren Ubuntu multiarch tim lib trong x86_64-linux-gnu hoac absolute path

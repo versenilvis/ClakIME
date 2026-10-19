@@ -73,11 +73,35 @@ X-KDE-autostart-after=panel\n";
     let env_file = env_dir.join("99-clak-im.conf");
 
     let env_content = "QT_IM_MODULE=fcitx\n\
+QT_IM_MODULES=\"wayland;fcitx\"\n\
 XMODIFIERS=@im=fcitx\n\
 INPUT_METHOD=fcitx5\n\
 SDL_IM_MODULE=fcitx\n";
 
     fs::write(&env_file, env_content).map_err(|e| e.to_string())?;
+
+    // sync environment variables to systemd user session and dbus activation
+    let _ = std::process::Command::new("systemctl")
+        .args([
+            "--user",
+            "set-environment",
+            "QT_IM_MODULE=fcitx",
+            "QT_IM_MODULES=wayland;fcitx",
+            "XMODIFIERS=@im=fcitx",
+            "INPUT_METHOD=fcitx5",
+            "SDL_IM_MODULE=fcitx",
+        ])
+        .status();
+    let _ = std::process::Command::new("dbus-update-activation-environment")
+        .args([
+            "--systemd",
+            "QT_IM_MODULE=fcitx",
+            "QT_IM_MODULES=wayland;fcitx",
+            "XMODIFIERS=@im=fcitx",
+            "INPUT_METHOD=fcitx5",
+            "SDL_IM_MODULE=fcitx",
+        ])
+        .status();
 
     let profile_file = home_path.join(".config/fcitx5/profile");
     if profile_file.exists() {
