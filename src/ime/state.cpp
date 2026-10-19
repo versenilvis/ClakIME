@@ -45,6 +45,9 @@ void ClakState::reset(bool force) {
                        " pending='" + pending_commit_string_ + "' app=" + app + " site='" + site + "')");
         return;
     }
+    if (shift_press_time_us_ > 0) {
+        shift_mouse_clicked_ = true;
+    }
     uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
     if (!force) {
         // guard against false reset from web apps within 50ms post-commit window
@@ -710,6 +713,21 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
         if (repeat_handler_.heldKey().sym() != 0) {
             repeat_handler_.cancel();
         }
+        if (is_shift_sym) {
+            uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
+            uint64_t hold_time_us = (shift_press_time_us_ > 0) ? (now_us - shift_press_time_us_) : 0;
+            bool single_tap = (shift_press_time_us_ > 0) && (hold_time_us < 250000) && !shift_other_key_pressed_ && !shift_mouse_clicked_;
+            shift_press_time_us_ = 0;
+            shift_other_key_pressed_ = false;
+            shift_mouse_clicked_ = false;
+
+            if (single_tap && !ctrl_shift_armed_ && !alt_shift_armed_) {
+                if (triggerShiftAutoFix()) {
+                    keyEvent.filterAndAccept();
+                    return;
+                }
+            }
+        }
         if (shortcut == "ctrl_shift") {
             if (ctrl_shift_armed_ && (is_shift_sym || is_ctrl_sym)) {
                 engine_->toggleAppEnabled(app);
@@ -749,6 +767,16 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
     }
 
     syncConfig();
+
+    if (is_shift_sym) {
+        if (shift_press_time_us_ == 0) {
+            shift_press_time_us_ = fcitx::now(CLOCK_MONOTONIC);
+            shift_other_key_pressed_ = false;
+            shift_mouse_clicked_ = false;
+        }
+    } else {
+        shift_other_key_pressed_ = true;
+    }
 
     utils::clakLog("keyEvent: sym=" + std::to_string(key.sym()) + " ('" + key_str + "') app='" + app +
                    "' term_cap=" + std::to_string(ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal)) +
@@ -990,6 +1018,102 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
     } else {
         repeat_handler_.cancel();
     }
+}
+
+bool ClakState::triggerShiftAutoFix() {
+    if (!engine_->config() || !clak_config_get_shift_autofix(engine_->config())) {
+        return false;
+    }
+    if (!ic_ || ic_->capabilityFlags().test(fcitx::CapabilityFlag::Password)) {
+        return false;
+    }
+
+    const auto& surr = ic_->surroundingText();
+    if (!surr.isValid()) {
+        return false;
+    }
+
+    uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
+    unsigned int cur = surr.cursor();
+    unsigned int anch = surr.anchor();
+
+    // 1. Quick Undo check: if user tapped Shift within 2s of previous autofix
+    if (!last_autofix_original_.empty() && last_autofix_time_us_ > 0 &&
+        (now_us - last_autofix_time_us_ < 2000000)) {
+        utils::clakLog("triggerShiftAutoFix: undo requested to restore '" + last_autofix_original_ + "'");
+        size_t converted_chars = last_autofix_converted_chars_;
+        std::string restore_text = last_autofix_original_;
+        last_autofix_original_.clear();
+        last_autofix_converted_chars_ = 0;
+        last_autofix_time_us_ = 0;
+
+        if (converted_chars > 0) {
+            ic_->deleteSurroundingText(-static_cast<int>(converted_chars), converted_chars);
+            doCommitString(restore_text);
+            return true;
+        }
+    }
+
+    int method = clak_config_get_method(engine_->config());
+
+    // 2. Selection mode: cursor != anchor
+    if (cur != anch) {
+        std::string selected = utils::extractSelection(surr.text(), cur, anch);
+        if (selected.empty()) {
+            return false;
+        }
+        int changed = 0;
+        char* fixed = clak_autofix_text(selected.c_str(), method, 1, &changed);
+        if (!fixed) {
+            return false;
+        }
+        std::string fixed_str = fixed;
+        clak_free_string(fixed);
+
+        if (changed != 0 && fixed_str != selected) {
+            size_t sel_len = (cur > anch) ? (cur - anch) : (anch - cur);
+            int offset = (cur > anch) ? -static_cast<int>(sel_len) : 0;
+
+            last_autofix_original_ = selected;
+            last_autofix_converted_chars_ = utils::utf8CharCount(fixed_str);
+            last_autofix_time_us_ = now_us;
+
+            utils::clakLog("triggerShiftAutoFix (selection): '" + selected + "' -> '" + fixed_str + "'");
+            ic_->deleteSurroundingText(offset, sel_len);
+            doCommitString(fixed_str);
+            return true;
+        }
+        return false;
+    }
+
+    // 3. Word-before-cursor mode: cursor == anchor
+    if (cur > 0) {
+        std::string wordBefore = utils::extractWordBeforeCursor(surr.text(), cur);
+        if (wordBefore.empty()) {
+            return false;
+        }
+        int changed = 0;
+        char* fixed = clak_autofix_text(wordBefore.c_str(), method, 1, &changed);
+        if (!fixed) {
+            return false;
+        }
+        std::string fixed_str = fixed;
+        clak_free_string(fixed);
+
+        if (changed != 0 && fixed_str != wordBefore) {
+            size_t word_chars = utils::utf8CharCount(wordBefore);
+            last_autofix_original_ = wordBefore;
+            last_autofix_converted_chars_ = utils::utf8CharCount(fixed_str);
+            last_autofix_time_us_ = now_us;
+
+            utils::clakLog("triggerShiftAutoFix (word-before): '" + wordBefore + "' -> '" + fixed_str + "'");
+            ic_->deleteSurroundingText(-static_cast<int>(word_chars), word_chars);
+            doCommitString(fixed_str);
+            return true;
+        }
+    }
+
+    return false;
 }
 
 } // namespace ime

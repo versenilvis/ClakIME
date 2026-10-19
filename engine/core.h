@@ -32,6 +32,7 @@ void clak_core_set_bracket_uo(ClakCore *e, int32_t enabled);
 
 char *clak_core_transform(ClakCore *e, const char *input);
 int32_t clak_core_is_valid(const char *s);
+char *clak_autofix_text(const char *input, int32_t method, int32_t modern, int32_t *changed_out);
 void clak_free_string(char *s);
 
 uint8_t *clak_charset_encode(const char *input, int32_t charset, size_t *out_len);
@@ -75,6 +76,8 @@ bool        clak_config_is_app_excluded(const ClakConfig *cfg, const char *app_n
 bool        clak_config_get_remember_state(const ClakConfig *cfg);
 bool        clak_config_get_uinput_ack(const ClakConfig *cfg);
 bool        clak_config_get_debug_log(const ClakConfig *cfg);
+bool        clak_config_get_shift_autofix(const ClakConfig *cfg);
+void        clak_config_set_shift_autofix(ClakConfig *cfg, bool enabled);
 int32_t     clak_config_get_startup_mode(const ClakConfig *cfg);
 int32_t     clak_config_get_method(const ClakConfig *cfg);
 char       *clak_config_get_toggle_shortcut(const ClakConfig *cfg);

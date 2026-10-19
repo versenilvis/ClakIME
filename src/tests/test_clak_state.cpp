@@ -473,5 +473,92 @@ TEST_F(ClakStateTest, GivenSelection_WhenCursorMoveKeyReceived_DoesNotFilterForN
     EXPECT_TRUE(ic.forwarded_keys.empty());
 }
 
+TEST_F(ClakStateTest, GivenSelection_WhenShiftTapped_AutoFixesSelection) {
+    clak_config_set_shift_autofix(const_cast<ClakConfig*>(engine_->config()), true);
+
+    MockInputContext ic(instance_->inputContextManager(), "test-app");
+    ic.setSurrounding("ddaay laf moojt baif toans khos", 31, 0);
+    ime::ClakState state(engine_.get(), &ic);
+
+    // tap Shift
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyStates(), false, &state);
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyStates(), true, &state);
+
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "đây là một bài toán khó");
+}
+
+TEST_F(ClakStateTest, GivenRecentAutoFix_WhenShiftTappedAgain_UndoesToOriginal) {
+    clak_config_set_shift_autofix(const_cast<ClakConfig*>(engine_->config()), true);
+
+    MockInputContext ic(instance_->inputContextManager(), "test-app");
+    ic.setSurrounding("ddaay laf moojt baif toans khos", 31, 0);
+    ime::ClakState state(engine_.get(), &ic);
+
+    // 1st tap: autofixes
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyStates(), false, &state);
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyStates(), true, &state);
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "đây là một bài toán khó");
+
+    // update surrounding text to reflect the fix
+    ic.setSurrounding("đây là một bài toán khó", 23, 23);
+
+    // 2nd tap within 2s: undoes
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyStates(), false, &state);
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyStates(), true, &state);
+    EXPECT_EQ(ic.commits.back(), "ddaay laf moojt baif toans khos");
+}
+
+TEST_F(ClakStateTest, GivenWordBeforeCursor_WhenShiftTapped_AutoFixesWord) {
+    clak_config_set_shift_autofix(const_cast<ClakConfig*>(engine_->config()), true);
+
+    MockInputContext ic(instance_->inputContextManager(), "test-app");
+    ic.setSurrounding("toans", 5, 5);
+    ime::ClakState state(engine_.get(), &ic);
+
+    // tap Shift
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyStates(), false, &state);
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyStates(), true, &state);
+
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "toán");
+}
+
+TEST_F(ClakStateTest, GivenShiftHeldWithOtherKey_DoesNotTriggerAutoFix) {
+    clak_config_set_shift_autofix(const_cast<ClakConfig*>(engine_->config()), true);
+
+    MockInputContext ic(instance_->inputContextManager(), "test-app");
+    ic.setSurrounding("ddaay", 5, 0);
+    ime::ClakState state(engine_.get(), &ic);
+
+    // Shift pressed, then 'a' pressed, 'a' released, Shift released
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyStates(), false, &state);
+    ic.sendKey(FcitxKey_a, fcitx::KeyState::Shift, false, &state);
+    ic.sendKey(FcitxKey_a, fcitx::KeyState::Shift, true, &state);
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyStates(), true, &state);
+
+    // commits should not contain "đây" from autofix
+    for (const auto& c : ic.commits) {
+        EXPECT_NE(c, "đây");
+    }
+}
+
+TEST_F(ClakStateTest, GivenShiftHeldWithMouseClick_DoesNotTriggerAutoFix) {
+    clak_config_set_shift_autofix(const_cast<ClakConfig*>(engine_->config()), true);
+
+    MockInputContext ic(instance_->inputContextManager(), "test-app");
+    ic.setSurrounding("ddaay", 5, 0);
+    ime::ClakState state(engine_.get(), &ic);
+
+    // Shift pressed, mouse click (reset called), Shift released
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyStates(), false, &state);
+    state.reset(/*force=*/true);
+    ic.sendKey(FcitxKey_Shift_L, fcitx::KeyStates(), true, &state);
+
+    // commits must be empty
+    EXPECT_TRUE(ic.commits.empty());
+}
+
 } // namespace test
 } // namespace clak

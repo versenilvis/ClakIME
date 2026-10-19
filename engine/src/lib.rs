@@ -1,3 +1,4 @@
+pub mod autofix;
 pub mod charset;
 pub mod config;
 pub mod engine;
@@ -330,6 +331,45 @@ pub unsafe extern "C" fn clak_core_transform(
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_autofix_text(
+    input: *const c_char,
+    method: i32,
+    modern: i32,
+    changed_out: *mut i32,
+) -> *mut c_char {
+    if input.is_null() {
+        if !changed_out.is_null() {
+            unsafe { *changed_out = 0 };
+        }
+        return std::ptr::null_mut();
+    }
+    let s = match unsafe { CStr::from_ptr(input) }.to_str() {
+        Ok(s) => s,
+        Err(_) => {
+            if !changed_out.is_null() {
+                unsafe { *changed_out = 0 };
+            }
+            return std::ptr::null_mut();
+        }
+    };
+    let m = match method {
+        0 => Method::Telex,
+        1 => Method::Vni,
+        2 => Method::Viqr,
+        3 => Method::TeipVni,
+        _ => Method::Telex,
+    };
+    let (fixed, was_changed) = autofix::autofix_text(s, m, modern != 0);
+    if !changed_out.is_null() {
+        unsafe { *changed_out = if was_changed { 1 } else { 0 } };
+    }
+    match CString::new(fixed) {
+        Ok(cs) => cs.into_raw(),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn clak_charset_encode(
     input: *const c_char,
     charset: i32,
@@ -511,6 +551,21 @@ pub unsafe extern "C" fn clak_config_get_debug_log(cfg: *const config::ClakConfi
         return false;
     }
     (*cfg).advanced.debug_log
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_config_get_shift_autofix(cfg: *const config::ClakConfig) -> bool {
+    if cfg.is_null() {
+        return false;
+    }
+    (*cfg).typing.shift_autofix
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_config_set_shift_autofix(cfg: *mut config::ClakConfig, v: bool) {
+    if !cfg.is_null() {
+        unsafe { (*cfg).typing.shift_autofix = v };
+    }
 }
 
 #[unsafe(no_mangle)]

@@ -62,6 +62,8 @@ pub struct TypingConfig {
     pub double_space_period: bool,
     #[serde(default)]
     pub auto_capitalize: bool,
+    #[serde(default)]
+    pub shift_autofix: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -60,6 +60,7 @@ public:
 private:
   void arm_safety_timer();
   bool handleKey(const fcitx::Key& key);
+  bool triggerShiftAutoFix();
   void replayBufferedKeys();
   std::string activeSite();
   void doCommitString(const std::string& text);
@@ -100,6 +101,13 @@ private:
   bool alt_shift_armed_{false};
   uint64_t last_selection_time_us_{0};
   bool address_bar_has_space_{false};
+
+  uint64_t shift_press_time_us_{0};
+  bool shift_other_key_pressed_{false};
+  bool shift_mouse_clicked_{false};
+  uint64_t last_autofix_time_us_{0};
+  std::string last_autofix_original_;
+  size_t last_autofix_converted_chars_{0};
 
   RepeatHandler repeat_handler_;
   ModalHandler modal_handler_;

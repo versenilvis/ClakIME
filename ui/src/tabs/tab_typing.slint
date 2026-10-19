@@ -7,6 +7,7 @@ import { GhostButton } from "../components/buttons.slint";
 export component TabTyping inherits VerticalLayout {
     in-out property <bool> double_space_period: false;
     in-out property <bool> auto_capitalize: false;
+    in-out property <bool> shift_autofix: false;
     in-out property <bool> macros_enabled: true;
     in-out property <[MacroItemData]> macro_items: [];
     in-out property <string> new_macro_trigger: "";
@@ -20,6 +21,13 @@ export component TabTyping inherits VerticalLayout {
     SectionHeader {
         title: "TỰ ĐỘNG";
         show-divider: false;
+    }
+
+    SettingItem {
+        title: "Sửa chính tả bằng phím Shift";
+        subtitle: "Nhấn nhả nhanh phím Shift để tự động sửa từ hoặc vùng chọn; nhấn lần nữa để hoàn tác";
+        checked <=> root.shift_autofix;
+        toggled => { root.changed(); }
     }
 
     SettingItem {

@@ -999,6 +999,7 @@ fn save_config(
 
     cfg_to_save.typing.double_space_period = window.get_double_space_period();
     cfg_to_save.typing.auto_capitalize = window.get_auto_capitalize();
+    cfg_to_save.typing.shift_autofix = window.get_shift_autofix();
     cfg_to_save.macros.enabled = window.get_macros_enabled();
     cfg_to_save.macros.items = saved_macros;
 
@@ -1058,6 +1059,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     main_window.set_double_space_period(cfg.typing.double_space_period);
     main_window.set_auto_capitalize(cfg.typing.auto_capitalize);
+    main_window.set_shift_autofix(cfg.typing.shift_autofix);
     main_window.set_macros_enabled(cfg.macros.enabled);
 
     let toggle_sc_display = shortcut_id_to_display(&cfg.shortcuts.toggle_vietnamese);
@@ -1375,6 +1377,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         window.set_modern_tone(default_cfg.spelling.modern_tone);
         window.set_double_space_period(default_cfg.typing.double_space_period);
         window.set_auto_capitalize(default_cfg.typing.auto_capitalize);
+        window.set_shift_autofix(default_cfg.typing.shift_autofix);
         window.set_macros_enabled(default_cfg.macros.enabled);
         window.set_toggle_shortcut_text("Ctrl + Shift".into());
         window.set_is_recording_shortcut(false);

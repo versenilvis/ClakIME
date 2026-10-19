@@ -48,6 +48,7 @@ export component MainWindow inherits Window {
     // go tat va tu dong sua
     in-out property <bool> double_space_period: false;
     in-out property <bool> auto_capitalize: false;
+    in-out property <bool> shift_autofix: false;
     in-out property <bool> macros_enabled: true;
     in-out property <[MacroItemData]> macro_items: [];
     in-out property <string> new_macro_trigger: "";
@@ -322,6 +323,7 @@ export component MainWindow inherits Window {
                     vertical-stretch: 1;
                     double_space_period <=> root.double_space_period;
                     auto_capitalize <=> root.auto_capitalize;
+                    shift_autofix <=> root.shift_autofix;
                     macros_enabled <=> root.macros_enabled;
                     macro_items <=> root.macro_items;
                     new_macro_trigger <=> root.new_macro_trigger;
