@@ -2,7 +2,7 @@
 name = "clak-engine"
 version = "0.5.0"
 edition = "2021"
-rust-version = "1.82.0"
+rust-version = "1.85.0"
 description = "Vietnamese input method engine"
 license = "0BSD"
 keywords = ["vietnamese", "ime", "telex", "vni", "input-method"]
