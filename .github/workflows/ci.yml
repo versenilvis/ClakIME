@@ -13,8 +13,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test-engine:
-    name: Rust Engine Tests
+  test-rust:
+    name: Rust Checks & Tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -34,65 +34,108 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             engine/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('engine/Cargo.lock', 'engine/Cargo.toml') }}
+            cli/target/
+            diagnostics/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
       - name: Check code formatting
-        run: cargo fmt --manifest-path engine/Cargo.toml -- --check
+        run: |
+          cargo fmt --manifest-path engine/Cargo.toml -- --check
+          cargo fmt --manifest-path diagnostics/Cargo.toml -- --check
+          cargo fmt --manifest-path cli/Cargo.toml -- --check
+          cargo fmt --manifest-path ui/Cargo.toml -- --check
 
       - name: Run clippy linter
-        run: cargo clippy --manifest-path engine/Cargo.toml -- -D warnings
+        run: |
+          cargo clippy --manifest-path engine/Cargo.toml -- -D warnings
+          cargo clippy --manifest-path diagnostics/Cargo.toml -- -D warnings
+          cargo clippy --manifest-path cli/Cargo.toml -- -D warnings
 
-      - name: Run engine tests
-        run: cargo test --manifest-path engine/Cargo.toml --verbose
+      - name: Run tests
+        run: |
+          cargo test --manifest-path engine/Cargo.toml --verbose
+          cargo test --manifest-path diagnostics/Cargo.toml --verbose
+          cargo test --manifest-path cli/Cargo.toml --verbose
 
-  build-arch:
-    name: Arch Linux Build & Package
+  build-distros:
+    name: Build & Test (${{ matrix.distro }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: archlinux
+            image: archlinux:latest
+            setup: |
+              pacman -Syu --noconfirm --needed \
+                base-devel cmake ninja extra-cmake-modules fcitx5 libinput rust git nodejs
+            cmake_args: "-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr"
+            test_gui: true
+          - distro: ubuntu
+            image: ubuntu:24.04
+            setup: |
+              apt-get update -y
+              DEBIAN_FRONTEND=noninteractive apt-get install -y \
+                build-essential cmake ninja-build extra-cmake-modules pkg-config \
+                libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev \
+                libinput-dev libudev-dev cargo rustc git
+            cmake_args: "-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DENABLE_GUI=OFF"
+            test_gui: false
+          - distro: fedora
+            image: fedora:latest
+            setup: |
+              dnf install -y \
+                gcc-c++ cmake ninja-build extra-cmake-modules fcitx5-devel \
+                libinput-devel systemd-devel pkgconfig cargo rust git
+            cmake_args: "-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DENABLE_GUI=OFF"
+            test_gui: false
     container:
-      image: archlinux:latest
+      image: ${{ matrix.image }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: |
-          pacman -Syu --noconfirm --needed \
-            base-devel \
-            cmake \
-            ninja \
-            extra-cmake-modules \
-            fcitx5 \
-            libinput \
-            rust \
-            git \
-            nodejs
-
-      - name: Cache Cargo & build artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            build/cargo-target/
-          key: ${{ runner.os }}-build-arch-${{ hashFiles('engine/Cargo.lock', 'ui/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-build-arch-
+        run: ${{ matrix.setup }}
 
       - name: Build Clak
         run: |
-          cmake -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=/usr
+          cmake -B build -G Ninja ${{ matrix.cmake_args }}
           cmake --build build -j$(nproc)
+
+      - name: Run C++ test suite
+        run: ./build/src/tests/clak_cpp_tests
 
       - name: Test installation
         run: |
           DESTDIR=/tmp/clak-install cmake --install build
-          test -f /tmp/clak-install/usr/lib/fcitx5/libclak.so
-          test -f /tmp/clak-install/usr/bin/clak-gui
+          test -f /tmp/clak-install/usr/lib/fcitx5/libclak.so || test -f /tmp/clak-install/usr/lib/*-linux-gnu/fcitx5/libclak.so || test -f /tmp/clak-install/usr/lib64/fcitx5/libclak.so
           test -f /tmp/clak-install/usr/share/fcitx5/addon/clak.conf
           test -f /tmp/clak-install/usr/share/fcitx5/inputmethod/clak.conf
+          if [ "${{ matrix.test_gui }}" = "true" ]; then
+            test -f /tmp/clak-install/usr/bin/clak-gui
+          fi
+
+      - name: Test installer simulation
+        run: bash scripts/install.sh --dry-run
+
+  check-nix:
+    name: Nix Flake Check & Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v16
+
+      - name: Cache Nix store
+        uses: DeterminateSystems/magic-nix-cache-action@v9
+
+      - name: Check Nix Flake
+        run: nix flake check
+
+      - name: Build Clak via Nix
+        run: nix build
