@@ -99,6 +99,11 @@ fn telex_english() {
     assert_eq!(t("hello"), "hello");
     assert_eq!(t("wood"), "wôd");
     assert_eq!(t("reboot"), "rebôt");
+    assert_eq!(t("detect"), "detect");
+    assert_eq!(t("dete"), "dete");
+    assert_eq!(t("delete"), "delete");
+    assert_eq!(t("hotel"), "hotel");
+    assert_eq!(t("metal"), "metal");
 }
 #[test]
 fn telex_english_toggle_off_word() {

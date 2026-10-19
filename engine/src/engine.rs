@@ -291,6 +291,9 @@ fn convert_telex_impl(input: &str, modern: bool, short_w: bool) -> String {
                                     }
                                 }
                                 if ls[i].variant == 0 {
+                                    if vi < ls.len() - 1 && lc != 'a' {
+                                        break;
+                                    }
                                     if !crossing_roof_valid(&ls, i, upper, false) {
                                         break;
                                     }
@@ -302,6 +305,9 @@ fn convert_telex_impl(input: &str, modern: bool, short_w: bool) -> String {
                                     break;
                                 }
                                 if ls[i].variant == 1 {
+                                    if vi < ls.len() - 1 && lc != 'a' {
+                                        break;
+                                    }
                                     if i + 1 < ls.len() {
                                         let mut trial = ls.to_vec();
                                         trial[i].variant = 0;
