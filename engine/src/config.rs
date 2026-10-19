@@ -54,6 +54,8 @@ pub struct SpellingConfig {
     pub modern_tone: bool,
     #[serde(default = "default_true")]
     pub free_marking: bool,
+    #[serde(default)]
+    pub autocorrect: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -167,6 +169,7 @@ impl Default for SpellingConfig {
             auto_restore: false,
             modern_tone: default_true(),
             free_marking: default_true(),
+            autocorrect: false,
         }
     }
 }

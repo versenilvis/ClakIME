@@ -1,8 +1,11 @@
 pub mod autofix;
+pub mod autocorrect;
 pub mod charset;
 pub mod config;
 pub mod engine;
+pub mod english_dict;
 pub mod ime;
+pub mod learned_typos;
 pub mod spelling;
 pub mod tables;
 pub mod vseq;
@@ -26,7 +29,7 @@ pub enum Method {
 static DICT: OnceLock<Vec<&'static str>> = OnceLock::new();
 static BASES: OnceLock<Vec<String>> = OnceLock::new();
 
-fn dict() -> &'static Vec<&'static str> {
+pub(crate) fn dict() -> &'static Vec<&'static str> {
     DICT.get_or_init(|| include_str!("../data/vietnamese.cm.dict").lines().collect())
 }
 
@@ -67,11 +70,20 @@ impl ClakCore {
     pub fn set_method(&mut self, method: Method) {
         self.method = method;
     }
+    pub fn method(&self) -> Method {
+        self.method
+    }
     pub fn set_modern(&mut self, v: bool) {
         self.modern = v;
     }
+    pub fn modern(&self) -> bool {
+        self.modern
+    }
     pub fn set_short_w(&mut self, v: bool) {
         self.short_w = v;
+    }
+    pub fn short_w(&self) -> bool {
+        self.short_w
     }
     pub fn set_auto_restore(&mut self, v: bool) {
         self.auto_restore = v;
@@ -565,6 +577,21 @@ pub unsafe extern "C" fn clak_config_get_shift_autofix(cfg: *const config::ClakC
 pub unsafe extern "C" fn clak_config_set_shift_autofix(cfg: *mut config::ClakConfig, v: bool) {
     if !cfg.is_null() {
         unsafe { (*cfg).typing.shift_autofix = v };
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_config_get_autocorrect(cfg: *const config::ClakConfig) -> bool {
+    if cfg.is_null() {
+        return true;
+    }
+    (*cfg).spelling.autocorrect
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_config_set_autocorrect(cfg: *mut config::ClakConfig, v: bool) {
+    if !cfg.is_null() {
+        unsafe { (*cfg).spelling.autocorrect = v };
     }
 }
 

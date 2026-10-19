@@ -1,36 +1,8 @@
 use crate::{engine, spelling, Method};
 use std::collections::HashSet;
-use std::sync::OnceLock;
-
-static COMMON_ENGLISH_WORDS: OnceLock<HashSet<&'static str>> = OnceLock::new();
 
 fn common_english_words() -> &'static HashSet<&'static str> {
-    COMMON_ENGLISH_WORDS.get_or_init(|| {
-        [
-            "a", "about", "after", "all", "also", "am", "an", "and", "any", "are", "as", "ask",
-            "at", "back", "be", "because", "been", "best", "book", "boot", "but", "by", "can",
-            "case", "cast", "check", "class", "close", "come", "const", "cook", "cool", "cost",
-            "could", "data", "date", "day", "deep", "def", "desk", "did", "disk", "do", "does",
-            "door", "east", "else", "end", "even", "fast", "feed", "file", "find", "first",
-            "floor", "food", "fool", "foot", "for", "free", "from", "get", "give", "go", "good",
-            "had", "has", "have", "he", "her", "hide", "him", "his", "home", "host", "how", "i",
-            "if", "in", "info", "into", "is", "it", "its", "just", "keep", "know", "last", "let",
-            "like", "line", "list", "log", "look", "loop", "main", "make", "mask", "me", "meet",
-            "mood", "moon", "most", "must", "my", "name", "need", "new", "next", "no", "noon",
-            "not", "now", "of", "on", "one", "only", "open", "or", "other", "our", "out", "over",
-            "page", "part", "past", "path", "people", "pool", "poor", "port", "post", "read",
-            "rest", "risk", "room", "root", "run", "say", "see", "seed", "set", "she", "show",
-            "side", "size", "sleep", "so", "some", "soon", "sort", "speed", "start", "stop",
-            "sweet", "take", "task", "test", "text", "than", "that", "the", "their", "them",
-            "then", "there", "these", "they", "think", "this", "time", "to", "took", "tool",
-            "tree", "true", "two", "type", "up", "us", "use", "var", "view", "want", "warn",
-            "was", "way", "we", "week", "well", "west", "what", "when", "which", "while", "who",
-            "wide", "will", "with", "wood", "word", "work", "would", "write", "year", "yes",
-            "you", "your", "zoom",
-        ]
-        .into_iter()
-        .collect()
-    })
+    crate::english_dict::common_english_words()
 }
 
 // checks whether a word already contains vietnamese diacritics

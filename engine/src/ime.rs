@@ -16,6 +16,7 @@ pub const ACTION_REPLACE_SURROUNDING: i32 = 2;
 pub const ACTION_ADDRESS_BAR_FIX: i32 = 3;
 pub const ACTION_REPLACE: i32 = 4;
 pub const ACTION_UINPUT_REPLACE: i32 = 4;
+pub const ACTION_AUTOCORRECT: i32 = 5;
 
 pub struct ClakContext {
     engine: ClakCore,
@@ -35,6 +36,9 @@ pub struct ClakContext {
     pub macros: std::collections::HashMap<String, String>,
     debug_log: bool,
     last_surr: Option<(String, usize)>,
+    pub autocorrect: bool,
+    pub last_committed: Option<(String, String, std::time::Instant)>,
+    pub pending_retype: Option<(String, String)>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -68,6 +72,9 @@ impl ClakContext {
             macros: std::collections::HashMap::new(),
             debug_log: false,
             last_surr: None,
+            autocorrect: false,
+            last_committed: None,
+            pending_retype: None,
         }
     }
 
@@ -86,6 +93,7 @@ impl ClakContext {
         self.bracket_brackets = cfg.general.bracket_brackets;
         self.double_space_period = cfg.typing.double_space_period;
         self.auto_capitalize = cfg.typing.auto_capitalize;
+        self.autocorrect = cfg.spelling.autocorrect;
         self.debug_log = cfg.advanced.debug_log;
         self.macros_enabled = cfg.macros.enabled;
         self.macros = cfg
@@ -125,6 +133,14 @@ impl ClakContext {
         if key_sym == 0xff08 {
             self.just_deleted = true;
             self.sentence_cap_state = SentenceCapState::Normal;
+
+            // detect backspace after committed word for adaptive learning
+            if let Some((last_raw, last_com, last_time)) = &self.last_committed {
+                if last_time.elapsed().as_secs() <= 4 && self.raw_buffer.is_empty() {
+                    self.pending_retype = Some((last_raw.clone(), last_com.clone()));
+                }
+            }
+
             if let Some(text) = surrounding_text {
                 self.stale_surr = Some((text.to_string(), cursor));
                 let chars: Vec<char> = text.chars().collect();
@@ -196,6 +212,31 @@ impl ClakContext {
                 self.stale_surr = None;
                 return self.replace(del_count, &del_str, &commit_text);
             }
+            if self.autocorrect
+                && self.engine.method() == Method::Telex
+                && !self.raw_buffer.is_empty()
+                && (self.last_composed == self.raw_buffer
+                    || !crate::spelling::is_valid_cvc(&self.last_composed))
+            {
+                if let Some(corrected) = crate::autocorrect::try_autocorrect_telex(
+                    &self.raw_buffer,
+                    self.engine.modern(),
+                    self.engine.short_w(),
+                ) {
+                    let del_count = self.last_composed.chars().count();
+                    let del_str = self.last_composed.clone();
+                    let mut commit_text = corrected;
+                    if key_sym == 0xff09 {
+                        commit_text.push('\t');
+                    } else {
+                        commit_text.push('\n');
+                    }
+                    self.reset();
+                    self.just_deleted = false;
+                    self.stale_surr = None;
+                    return self.replace(del_count, &del_str, &commit_text);
+                }
+            }
             self.reset();
             self.just_deleted = false;
             self.stale_surr = None;
@@ -210,6 +251,8 @@ impl ClakContext {
             self.reset();
             self.just_deleted = false;
             self.stale_surr = None;
+            self.pending_retype = None;
+            self.last_committed = None;
             self.sentence_cap_state = SentenceCapState::Normal;
             return self.forward();
         }
@@ -250,6 +293,24 @@ impl ClakContext {
 
         let key_ch = key_str.chars().next().unwrap_or('\0');
         if is_word_break(key_ch as u32) {
+            let cur_raw = self.raw_buffer.clone();
+            let cur_com = if !self.last_composed.is_empty() {
+                self.last_composed.clone()
+            } else {
+                self.raw_buffer.clone()
+            };
+
+            // adaptive learning: observe retype if user previously backspaced a word
+            if let Some((old_raw, _old_com)) = self.pending_retype.take() {
+                if !cur_com.is_empty() {
+                    crate::learned_typos::observe_retype(&old_raw, &cur_com);
+                }
+            }
+
+            if !cur_raw.is_empty() {
+                self.last_committed = Some((cur_raw, cur_com, std::time::Instant::now()));
+            }
+
             if self.auto_capitalize {
                 if key_ch == '.' || key_ch == '?' || key_ch == '!' {
                     self.sentence_cap_state = SentenceCapState::SawPunctuation;
@@ -289,6 +350,38 @@ impl ClakContext {
                 }
             }
 
+            // priority 1: autocorrect scrambled telex words at word break (telex only)
+            if self.autocorrect
+                && self.engine.method() == Method::Telex
+                && !self.raw_buffer.is_empty()
+                && (self.last_composed == self.raw_buffer
+                    || !crate::spelling::is_valid_cvc(&self.last_composed))
+            {
+                if let Some(corrected) = crate::autocorrect::try_autocorrect_telex(
+                    &self.raw_buffer,
+                    self.engine.modern(),
+                    self.engine.short_w(),
+                ) {
+                    let del_count = self.last_composed.chars().count();
+                    let mut orig_text = self.last_composed.clone();
+                    orig_text.push_str(key_str);
+                    let mut commit_text = corrected;
+                    commit_text.push_str(key_str);
+                    self.reset();
+                    self.just_deleted = false;
+                    self.stale_surr = None;
+                    self.commit_buf = CString::new(commit_text).unwrap_or_default();
+                    self.delete_buf = CString::new(orig_text).unwrap_or_default();
+                    return ImeAction {
+                        action_type: ACTION_AUTOCORRECT,
+                        delete_count: del_count,
+                        commit_str: self.commit_buf.as_ptr(),
+                        delete_str: self.delete_buf.as_ptr(),
+                    };
+                }
+            }
+
+            // priority 2: auto-restore incomplete stop coda words
             if self.engine.auto_restore()
                 && !self.last_composed.is_empty()
                 && self.last_composed != self.raw_buffer
@@ -938,4 +1031,23 @@ pub unsafe extern "C" fn clak_process_key(
             delete_str: std::ptr::null(),
         },
     }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn clak_observe_retype(
+    old_raw: *const c_char,
+    new_word: *const c_char,
+) -> bool {
+    if old_raw.is_null() || new_word.is_null() {
+        return false;
+    }
+    let r = match CStr::from_ptr(old_raw).to_str() {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    let w = match CStr::from_ptr(new_word).to_str() {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    crate::learned_typos::observe_retype(r, w).is_some()
 }

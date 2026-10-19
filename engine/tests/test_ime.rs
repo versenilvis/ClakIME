@@ -251,7 +251,43 @@ fn simulate_typing(input: &str) -> String {
             }
             ACTION_REPLACE
                 | ACTION_REPLACE_SURROUNDING
-                | ACTION_ADDRESS_BAR_FIX => {
+                | ACTION_ADDRESS_BAR_FIX
+                | ACTION_AUTOCORRECT => {
+                let del = action.delete_count;
+                let s = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
+                let mut doc_chars: Vec<char> = doc.chars().collect();
+                for _ in 0..del {
+                    doc_chars.pop();
+                }
+                doc = doc_chars.into_iter().collect();
+                doc.push_str(s);
+            }
+            _ => {}
+        }
+    }
+    doc
+}
+
+fn simulate_typing_autocorrect(input: &str) -> String {
+    let mut ctx = ClakContext::new(Method::Telex);
+    ctx.autocorrect = true;
+    let mut doc = String::new();
+    for ch in input.chars() {
+        let key_str = ch.to_string();
+        let cur = doc.chars().count();
+        let action = ctx.process_key(ch as u32, &key_str, false, Some(&doc), cur, cur);
+        match action.action_type {
+            ACTION_FORWARD => {
+                doc.push(ch);
+            }
+            ACTION_COMMIT => {
+                let s = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
+                doc.push_str(s);
+            }
+            ACTION_REPLACE
+                | ACTION_REPLACE_SURROUNDING
+                | ACTION_ADDRESS_BAR_FIX
+                | ACTION_AUTOCORRECT => {
                 let del = action.delete_count;
                 let s = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
                 let mut doc_chars: Vec<char> = doc.chars().collect();
@@ -283,7 +319,8 @@ fn simulate_typing_fallback(input: &str) -> String {
             }
             ACTION_REPLACE
                 | ACTION_REPLACE_SURROUNDING
-                | ACTION_ADDRESS_BAR_FIX => {
+                | ACTION_ADDRESS_BAR_FIX
+                | ACTION_AUTOCORRECT => {
                 let del = action.delete_count;
                 let s = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
                 let mut doc_chars: Vec<char> = doc.chars().collect();
@@ -691,4 +728,45 @@ fn test_delayed_circumflex_and_auto_restore() {
 
     assert_eq!(simulate_typing("chatas "), "chất ");
     assert_eq!(simulate_typing_fallback("chatas "), "chất ");
+}
+
+#[test]
+fn test_smart_autocorrect_in_ime() {
+    // default: autocorrect is false (opt-in), so typing scrambled words without enabling autocorrect does nothing
+    assert_eq!(simulate_typing("nheiuef "), "nheiuef ");
+
+    // when enabled: autocorrect triggers on word-break (space)
+    assert_eq!(simulate_typing_autocorrect("nheiuef "), "nhiều ");
+    assert_eq!(simulate_typing_autocorrect("thoogn "), "thông ");
+    assert_eq!(simulate_typing_autocorrect("beeits "), "biết ");
+    assert_eq!(simulate_typing_autocorrect("bnja "), "bạn ");
+    assert_eq!(simulate_typing_autocorrect("khnog "), "không ");
+    assert_eq!(simulate_typing_autocorrect("kieur "), "kiểu ");
+
+    // english words must never be autocorrected
+    assert_eq!(simulate_typing_autocorrect("chief "), "chief ");
+    assert_eq!(simulate_typing_autocorrect("brief "), "brief ");
+    assert_eq!(simulate_typing_autocorrect("server "), "server ");
+    assert_eq!(simulate_typing_autocorrect("tests "), "tests ");
+}
+
+#[test]
+fn test_smart_autocorrect_action_and_no_backspace_hijack() {
+    let mut ctx = ClakContext::new(Method::Telex);
+    ctx.autocorrect = true;
+    for ch in "nheiuef".chars() {
+        ctx.process_key(ch as u32, &ch.to_string(), false, None, 0, 0);
+    }
+    // on space, autocorrect fires with ACTION_AUTOCORRECT
+    let act_sp = ctx.process_key(b' ' as u32, " ", false, None, 0, 0);
+    assert_eq!(act_sp.action_type, ACTION_AUTOCORRECT);
+    assert_eq!(act_sp.delete_count, 7);
+    let commit = unsafe { CStr::from_ptr(act_sp.commit_str).to_str().unwrap() };
+    let del = unsafe { CStr::from_ptr(act_sp.delete_str).to_str().unwrap() };
+    assert_eq!(commit, "nhiều ");
+    assert_eq!(del, "nheiuef ");
+
+    // backspace after space is NOT hijacked (normal backspace behavior)
+    let act_bs = ctx.process_key(0xff08, "", false, None, 0, 0);
+    assert_eq!(act_bs.action_type, ACTION_FORWARD);
 }

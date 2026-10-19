@@ -48,6 +48,7 @@ typedef void ClakContext;
 #define CLAK_ACTION_ADDRESS_BAR_FIX     3
 #define CLAK_ACTION_REPLACE             4
 #define CLAK_ACTION_UINPUT_REPLACE      4
+#define CLAK_ACTION_AUTOCORRECT         5
 
 // Lifetime contract:
 // commit_str and delete_str are borrowed from the internal buffers of ClakContext.
@@ -78,6 +79,8 @@ bool        clak_config_get_uinput_ack(const ClakConfig *cfg);
 bool        clak_config_get_debug_log(const ClakConfig *cfg);
 bool        clak_config_get_shift_autofix(const ClakConfig *cfg);
 void        clak_config_set_shift_autofix(ClakConfig *cfg, bool enabled);
+bool        clak_config_get_autocorrect(const ClakConfig *cfg);
+void        clak_config_set_autocorrect(ClakConfig *cfg, bool enabled);
 int32_t     clak_config_get_startup_mode(const ClakConfig *cfg);
 int32_t     clak_config_get_method(const ClakConfig *cfg);
 char       *clak_config_get_toggle_shortcut(const ClakConfig *cfg);
@@ -91,6 +94,8 @@ ClakAction   clak_process_key(ClakContext *ctx,
                               const char *surrounding_text,
                               size_t cursor,
                               size_t anchor);
+
+bool         clak_observe_retype(const char *old_raw, const char *new_word);
 
 #ifdef __cplusplus
 }
