@@ -731,7 +731,6 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
 
             if (single_tap && !ctrl_shift_armed_ && !alt_shift_armed_) {
                 if (triggerShiftAutoFix()) {
-                    keyEvent.filterAndAccept();
                     return;
                 }
             }
@@ -1076,7 +1075,7 @@ bool ClakState::triggerShiftAutoFix() {
     std::string selected;
     if (surr.isValid() && cur != anch) {
         selected = utils::extractSelection(surr.text(), cur, anch);
-    } else if (is_address_bar || cur == 0 || !surr.isValid()) {
+    } else if (is_address_bar || !surr.isValid()) {
         if (engine_ && engine_->instance()) {
             auto* cb = engine_->instance()->addonManager().addon("clipboard");
             if (cb) {
@@ -1084,20 +1083,6 @@ bool ClakState::triggerShiftAutoFix() {
                     selected = cb->call<fcitx::IClipboard::primary>(ic_);
                 } catch (...) {
                     selected.clear();
-                }
-            }
-        }
-        if (selected.empty()) {
-            FILE* fp = popen("wl-paste --primary 2>/dev/null", "r");
-            if (fp) {
-                char buf[512];
-                while (fgets(buf, sizeof(buf), fp)) {
-                    selected += buf;
-                    if (selected.size() > 4096) break;
-                }
-                pclose(fp);
-                while (!selected.empty() && (selected.back() == '\n' || selected.back() == '\r')) {
-                    selected.pop_back();
                 }
             }
         }
