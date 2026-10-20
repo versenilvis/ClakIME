@@ -1,6 +1,7 @@
 #include "window/window_info.h"
 #include "de/hyprland.h"
 #include "de/gnome.h"
+#include "de/kde.h"
 #include "apps/terminal.h"
 #include "apps/browser.h"
 #include <chrono>
@@ -55,7 +56,7 @@ WindowInfo getActiveWindow(const std::string& fallback_app) {
     if (!hypr_ok || info.win_class.empty()) {
         if (de::queryAtspiActiveWindow(info)) {
             // found active window via at-spi
-        } else if (!fallback_app.empty() && fallback_app != "gnome-shell") {
+        } else if (!fallback_app.empty() && !de::isDesktopShell(fallback_app)) {
             info.win_class = fallback_app;
             info.win_title = fallback_app;
         } else {
@@ -73,7 +74,7 @@ WindowInfo getActiveWindow(const std::string& fallback_app) {
         }
     }
 
-    if (info.win_class == "gnome-shell") {
+    if (de::isDesktopShell(info.win_class)) {
         info.win_class.clear();
         info.win_title.clear();
     }

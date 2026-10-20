@@ -924,13 +924,18 @@ EOF
                     echo -e "  ${c_dim}[Giả lập] Sẽ hỏi người dùng có muốn cấu hình VirtualKeyboard không [y/N]${c_reset}"
                 elif prompt_yn "  Bạn có muốn Clak tự động cấu hình VirtualKeyboard cho KDE Plasma không? [y/N]: " "y"; then
                     local set_ok=0
+                    local target_desktop="/usr/share/applications/fcitx5-wayland-launcher.desktop"
+                    [ ! -f "$target_desktop" ] && target_desktop="/usr/share/applications/org.fcitx.Fcitx5.desktop"
                     if command -v kwriteconfig6 >/dev/null 2>&1; then
-                        kwriteconfig6 --file kwinrc --group Wayland --key InputMethod /usr/share/applications/org.fcitx.Fcitx5.desktop 2>/dev/null && set_ok=1 || true
+                        kwriteconfig6 --file kwinrc --group Wayland --key InputMethod "$target_desktop" 2>/dev/null || true
+                        kwriteconfig6 --file kwinrc --group Wayland --key VirtualKeyboardEnabled true 2>/dev/null && set_ok=1 || true
                     elif command -v kwriteconfig5 >/dev/null 2>&1; then
-                        kwriteconfig5 --file kwinrc --group Wayland --key InputMethod /usr/share/applications/org.fcitx.Fcitx5.desktop 2>/dev/null && set_ok=1 || true
+                        kwriteconfig5 --file kwinrc --group Wayland --key InputMethod "$target_desktop" 2>/dev/null || true
+                        kwriteconfig5 --file kwinrc --group Wayland --key VirtualKeyboardEnabled true 2>/dev/null && set_ok=1 || true
                     fi
                     if [ "$set_ok" -eq 1 ]; then
                         log_step "$lbl_de" "Đã cấu hình VirtualKeyboard thành Fcitx5 cho KDE Plasma"
+                        echo -e "  ${c_yellow}• Lưu ý: KWin Wayland chỉ nạp VirtualKeyboard khi khởi động, cần đăng xuất (Logout) để có hiệu lực${c_reset}"
                     else
                         log_step "$lbl_warn" "Chưa tự động cấu hình được kwinrc, vui lòng chọn thủ công"
                         echo ""
@@ -1295,6 +1300,11 @@ run_simulation() {
     echo -e "${c_green}✔ Cài đặt Clak thành công vào hệ thống Fcitx5!${c_reset}"
     echo -e "  ${c_cyan}::${c_reset} Vào cấu hình Fcitx5 (${c_cyan}fcitx5-configtool${c_reset}) để thêm Clak vào danh sách bộ gõ"
     echo -e "  ${c_yellow}:: Lưu ý:${c_reset} ${c_bold}Hãy tắt hết các bàn phím khác và chỉ thêm mỗi Clak. Nó đã hỗ trợ sẵn gõ cả tiếng Anh và tiếng Việt${c_reset}"
+    if echo "${XDG_CURRENT_DESKTOP:-}" | grep -qi "kde\|plasma"; then
+        echo -e "  ${c_cyan}:: Riêng người dùng KDE Plasma Wayland:${c_reset}"
+        echo -e "     ${c_yellow}• Vui lòng Đăng xuất (Logout) và Đăng nhập lại để KWin nạp giao thức bộ gõ Wayland${c_reset}"
+        echo -e "     ${c_yellow}• Sau khi đăng nhập lại, bộ gõ sẽ tự động kích hoạt trên toàn bộ ứng dụng${c_reset}"
+    fi
     echo ""
 }
 
@@ -1609,6 +1619,11 @@ run_install() {
     echo -e "${c_green}✔ Cài đặt Clak thành công vào hệ thống Fcitx5!${c_reset}"
     echo -e "  ${c_cyan}::${c_reset} Vào cấu hình Fcitx5 (${c_cyan}fcitx5-configtool${c_reset}) để thêm Clak vào danh sách bộ gõ để sử dụng"
     echo -e "  ${c_yellow}:: Lưu ý:${c_reset} ${c_bold}Hãy tắt hết các bàn phím khác và chỉ thêm mỗi Clak. Nó hỗ trợ gõ cả tiếng Anh và tiếng Việt${c_reset}"
+    if echo "${XDG_CURRENT_DESKTOP:-}" | grep -qi "kde\|plasma"; then
+        echo -e "  ${c_cyan}:: Riêng người dùng KDE Plasma Wayland:${c_reset}"
+        echo -e "     ${c_yellow}• Vui lòng Đăng xuất (Logout) và Đăng nhập lại để KWin nạp giao thức bộ gõ Wayland${c_reset}"
+        echo -e "     ${c_yellow}• Sau khi đăng nhập lại, bộ gõ sẽ tự động kích hoạt trên toàn bộ ứng dụng${c_reset}"
+    fi
     echo ""
     if command -v notify-send >/dev/null 2>&1; then
         notify-send -i org.fcitx.Fcitx5.clak "Clak" "Cài đặt thành công! Hãy tắt hết các bàn phím khác và chỉ thêm mỗi Clak. Nó hỗ trợ gõ cả tiếng Anh và tiếng Việt" 2>/dev/null || true

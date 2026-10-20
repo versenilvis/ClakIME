@@ -3,6 +3,7 @@
 #include "config/config.h"
 #include "config/sites.h"
 #include "window/window_info.h"
+#include "de/kde.h"
 #include "uinput/uinput.h"
 #include "utils/log.h"
 #include "utils/text_utils.h"
@@ -120,17 +121,17 @@ void ClakState::resetHard() {
 }
 
 std::string ClakState::appKey() {
-    if (ic_ && !ic_->program().empty() && ic_->program() != "gnome-shell") {
+    if (ic_ && !ic_->program().empty() && !de::isDesktopShell(ic_->program())) {
         return ic_->program();
     }
     if (ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal)) {
         return "terminal";
     }
     platform::WindowInfo win = platform::getActiveWindow();
-    if (!win.win_class.empty() && win.win_class != "gnome-shell") {
+    if (!win.win_class.empty() && !de::isDesktopShell(win.win_class)) {
         return win.win_class;
     }
-    if (ic_ && !ic_->program().empty()) {
+    if (ic_ && !ic_->program().empty() && !de::isDesktopShell(ic_->program())) {
         return ic_->program();
     }
     return "default";
@@ -144,7 +145,7 @@ std::string ClakState::activeSite() {
     last_site_check_us_ = now_us;
     std::string fallback = (ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal))
                                 ? "terminal"
-                                : ((ic_ && !ic_->program().empty() && ic_->program() != "gnome-shell") ? ic_->program() : "");
+                                : ((ic_ && !ic_->program().empty() && !de::isDesktopShell(ic_->program())) ? ic_->program() : "");
     platform::WindowInfo win = platform::getActiveWindow(fallback);
     std::string new_site = config::extractDomain(win.win_class, win.win_title);
     if (!new_site.empty() && !cached_site_.empty() && new_site != cached_site_) {
@@ -882,7 +883,7 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
 
     std::string fallback = (ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal))
                                 ? "terminal"
-                                : ((ic_ && !ic_->program().empty() && ic_->program() != "gnome-shell") ? ic_->program() : "");
+                                : ((ic_ && !ic_->program().empty() && !de::isDesktopShell(ic_->program())) ? ic_->program() : "");
     modal_handler_.updateStatus(fallback);
     if (modal_handler_.handleKey(key, [this]() { reset(); })) {
         return;

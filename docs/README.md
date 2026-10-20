@@ -170,7 +170,7 @@ Mỗi module được giải thích cặn kẽ trong các tài liệu sau:
 
 - [Lõi xử lý ngôn ngữ Rust](./engine.md): Cơ chế Telex, quy tắc đặt dấu, kiểm tra ngữ pháp tiếng Việt và giao tiếp C-FFI.
 - [Quản lý trạng thái và điều hướng phím](./ime-state-dispatch.md): Thuật toán chọn kênh Surrounding vs Uinput, cơ chế phím chốt sentinel, bộ đệm phím, và bộ đếm an toàn.
-- [Môi trường cửa sổ và nhận diện ứng dụng](./platform-window.md): Giao tiếp IPC socket với Hyprland, nhận diện domain web, và chuyển đổi trạng thái Vim.
+- [Môi trường cửa sổ và nhận diện ứng dụng](./platform-window.md): Giao tiếp IPC socket với Hyprland, tích hợp KDE Plasma, nhận diện domain web, và chuyển đổi trạng thái Vim.
 - [Bộ phát phím ảo và nhịp thời gian uinput](./uinput-pacing.md): Trình điều khiển `/dev/uinput`, kỹ thuật pacing với post_delay và gap_ms để trình duyệt không bị nuốt phím.
 - [Đo đạc và tối ưu độ trễ](./benchmark-latency.md): Phương pháp đo latency từ lúc nhận keydown đến khi commit, bảng số liệu p50/p95/p99 của 5 nhóm ứng dụng.
 - [Hệ thống kiểm thử tự động](./test.md): Danh mục kiểm thử Rust engine, C++ state machine, kịch bản phòng ngừa lỗi và hướng dẫn chạy test.

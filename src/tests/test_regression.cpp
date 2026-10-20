@@ -8,6 +8,8 @@
 #include "uinput/uinput.h"
 #include "window/window_info.h"
 #include "config/config.h"
+#include "de/kde.h"
+#include "apps/terminal.h"
 
 namespace clak {
 namespace test {
@@ -1056,6 +1058,37 @@ TEST_F(RegressionCorpusTest, test_regression_tiktok_uses_uinput_with_draftjs_pac
     EXPECT_FALSE(state->isDeleting());
     ASSERT_FALSE(ic.commits.empty());
     EXPECT_EQ(ic.commits.back(), "đ");
+}
+
+TEST_F(RegressionCorpusTest, test_kde_support_and_shell_filtering) {
+    // desktop shells must be recognized and filtered
+    EXPECT_TRUE(de::isDesktopShell("gnome-shell"));
+    EXPECT_TRUE(de::isDesktopShell("plasmashell"));
+    EXPECT_TRUE(de::isDesktopShell("org.kde.plasmashell"));
+    EXPECT_TRUE(de::isDesktopShell("plasma-desktop"));
+    EXPECT_TRUE(de::isDesktopShell("krunner"));
+    EXPECT_TRUE(de::isDesktopShell("org.kde.krunner"));
+    EXPECT_TRUE(de::isDesktopShell("kscreenlocker_greet"));
+    EXPECT_TRUE(de::isDesktopShell("org.kde.kscreenlocker"));
+    EXPECT_TRUE(de::isDesktopShell("org.kde.polkit-kde-authentication-agent-1"));
+    EXPECT_TRUE(de::isDesktopShell("xdg-desktop-portal-gnome"));
+
+    // normal apps must not be considered desktop shells
+    EXPECT_FALSE(de::isDesktopShell("firefox"));
+    EXPECT_FALSE(de::isDesktopShell("google-chrome"));
+    EXPECT_FALSE(de::isDesktopShell("konsole"));
+    EXPECT_FALSE(de::isDesktopShell("yakuake"));
+    EXPECT_FALSE(de::isDesktopShell("code"));
+
+    // yakuake must be recognized as terminal app
+    EXPECT_TRUE(apps::isTerminalApp("yakuake"));
+    EXPECT_TRUE(apps::isTerminalApp("konsole"));
+
+    // appKey filtering with plasmashell fallback
+    platform::setMockActiveWindow(platform::WindowInfo{"plasmashell", "plasmashell", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "plasmashell");
+    ime::ClakState state(engine_.get(), &ic);
+    EXPECT_EQ(state.appKey(), "default");
 }
 
 } // namespace test

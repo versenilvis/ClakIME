@@ -215,6 +215,16 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
             }
         ));
     }
+    if report.kde.is_kde {
+        out.push_str(&format!(
+            "- KDE Plasma: {}\n",
+            if report.kde.virtual_keyboard_configured {
+                "VirtualKeyboard đã trỏ về Fcitx5 (OK)"
+            } else {
+                "VirtualKeyboard chưa trỏ về Fcitx5 (cần cấu hình kwinrc)"
+            }
+        ));
+    }
     out.push('\n');
 
     if !report.conflicts.is_empty() {

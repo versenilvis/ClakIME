@@ -1,4 +1,5 @@
 #include "de/gnome.h"
+#include "de/kde.h"
 #include <cstdio>
 #include <dlfcn.h>
 #include <cctype>
@@ -81,7 +82,7 @@ bool queryAtspiActiveWindow(window::WindowInfo& info) {
         std::string raw_an = an ? an : "";
         if (p_free && an) p_free(an);
         std::string app_name = normalizeAppName(raw_an);
-        if (app_name == "gnome-shell" || app_name.find("portal") != std::string::npos) {
+        if (de::isDesktopShell(app_name)) {
             if (p_unref) p_unref(app);
             continue;
         }

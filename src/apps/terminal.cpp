@@ -25,7 +25,7 @@ bool isTerminalApp(const std::string& app) {
     if (isVteTerminalApp(app)) return true;
     static const std::vector<std::string> terms = {
         "kitty", "ghostty", "alacritty", "foot", "wezterm", "xterm",
-        "gnome-terminal", "konsole", "tilix", "terminator", "urxvt",
+        "gnome-terminal", "konsole", "yakuake", "tilix", "terminator", "urxvt",
         "terminal", "x-terminal-emulator", "x-terminal-emul"
     };
     for (const auto& t : terms) {
@@ -47,7 +47,7 @@ std::string detectRunningTerminalApp() {
 
     static const char* const kTerminals[] = {
         "kitty", "x-terminal-emulator", "x-terminal-emul", "alacritty", "ghostty", "foot",
-        "wezterm", "gnome-terminal", "konsole", "xterm", "terminator", "tilix",
+        "wezterm", "gnome-terminal", "konsole", "yakuake", "xterm", "terminator", "tilix",
         "ptyxis", "kgx", "gnome-console", "blackbox"
     };
 

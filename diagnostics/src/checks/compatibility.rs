@@ -29,6 +29,14 @@ pub struct JetBrainsStatus {
     pub explanation: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KdeStatus {
+    pub is_kde: bool,
+    pub virtual_keyboard_configured: bool,
+    pub input_method_entry: Option<String>,
+    pub explanation: String,
+}
+
 // inspect fcitx5 profile configuration for clak presence
 pub fn check_profile() -> ProfileStatus {
     let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
@@ -697,4 +705,246 @@ pub fn fix_jetbrains_compatibility() -> Result<usize, String> {
     }
 
     Ok(patched_count)
+}
+
+// inspect kde plasma virtual keyboard settings
+pub fn check_kde() -> KdeStatus {
+    let de = env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
+    let kde_full = env::var("KDE_FULL_SESSION").unwrap_or_default();
+    let is_kde = de.contains("KDE") || de.contains("Plasma") || de.contains("plasma") || kde_full == "true";
+
+    if !is_kde {
+        return KdeStatus {
+            is_kde: false,
+            virtual_keyboard_configured: false,
+            input_method_entry: None,
+            explanation: "Không phát hiện môi trường KDE Plasma".to_string(),
+        };
+    }
+
+    let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    let kwinrc_path = PathBuf::from(&home).join(".config/kwinrc");
+
+    let mut virtual_keyboard_configured = false;
+    let mut input_method_entry = None;
+
+    if kwinrc_path.exists() {
+        if let Ok(content) = fs::read_to_string(&kwinrc_path) {
+            let mut in_wayland = false;
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with('[') && trimmed.ends_with(']') {
+                    in_wayland = trimmed == "[Wayland]";
+                    continue;
+                }
+                if in_wayland && trimmed.starts_with("InputMethod=") {
+                    let val = trimmed.trim_start_matches("InputMethod=").trim();
+                    input_method_entry = Some(val.to_string());
+                    if val.contains("Fcitx5") || val.contains("fcitx") {
+                        virtual_keyboard_configured = true;
+                    }
+                }
+            }
+        }
+    }
+
+    // fallback check with kreadconfig6 or kreadconfig5 if file did not explicitly match
+    if !virtual_keyboard_configured {
+        for cmd in &["kreadconfig6", "kreadconfig5"] {
+            if let Ok(out) = Command::new(cmd)
+                .args(["--file", "kwinrc", "--group", "Wayland", "--key", "InputMethod"])
+                .output()
+            {
+                if out.status.success() {
+                    let val = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                    if !val.is_empty() {
+                        input_method_entry = Some(val.clone());
+                        if val.contains("Fcitx5") || val.contains("fcitx") {
+                            virtual_keyboard_configured = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let explanation = if virtual_keyboard_configured {
+        "KDE Plasma đã cấu hình VirtualKeyboard trỏ về Fcitx5 thành công".to_string()
+    } else {
+        "KWin Wayland cần đặt VirtualKeyboard thành Fcitx5 để bộ gõ hiển thị khung popup và hoạt động chính xác".to_string()
+    };
+
+    KdeStatus {
+        is_kde: true,
+        virtual_keyboard_configured,
+        input_method_entry,
+        explanation,
+    }
+}
+
+// configure kwinrc virtual keyboard for fcitx5 on kde plasma
+pub fn fix_kde_virtual_keyboard() -> Result<(), String> {
+    let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    let kwinrc_path = PathBuf::from(&home).join(".config/kwinrc");
+    let launcher_desktop = "/usr/share/applications/fcitx5-wayland-launcher.desktop";
+    let target_desktop = if Path::new(launcher_desktop).exists() {
+        launcher_desktop
+    } else {
+        "/usr/share/applications/org.fcitx.Fcitx5.desktop"
+    };
+
+    let mut kwrite_ok = false;
+    for cmd in &["kwriteconfig6", "kwriteconfig5"] {
+        let im_ok = Command::new(cmd)
+            .args(["--file", "kwinrc", "--group", "Wayland", "--key", "InputMethod", target_desktop])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        let vk_ok = Command::new(cmd)
+            .args(["--file", "kwinrc", "--group", "Wayland", "--key", "VirtualKeyboardEnabled", "true"])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if im_ok && vk_ok {
+            kwrite_ok = true;
+            break;
+        }
+    }
+
+    if !kwrite_ok {
+        // fallback manual file edit
+        let mut lines = Vec::new();
+        let mut in_wayland = false;
+        let mut found_wayland = false;
+        let mut updated_im = false;
+        let mut updated_vk = false;
+
+        if kwinrc_path.exists() {
+            if let Ok(content) = fs::read_to_string(&kwinrc_path) {
+                for line in content.lines() {
+                    let trimmed = line.trim();
+                    if trimmed.starts_with('[') && trimmed.ends_with(']') {
+                        if in_wayland {
+                            if !updated_im {
+                                lines.push(format!("InputMethod={}", target_desktop));
+                                updated_im = true;
+                            }
+                            if !updated_vk {
+                                lines.push("VirtualKeyboardEnabled=true".to_string());
+                                updated_vk = true;
+                            }
+                        }
+                        in_wayland = trimmed == "[Wayland]";
+                        if in_wayland {
+                            found_wayland = true;
+                        }
+                        lines.push(line.to_string());
+                        continue;
+                    }
+                    if in_wayland && trimmed.starts_with("InputMethod=") {
+                        lines.push(format!("InputMethod={}", target_desktop));
+                        updated_im = true;
+                        continue;
+                    }
+                    if in_wayland && trimmed.starts_with("VirtualKeyboardEnabled=") {
+                        lines.push("VirtualKeyboardEnabled=true".to_string());
+                        updated_vk = true;
+                        continue;
+                    }
+                    lines.push(line.to_string());
+                }
+                if in_wayland {
+                    if !updated_im {
+                        lines.push(format!("InputMethod={}", target_desktop));
+                    }
+                    if !updated_vk {
+                        lines.push("VirtualKeyboardEnabled=true".to_string());
+                    }
+                }
+            }
+        }
+
+        if !found_wayland {
+            lines.push("[Wayland]".to_string());
+            lines.push(format!("InputMethod={}", target_desktop));
+            lines.push("VirtualKeyboardEnabled=true".to_string());
+        }
+
+        fs::write(&kwinrc_path, lines.join("\n") + "\n").map_err(|e| e.to_string())?;
+    }
+
+    // reload kwin virtual keyboard without requiring session relogin
+    for prop in &["active", "enabled"] {
+        let _ = Command::new("busctl")
+            .args([
+                "--user",
+                "call",
+                "org.kde.KWin",
+                "/VirtualKeyboard",
+                "org.freedesktop.DBus.Properties",
+                "Set",
+                "ssv",
+                "org.kde.kwin.VirtualKeyboard",
+                prop,
+                "b",
+                "false",
+            ])
+            .status();
+    }
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    for prop in &["active", "enabled"] {
+        let _ = Command::new("busctl")
+            .args([
+                "--user",
+                "call",
+                "org.kde.KWin",
+                "/VirtualKeyboard",
+                "org.freedesktop.DBus.Properties",
+                "Set",
+                "ssv",
+                "org.kde.kwin.VirtualKeyboard",
+                prop,
+                "b",
+                "true",
+            ])
+            .status();
+    }
+    let _ = Command::new("busctl")
+        .args([
+            "--user",
+            "call",
+            "org.kde.KWin",
+            "/KWin",
+            "org.kde.KWin",
+            "reconfigure",
+        ])
+        .status();
+    for qdbus_bin in &["qdbus6", "qdbus"] {
+        let _ = Command::new(qdbus_bin)
+            .args([
+                "org.kde.KWin",
+                "/VirtualKeyboard",
+                "org.freedesktop.DBus.Properties.Set",
+                "org.kde.kwin.VirtualKeyboard",
+                "enabled",
+                "false",
+            ])
+            .status();
+        let _ = Command::new(qdbus_bin)
+            .args([
+                "org.kde.KWin",
+                "/VirtualKeyboard",
+                "org.freedesktop.DBus.Properties.Set",
+                "org.kde.kwin.VirtualKeyboard",
+                "enabled",
+                "true",
+            ])
+            .status();
+    }
+
+    // restart fcitx5 daemon to re-bind to kwin wayland input method protocol
+    restart_fcitx5_daemon();
+
+    Ok(())
 }

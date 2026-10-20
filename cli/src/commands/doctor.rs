@@ -19,6 +19,9 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
         if summary.jetbrains_patched > 0 {
             println!("    ✔ Đã cấu hình tương thích JetBrains IDEs.");
         }
+        if summary.kde_fixed {
+            println!("    ✔ Đã cấu hình VirtualKeyboard cho KDE Plasma thành công.");
+        }
         if summary.permissions_fixed {
             println!("    ✔ Đã cấp quyền thiết bị input/uinput thành công.");
         }
@@ -215,6 +218,13 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
                 "  • JetBrains IDEs: \x1b[33m[CẦN TỐI ƯU]\x1b[0m Chưa cấu hình: {}",
                 report.jetbrains.unconfigured_ides.join(", ")
             );
+        }
+    }
+    if report.kde.is_kde {
+        if report.kde.virtual_keyboard_configured {
+            println!("  • KDE Plasma: \x1b[32m[OK]\x1b[0m VirtualKeyboard đã đặt Fcitx5");
+        } else {
+            println!("  • KDE Plasma: \x1b[33m[CẦN CẤU HÌNH]\x1b[0m VirtualKeyboard chưa đặt Fcitx5");
         }
     }
 

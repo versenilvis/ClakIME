@@ -7,8 +7,9 @@ pub use checks::autostart::{
     check_autostart, disable_autostart, enable_autostart, AutostartStatus,
 };
 pub use checks::compatibility::{
-    check_jetbrains, check_profile, check_wps, fix_fcitx5_profile, fix_jetbrains_compatibility,
-    fix_wps_compatibility, restart_fcitx5_daemon, JetBrainsStatus, ProfileStatus, WpsStatus,
+    check_jetbrains, check_kde, check_profile, check_wps, fix_fcitx5_profile,
+    fix_jetbrains_compatibility, fix_kde_virtual_keyboard, fix_wps_compatibility,
+    restart_fcitx5_daemon, JetBrainsStatus, KdeStatus, ProfileStatus, WpsStatus,
 };
 pub use checks::config::{check_config, ConfigStatus};
 pub use checks::conflicts::{check_conflicts, AppConflict};
@@ -46,6 +47,7 @@ pub struct DiagnosticReport {
     pub profile: ProfileStatus,
     pub wps: WpsStatus,
     pub jetbrains: JetBrainsStatus,
+    pub kde: KdeStatus,
     pub conflicts: Vec<AppConflict>,
     pub issues: Vec<DiagnosticIssue>,
     pub warnings: Vec<DiagnosticWarning>,
@@ -75,6 +77,7 @@ pub fn run_diagnostics() -> DiagnosticReport {
     let profile = check_profile();
     let wps = check_wps();
     let jetbrains = check_jetbrains();
+    let kde = check_kde();
 
     let mut issues = Vec::new();
     let mut warnings = Vec::new();
@@ -135,6 +138,14 @@ pub fn run_diagnostics() -> DiagnosticReport {
             title: format!("JetBrains IDEs chưa tối ưu ({})", jetbrains.unconfigured_ides.join(", ")),
             message: "Java runtime trên Wayland có lỗi JBR-5672 gây mất focus khi đổi tab. Cần thêm -Dawt.toolkit.name=sun.awt.X11.XToolkit".to_string(),
             fix_command: Some("Bấm nút 'Tối ưu hóa JetBrains' trong Tab Bác sĩ".to_string()),
+        });
+    }
+
+    if kde.is_kde && !kde.virtual_keyboard_configured {
+        warnings.push(DiagnosticWarning {
+            title: "KDE Plasma chưa đặt VirtualKeyboard cho Fcitx5".to_string(),
+            message: "KWin Wayland cần đặt VirtualKeyboard thành Fcitx5 để bộ gõ hiển thị khung popup và hoạt động chính xác".to_string(),
+            fix_command: Some("kwriteconfig6 --file kwinrc --group Wayland --key InputMethod /usr/share/applications/org.fcitx.Fcitx5.desktop hoặc chạy clak doctor --fix".to_string()),
         });
     }
 
@@ -267,6 +278,7 @@ pub fn run_diagnostics() -> DiagnosticReport {
         profile,
         wps,
         jetbrains,
+        kde,
         conflicts,
         issues,
         warnings,
@@ -280,6 +292,7 @@ pub struct AutoFixSummary {
     pub autostart_enabled: bool,
     pub wps_patched: usize,
     pub jetbrains_patched: usize,
+    pub kde_fixed: bool,
     pub permissions_fixed: bool,
     pub errors: Vec<String>,
 }
@@ -291,6 +304,7 @@ impl AutoFixSummary {
             || self.autostart_enabled
             || self.wps_patched > 0
             || self.jetbrains_patched > 0
+            || self.kde_fixed
             || self.permissions_fixed
     }
 }
@@ -359,6 +373,19 @@ pub fn auto_fix_all(include_permissions: bool) -> AutoFixSummary {
             Err(e) => summary
                 .errors
                 .push(format!("Lỗi cấu hình JetBrains: {}", e)),
+        }
+    }
+
+    // 5b. Fix KDE VirtualKeyboard if needed
+    if pre_report.kde.is_kde && !pre_report.kde.virtual_keyboard_configured {
+        match fix_kde_virtual_keyboard() {
+            Ok(_) => {
+                summary.kde_fixed = true;
+                summary.fcitx5_restarted = true;
+            }
+            Err(e) => summary
+                .errors
+                .push(format!("Lỗi cấu hình KDE VirtualKeyboard: {}", e)),
         }
     }
 

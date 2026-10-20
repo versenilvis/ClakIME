@@ -1,6 +1,7 @@
 #include "de/keyboard_settings.h"
 #include "de/hyprland.h"
 #include "de/gnome.h"
+#include "de/kde.h"
 #include <chrono>
 #include <cstdlib>
 
@@ -44,6 +45,13 @@ uint64_t getRepeatDelayUs() {
             return s_cached_delay;
         }
         if (s_cached_delay == 0) s_cached_delay = 200000; // hyprland default 200ms
+    } else if (isKdeSession()) {
+        auto val = queryKdeRepeatDelayUs();
+        if (val.has_value()) {
+            s_cached_delay = *val;
+            return s_cached_delay;
+        }
+        if (s_cached_delay == 0) s_cached_delay = 600000; // kde default 600ms
     } else {
         auto val = queryGnomeRepeatDelayUs();
         if (val.has_value()) {
@@ -79,6 +87,13 @@ uint64_t getRepeatIntervalUs() {
             return s_cached_interval;
         }
         if (s_cached_interval == 0) s_cached_interval = 25000; // hyprland default 25ms
+    } else if (isKdeSession()) {
+        auto val = queryKdeRepeatIntervalUs();
+        if (val.has_value()) {
+            s_cached_interval = *val;
+            return s_cached_interval;
+        }
+        if (s_cached_interval == 0) s_cached_interval = 40000; // kde default 40ms
     } else {
         auto val = queryGnomeRepeatIntervalUs();
         if (val.has_value()) {
