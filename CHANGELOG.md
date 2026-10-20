@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.7.1](https://github.com/versenilvis/ClakIME/releases/tag/v0.7.1) - 2026-10-20
+
+### Bug fixes
+
+- Support source build, gnome terminal variants, and ubuntu multiarch ([9733d9](https://github.com/versenilvis/ClakIME/commit/9733d9e2473f3a35f43b0aab1a4c34d0c7cd8ee0))
+
 ## [v0.7.0](https://github.com/versenilvis/ClakIME/releases/tag/v0.7.0) - 2026-10-20
 
 ### Bug fixes
