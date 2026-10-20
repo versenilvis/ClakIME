@@ -1,6 +1,6 @@
 [package]
 name = "clak-engine"
-version = "0.5.0"
+version = "0.7.0"
 edition = "2021"
 rust-version = "1.85.0"
 description = "Vietnamese input method engine"
