@@ -9,6 +9,7 @@ dry_run=0
 target_version=""
 force_update=0
 assume_yes=0
+build_from_source=0
 tmp_dir=""
 
 # load shared path helpers if available
@@ -38,6 +39,9 @@ trap cleanup EXIT INT TERM
 # parse command-line arguments
 for arg in "$@"; do
     case "$arg" in
+        --source|--build|-s)
+            build_from_source=1
+            ;;
         --dry-run|--simulate|-d)
             dry_run=1
             ;;
@@ -55,6 +59,7 @@ for arg in "$@"; do
             echo "Hoặc: bash scripts/update.sh [options]"
             echo ""
             echo "Tùy chọn:"
+            echo "  -s, --source, --build      Biên dịch và cập nhật trực tiếp từ mã nguồn GitHub (main)"
             echo "  -d, --dry-run, --simulate  Chạy giả lập kiểm tra quy trình cập nhật"
             echo "  -f, --force                Cập nhật đè phiên bản mới nhất ngay cả khi đang ở bản mới"
             echo "  -y, --yes                  Tự động đồng ý cập nhật qua trình quản lý gói nếu có"
@@ -285,6 +290,28 @@ get_installed_version() {
         fi
     fi
 
+    # check if installed via dpkg
+    if command -v dpkg-query >/dev/null 2>&1; then
+        local d_ver
+        d_ver=$(dpkg-query -W -f='${Version}' clak 2>/dev/null || true)
+        if [ -n "$d_ver" ]; then
+            echo "v${d_ver%%-*}"
+            return
+        fi
+    fi
+
+    # check if installed via addon conf
+    for conf in "${HOME}/.local/share/fcitx5/addon/clak.conf" "/usr/share/fcitx5/addon/clak.conf"; do
+        if [ -f "$conf" ]; then
+            local c_ver
+            c_ver=$(grep -m1 '^Version=' "$conf" 2>/dev/null | cut -d= -f2 || true)
+            if [ -n "$c_ver" ]; then
+                echo "v${c_ver}"
+                return
+            fi
+        fi
+    done
+
     echo "v0.1.0"
 }
 
@@ -294,6 +321,14 @@ detect_install_source() {
     if command -v pacman >/dev/null 2>&1; then
         if pacman -Qi clak >/dev/null 2>&1 || pacman -Qi clak-git >/dev/null 2>&1 || pacman -Qi fcitx5-clak >/dev/null 2>&1; then
             echo "aur"
+            return
+        fi
+    fi
+
+    # debian or ubuntu dpkg package
+    if command -v dpkg-query >/dev/null 2>&1; then
+        if dpkg-query -W clak >/dev/null 2>&1; then
+            echo "dpkg"
             return
         fi
     fi
@@ -602,33 +637,72 @@ run_update() {
         esac
     fi
 
+    # build from source if requested
+    if [ "$build_from_source" -eq 1 ] && [ "$source_type" != "git" ]; then
+        log_step "$lbl_fetch" "Tải mã nguồn Clak từ GitHub..."
+        if ! command -v git >/dev/null 2>&1; then
+            err "Cần git để clone mã nguồn"
+        fi
+        local tmp_src
+        tmp_src=$(mktemp -d)
+        git clone --depth 1 "https://github.com/${repo}.git" "${tmp_src}/clak"
+        (
+            cd "${tmp_src}/clak"
+            if command -v just >/dev/null 2>&1; then
+                just build-release
+                just install-user
+            else
+                log_step "$lbl_update" "Biên dịch bằng CMake & Cargo..."
+                cmake -B build -DCMAKE_BUILD_TYPE=Release
+                cmake --build build --target install-user
+            fi
+        )
+        rm -rf "$tmp_src"
+        configure_wps_compatibility 0
+        configure_steam_compatibility 0
+        spin_step "Đang nạp lại daemon Fcitx5..." 0.6
+        reload_fcitx5
+        local updated_ver
+        updated_ver=$(get_installed_version)
+        printf "\r\033[K\n"
+        echo -e "${c_green}Đã biên dịch và update Clak lên phiên bản ${updated_ver}${c_reset}"
+        echo ""
+        exit 0
+    fi
+
     # if running from local git source tree
     if [ "$source_type" = "git" ]; then
         log_step "$lbl_check" "Phát hiện mã nguồn trong Git repository"
-        if command -v just >/dev/null 2>&1; then
-            local git_reply="y"
-            if [ "$assume_yes" -eq 0 ]; then
-                read -r -p "Bạn có muốn git pull và build lại bằng just? [Y/n] " git_reply < /dev/tty || git_reply="y"
-            fi
-            case "$git_reply" in
-                [yY][eE][sS]|[yY]|"")
-                    git pull
-                    just build-release
-                    just install
-                    spin_step "Đang nạp lại daemon Fcitx5..." 0.6
-                    reload_fcitx5
-                    local updated_ver
-                    updated_ver=$(get_installed_version)
-                    printf "\r\033[K\n"
-                    echo -e "${c_green}Đã update Clak lên phiên bản ${updated_ver}${c_reset}"
-                    echo ""
-                    exit 0
-                    ;;
-                *)
-                    log_step "$lbl_warn" "Bỏ qua build từ source, tiếp tục tải bản phát hành"
-                    ;;
-            esac
+        local git_reply="y"
+        if [ "$assume_yes" -eq 0 ]; then
+            read -r -p "Bạn có muốn git pull và build lại từ source? [Y/n] " git_reply < /dev/tty || git_reply="y"
         fi
+        case "$git_reply" in
+            [yY][eE][sS]|[yY]|"")
+                git pull
+                if command -v just >/dev/null 2>&1; then
+                    just build-release
+                    just install-user
+                else
+                    log_step "$lbl_update" "Biên dịch bằng CMake & Cargo..."
+                    cmake -B build -DCMAKE_BUILD_TYPE=Release
+                    cmake --build build --target install-user
+                fi
+                configure_wps_compatibility 0
+                configure_steam_compatibility 0
+                spin_step "Đang nạp lại daemon Fcitx5..." 0.6
+                reload_fcitx5
+                local updated_ver
+                updated_ver=$(get_installed_version)
+                printf "\r\033[K\n"
+                echo -e "${c_green}Đã update Clak lên phiên bản ${updated_ver}${c_reset}"
+                echo ""
+                exit 0
+                ;;
+            *)
+                log_step "$lbl_warn" "Bỏ qua build từ source, tiếp tục tải bản phát hành"
+                ;;
+        esac
     fi
 
     # 2. query latest release from github api
@@ -678,7 +752,17 @@ run_update() {
     arch=$(uname -m)
     local download_url=""
     local archive_pat="linux-${arch}.tar.xz"
-    download_url=$(echo "$releases_json" | grep "browser_download_url" | grep "linux-${arch}\.tar\.xz" | head -1 | cut -d '"' -f 4 || true)
+
+    if [ "$source_type" = "dpkg" ]; then
+        download_url=$(echo "$releases_json" | grep "browser_download_url" | grep "amd64\.deb" | head -1 | cut -d '"' -f 4 || true)
+        if [ -n "$download_url" ]; then
+            archive_pat="amd64.deb"
+        fi
+    fi
+
+    if [ -z "$download_url" ]; then
+        download_url=$(echo "$releases_json" | grep "browser_download_url" | grep "linux-${arch}\.tar\.xz" | head -1 | cut -d '"' -f 4 || true)
+    fi
     if [ -z "$download_url" ]; then
         download_url=$(echo "$releases_json" | grep "browser_download_url" | grep "linux-${arch}\.tar\.gz" | head -1 | cut -d '"' -f 4 || true)
         archive_pat="linux-${arch}.tar.gz"
@@ -729,6 +813,18 @@ run_update() {
                 log_step "$lbl_check" "Xác thực SHA256 thành công (${actual_hash:0:16}...)"
             fi
         fi
+    # install deb package directly if dpkg managed
+    if [ "$source_type" = "dpkg" ] && [[ "$archive_name" == *.deb ]]; then
+        log_step "$lbl_update" "Cập nhật gói qua dpkg..."
+        run_sudo dpkg -i "${tmp_dir}/${archive_name}"
+        configure_wps_compatibility 0
+        configure_steam_compatibility 0
+        spin_step "Đang nạp lại daemon Fcitx5..." 0.6
+        reload_fcitx5
+        printf "\r\033[K\n"
+        echo -e "${c_green}Đã update Clak lên phiên bản ${latest_tag}${c_reset}"
+        echo ""
+        exit 0
     fi
 
     # 4. extract archive
@@ -818,7 +914,13 @@ run_update() {
         # because fcitx5 only resolves relative Library paths against system PKGLIBDIR
         sed -i "s|^Library=.*|Library=${lib_dest}/libclak|" "${addon_dest}/clak.conf"
 
-
+        # create symlinks for known user addon directories (e.g. Ubuntu multiarch)
+        for d in $(get_user_addon_dirs); do
+            if [ "$d" != "$lib_dest" ]; then
+                mkdir -p "$d"
+                ln -sf "${lib_dest}/libclak.so" "$d/libclak.so" 2>/dev/null || true
+            fi
+        done
 
         if [ -f "$cli_src" ]; then
             mkdir -p "${HOME}/.local/bin"
@@ -851,6 +953,9 @@ run_update() {
 
     mkdir -p "${HOME}/.local/share/clak"
     echo "$latest_tag" > "$version_file"
+    if [ -f "${script_dir}/update.sh" ]; then
+        cp "${script_dir}/update.sh" "${HOME}/.local/share/clak/update.sh" 2>/dev/null || true
+    fi
 
     # clean up temporary archive directory
     if [ -n "${tmp_dir:-}" ] && [ -d "$tmp_dir" ]; then

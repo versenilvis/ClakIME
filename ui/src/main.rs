@@ -1423,12 +1423,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let win_weak_thread = win_update.clone();
         std::thread::spawn(move || {
             let terminals = [
+                "ptyxis",
+                "kgx",
+                "gnome-terminal",
                 "kitty",
                 "alacritty",
                 "foot",
                 "wezterm",
-                "gnome-terminal",
                 "konsole",
+                "xfce4-terminal",
+                "x-terminal-emulator",
                 "xterm",
             ];
             let term = terminals.iter().find(|&&t| {
@@ -1439,25 +1443,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .unwrap_or(false)
             });
 
-            let script_path = if std::path::Path::new("scripts/update.sh").exists() {
-                std::path::PathBuf::from("scripts/update.sh")
-            } else if let Ok(home) = std::env::var("HOME") {
-                std::path::PathBuf::from(home).join("dev/github/input-method/scripts/update.sh")
-            } else {
-                std::path::PathBuf::from("/tmp/update.sh")
-            };
+            let script_cmd = "if [ -f scripts/update.sh ]; then bash scripts/update.sh; elif [ -f \"$HOME/.local/share/clak/update.sh\" ]; then bash \"$HOME/.local/share/clak/update.sh\"; else curl -fsSL https://raw.githubusercontent.com/versenilvis/ClakIME/main/scripts/update.sh | bash; fi; echo ''; read -p 'Nhấn Enter để đóng...' dummy";
 
             let res = if let Some(&term_cmd) = term {
-                let cmd_str = format!(
-                    "bash \"{}\"; echo ''; read -p 'Nhấn Enter để đóng...' dummy",
-                    script_path.display()
-                );
-                std::process::Command::new(term_cmd)
-                    .args(["-e", "bash", "-c", &cmd_str])
-                    .status()
+                let mut cmd = std::process::Command::new(term_cmd);
+                match term_cmd {
+                    "gnome-terminal" | "kgx" | "ptyxis" | "kitty" => {
+                        cmd.args(["--", "bash", "-c", script_cmd]);
+                    }
+                    "foot" => {
+                        cmd.args(["bash", "-c", script_cmd]);
+                    }
+                    "wezterm" => {
+                        cmd.args(["start", "--", "bash", "-c", script_cmd]);
+                    }
+                    _ => {
+                        cmd.args(["-e", "bash", "-c", script_cmd]);
+                    }
+                }
+                cmd.status()
             } else {
                 std::process::Command::new("bash")
-                    .arg(&script_path)
+                    .args(["-c", script_cmd])
                     .status()
             };
 

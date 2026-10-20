@@ -1534,6 +1534,13 @@ run_install() {
         # because fcitx5 only resolves relative Library paths against system PKGLIBDIR
         sed -i "s|^Library=.*|Library=${lib_dest}/libclak|" "${addon_dest}/clak.conf"
 
+        # create symlinks for known user addon directories (e.g. Ubuntu multiarch)
+        for d in $(get_user_addon_dirs); do
+            if [ "$d" != "$lib_dest" ]; then
+                mkdir -p "$d"
+                ln -sf "${lib_dest}/libclak.so" "$d/libclak.so" 2>/dev/null || true
+            fi
+        done
 
         if [ -f "$cli_src" ]; then
             mkdir -p "${HOME}/.local/bin"
@@ -1579,6 +1586,12 @@ run_install() {
     # save installed version for updater
     mkdir -p "${HOME}/.local/share/clak"
     echo "$tag_name" > "${HOME}/.local/share/clak/version"
+    if [ -f "${script_dir}/update.sh" ]; then
+        cp "${script_dir}/update.sh" "${HOME}/.local/share/clak/update.sh" 2>/dev/null || true
+    fi
+    if [ -f "${script_dir}/uninstall.sh" ]; then
+        cp "${script_dir}/uninstall.sh" "${HOME}/.local/share/clak/uninstall.sh" 2>/dev/null || true
+    fi
 
     # clean up temporary archive directory
     if [ -n "${tmp_dir:-}" ] && [ -d "$tmp_dir" ]; then
