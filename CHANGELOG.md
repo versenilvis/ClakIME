@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.7.2](https://github.com/versenilvis/ClakIME/releases/tag/v0.7.2) - 2026-10-20
+
+### Bug fixes
+
+- Route gnome-terminal and vte terminals to vte profile ([4031c8](https://github.com/versenilvis/ClakIME/commit/4031c84c941cb5c361653db20f6f8cee9e30295e))
+- Top-align pacing tab items and remove confusing telemetry box ([23171b](https://github.com/versenilvis/ClakIME/commit/23171bc97858e58aa56a54253979889bfdd087bd))
+
+### Documentation
+
+- Add adaptive pacing architecture design ([9c6946](https://github.com/versenilvis/ClakIME/commit/9c6946c8adebcf06d27e2f6a758edd76fb7ea545))
+
+### Features
+
+- Add pacing presets and delay adjustment in advanced settings ([a65a39](https://github.com/versenilvis/ClakIME/commit/a65a397430732f8a5561cdca09c97922ea81c752))
+- Add dedicated pacing tab with telemetry and grouped delay sliders ([407060](https://github.com/versenilvis/ClakIME/commit/4070606e5900f306cb8aac365fe583c7ac1e8643))
+- Implement aimd adaptive pacing engine with state persistence ([8855c5](https://github.com/versenilvis/ClakIME/commit/8855c56dc02bcbb051ac1c9abeac78095f869bc1))
+
 ## [v0.7.1](https://github.com/versenilvis/ClakIME/releases/tag/v0.7.1) - 2026-10-20
 
 ### Bug fixes
