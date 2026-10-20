@@ -33,7 +33,7 @@ fn is_mixed_case(word: &str) -> bool {
 
 // checks whether a word already contains vietnamese diacritics
 pub fn has_vietnamese_accent(word: &str) -> bool {
-    word.chars().any(|c| !c.is_ascii())
+    !word.is_ascii()
 }
 
 // checks if raw string has telex-specific modifier or tone characters
@@ -85,9 +85,9 @@ fn telex_keystroke_bounds(word: &str) -> (usize, usize) {
                 min_keys += 2;
                 max_keys += 2;
             }
-            'ấ' | 'Ấ' | 'ầ' | 'Ầ' | 'ẩ' | 'Ẩ' | 'ẫ' | 'Ẫ' | 'ậ' | 'Ậ'
-            | 'ế' | 'Ế' | 'ề' | 'Ề' | 'ể' | 'Ể' | 'ễ' | 'Ễ' | 'ệ' | 'Ệ'
-            | 'ố' | 'Ố' | 'ồ' | 'Ồ' | 'ổ' | 'Ổ' | 'ỗ' | 'Ỗ' | 'ộ' | 'Ộ' => {
+            'ấ' | 'Ấ' | 'ầ' | 'Ầ' | 'ẩ' | 'Ẩ' | 'ẫ' | 'Ẫ' | 'ậ' | 'Ậ' | 'ế' | 'Ế' | 'ề' | 'Ề'
+            | 'ể' | 'Ể' | 'ễ' | 'Ễ' | 'ệ' | 'Ệ' | 'ố' | 'Ố' | 'ồ' | 'Ồ' | 'ổ' | 'Ổ' | 'ỗ' | 'Ỗ'
+            | 'ộ' | 'Ộ' => {
                 min_keys += 3;
                 max_keys += 3;
             }
@@ -119,12 +119,11 @@ fn telex_keystroke_bounds(word: &str) -> (usize, usize) {
                 min_keys += 3;
                 max_keys += 3;
             }
-            'á' | 'Á' | 'à' | 'À' | 'ả' | 'Ả' | 'ã' | 'Ã' | 'ạ' | 'Ạ'
-            | 'é' | 'É' | 'è' | 'È' | 'ẻ' | 'Ẻ' | 'ẽ' | 'Ẽ' | 'ẹ' | 'Ẹ'
-            | 'í' | 'Í' | 'ì' | 'Ì' | 'ỉ' | 'Ỉ' | 'ĩ' | 'Ĩ' | 'ị' | 'Ị'
-            | 'ó' | 'Ó' | 'ò' | 'Ò' | 'ỏ' | 'Ỏ' | 'õ' | 'Õ' | 'ọ' | 'Ọ'
-            | 'ú' | 'Ú' | 'ù' | 'Ù' | 'ủ' | 'Ủ' | 'ũ' | 'Ũ' | 'ụ' | 'Ụ'
-            | 'ý' | 'Ý' | 'ỳ' | 'Ỳ' | 'ỷ' | 'Ỷ' | 'ỹ' | 'Ỹ' | 'ỵ' | 'Ỵ' => {
+            'á' | 'Á' | 'à' | 'À' | 'ả' | 'Ả' | 'ã' | 'Ã' | 'ạ' | 'Ạ' | 'é' | 'É' | 'è' | 'È'
+            | 'ẻ' | 'Ẻ' | 'ẽ' | 'Ẽ' | 'ẹ' | 'Ẹ' | 'í' | 'Í' | 'ì' | 'Ì' | 'ỉ' | 'Ỉ' | 'ĩ' | 'Ĩ'
+            | 'ị' | 'Ị' | 'ó' | 'Ó' | 'ò' | 'Ò' | 'ỏ' | 'Ỏ' | 'õ' | 'Õ' | 'ọ' | 'Ọ' | 'ú' | 'Ú'
+            | 'ù' | 'Ù' | 'ủ' | 'Ủ' | 'ũ' | 'Ũ' | 'ụ' | 'Ụ' | 'ý' | 'Ý' | 'ỳ' | 'Ỳ' | 'ỷ' | 'Ỷ'
+            | 'ỹ' | 'Ỹ' | 'ỵ' | 'Ỵ' => {
                 min_keys += 2;
                 max_keys += 2;
             }
@@ -155,11 +154,17 @@ fn matches_initial_consonant(raw_lower: &str, ic_len: usize, candidate: &str) ->
         match (raw_first, cand_first) {
             (Some(r), Some(c)) => {
                 let norm_c = match c {
-                    'á' | 'à' | 'ả' | 'ã' | 'ạ' | 'â' | 'ấ' | 'ầ' | 'ẩ' | 'ẫ' | 'ậ' | 'ă' | 'ắ' | 'ằ' | 'ẳ' | 'ẵ' | 'ặ' => 'a',
-                    'é' | 'è' | 'ẻ' | 'ẽ' | 'ẹ' | 'ê' | 'ế' | 'ề' | 'ể' | 'ễ' | 'ệ' => 'e',
+                    'á' | 'à' | 'ả' | 'ã' | 'ạ' | 'â' | 'ấ' | 'ầ' | 'ẩ' | 'ẫ' | 'ậ' | 'ă' | 'ắ'
+                    | 'ằ' | 'ẳ' | 'ẵ' | 'ặ' => 'a',
+                    'é' | 'è' | 'ẻ' | 'ẽ' | 'ẹ' | 'ê' | 'ế' | 'ề' | 'ể' | 'ễ' | 'ệ' => {
+                        'e'
+                    }
                     'í' | 'ì' | 'ỉ' | 'ĩ' | 'ị' => 'i',
-                    'ó' | 'ò' | 'ỏ' | 'õ' | 'ọ' | 'ô' | 'ố' | 'ồ' | 'ổ' | 'ỗ' | 'ộ' | 'ơ' | 'ớ' | 'ờ' | 'ở' | 'ỡ' | 'ợ' => 'o',
-                    'ú' | 'ù' | 'ủ' | 'ũ' | 'ụ' | 'ư' | 'ứ' | 'ừ' | 'ử' | 'ữ' | 'ự' => 'u',
+                    'ó' | 'ò' | 'ỏ' | 'õ' | 'ọ' | 'ô' | 'ố' | 'ồ' | 'ổ' | 'ỗ' | 'ộ' | 'ơ' | 'ớ'
+                    | 'ờ' | 'ở' | 'ỡ' | 'ợ' => 'o',
+                    'ú' | 'ù' | 'ủ' | 'ũ' | 'ụ' | 'ư' | 'ứ' | 'ừ' | 'ử' | 'ữ' | 'ự' => {
+                        'u'
+                    }
                     'ý' | 'ỳ' | 'ỷ' | 'ỹ' | 'ỵ' => 'y',
                     other => other,
                 };
@@ -246,9 +251,14 @@ pub fn try_autocorrect_telex(raw: &str, modern: bool, short_w: bool) -> Option<S
         || lower.starts_with("dd")
     {
         2
-    } else if lower.starts_with(|c: char| matches!(c, 'b' | 'c' | 'd' | 'g' | 'h' | 'k' | 'l' | 'm' | 'n' | 'p' | 'r' | 's' | 't' | 'v' | 'x')) {
+    } else if lower.starts_with(|c: char| {
+        matches!(
+            c,
+            'b' | 'c' | 'd' | 'g' | 'h' | 'k' | 'l' | 'm' | 'n' | 'p' | 'r' | 's' | 't' | 'v' | 'x'
+        )
+    }) {
         1
-    } else if lower.starts_with(|c: char| matches!(c, 'a' | 'e' | 'i' | 'o' | 'u' | 'y')) {
+    } else if lower.starts_with(['a', 'e', 'i', 'o', 'u', 'y']) {
         0
     } else {
         // words starting with f, j, w, z or illegal consonants are never vietnamese
@@ -288,17 +298,23 @@ pub fn try_autocorrect_telex(raw: &str, modern: bool, short_w: bool) -> Option<S
     }
 
     // tone marker or non-coda consonant cannot precede vowels in vietnamese syllable
-    if rest.starts_with(|c: char| matches!(c, 's' | 'f' | 'r' | 'x' | 'j' | 'l')) {
+    if rest.starts_with(['s', 'f', 'r', 'x', 'j', 'l']) {
         return None;
     }
 
     // rest must contain at least one vowel
-    if !rest.chars().any(|c| matches!(c, 'a' | 'e' | 'i' | 'o' | 'u' | 'y' | 'w')) {
+    if !rest
+        .chars()
+        .any(|c| matches!(c, 'a' | 'e' | 'i' | 'o' | 'u' | 'y' | 'w'))
+    {
         return None;
     }
 
     // tone key budget: in telex, rest can have at most one tone marker
-    let tone_count = rest.chars().filter(|&c| matches!(c, 's' | 'f' | 'r' | 'x' | 'j')).count();
+    let tone_count = rest
+        .chars()
+        .filter(|&c| matches!(c, 's' | 'f' | 'r' | 'x' | 'j'))
+        .count();
     if tone_count > 1 {
         return None;
     }
@@ -410,7 +426,7 @@ pub fn try_autocorrect_telex(raw: &str, modern: bool, short_w: bool) -> Option<S
             && matches_initial_consonant(&lower, ic_len, &conv)
         {
             let (min_k, max_k) = telex_keystroke_bounds(&conv);
-            if n + 1 >= min_k && n + 1 <= max_k && !candidates.contains(&conv) {
+            if n + 1 >= min_k && n < max_k && !candidates.contains(&conv) {
                 candidates.push(conv);
             }
         }

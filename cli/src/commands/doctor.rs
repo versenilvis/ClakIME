@@ -224,7 +224,9 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
         if report.kde.virtual_keyboard_configured {
             println!("  • KDE Plasma: \x1b[32m[OK]\x1b[0m VirtualKeyboard đã đặt Fcitx5");
         } else {
-            println!("  • KDE Plasma: \x1b[33m[CẦN CẤU HÌNH]\x1b[0m VirtualKeyboard chưa đặt Fcitx5");
+            println!(
+                "  • KDE Plasma: \x1b[33m[CẦN CẤU HÌNH]\x1b[0m VirtualKeyboard chưa đặt Fcitx5"
+            );
         }
     }
 

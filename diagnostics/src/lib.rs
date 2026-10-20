@@ -208,8 +208,10 @@ pub fn run_diagnostics() -> DiagnosticReport {
                 )
             } else {
                 (
-                    "QT_IM_MODULE đang được đặt là 'ibus', khiến ứng dụng Qt bỏ qua Fcitx5".to_string(),
-                    "Đổi QT_IM_MODULE=fcitx trong ~/.config/environment.d/99-clak-im.conf".to_string(),
+                    "QT_IM_MODULE đang được đặt là 'ibus', khiến ứng dụng Qt bỏ qua Fcitx5"
+                        .to_string(),
+                    "Đổi QT_IM_MODULE=fcitx trong ~/.config/environment.d/99-clak-im.conf"
+                        .to_string(),
                 )
             };
             issues.push(DiagnosticIssue {
@@ -346,7 +348,7 @@ pub fn auto_fix_all(include_permissions: bool) -> AutoFixSummary {
             .environment
             .xmodifiers
             .as_deref()
-            .map_or(false, |x| x.contains("ibus"))
+            .is_some_and(|x| x.contains("ibus"))
         || !pre_report.environment.env_file_exists;
 
     if !pre_report.autostart.is_enabled || has_env_conflict {

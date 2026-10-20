@@ -7,7 +7,7 @@ fn common_english_words() -> &'static HashSet<&'static str> {
 
 // checks whether a word already contains vietnamese diacritics
 fn has_vietnamese_accent(word: &str) -> bool {
-    word.chars().any(|c| !c.is_ascii())
+    !word.is_ascii()
 }
 
 // checks whether a word is all uppercase (at least 2 letters, e.g. API, DDAY)
@@ -80,6 +80,7 @@ fn tokenize(input: &str, method: Method) -> Vec<Token<'_>> {
 /// - Skips common English words that collide with Telex
 /// - Skips URLs, emails, identifiers with digits/symbols
 /// - Transforms valid raw Telex/VNI words to Vietnamese if the result is a valid CVC syllable
+///
 /// Returns `(converted_string, was_changed)`
 pub fn autofix_text(input: &str, method: Method, modern: bool) -> (String, bool) {
     if input.is_empty() {
@@ -136,7 +137,7 @@ pub fn autofix_text(input: &str, method: Method, modern: bool) -> (String, bool)
                         || next.starts_with('/')
                         || next.starts_with("://")
                         || (next.starts_with('.')
-                            && next.chars().nth(1).map_or(false, |c| c.is_alphabetic()))
+                            && next.chars().nth(1).is_some_and(|c| c.is_alphabetic()))
                     {
                         output.push_str(w);
                         continue;
@@ -159,7 +160,7 @@ pub fn autofix_text(input: &str, method: Method, modern: bool) -> (String, bool)
                 let is_valid_candidate = match method {
                     Method::Vni | Method::TeipVni => {
                         w.chars().any(|c| c.is_alphabetic())
-                            && w.chars().next().map_or(false, |c| c.is_alphabetic())
+                            && w.chars().next().is_some_and(|c| c.is_alphabetic())
                     }
                     _ => is_pure_letters(w),
                 };

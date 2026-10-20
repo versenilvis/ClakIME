@@ -1,5 +1,5 @@
-pub mod autofix;
 pub mod autocorrect;
+pub mod autofix;
 pub mod charset;
 pub mod config;
 pub mod engine;

@@ -711,7 +711,8 @@ pub fn fix_jetbrains_compatibility() -> Result<usize, String> {
 pub fn check_kde() -> KdeStatus {
     let de = env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
     let kde_full = env::var("KDE_FULL_SESSION").unwrap_or_default();
-    let is_kde = de.contains("KDE") || de.contains("Plasma") || de.contains("plasma") || kde_full == "true";
+    let is_kde =
+        de.contains("KDE") || de.contains("Plasma") || de.contains("plasma") || kde_full == "true";
 
     if !is_kde {
         return KdeStatus {
@@ -752,7 +753,14 @@ pub fn check_kde() -> KdeStatus {
     if !virtual_keyboard_configured {
         for cmd in &["kreadconfig6", "kreadconfig5"] {
             if let Ok(out) = Command::new(cmd)
-                .args(["--file", "kwinrc", "--group", "Wayland", "--key", "InputMethod"])
+                .args([
+                    "--file",
+                    "kwinrc",
+                    "--group",
+                    "Wayland",
+                    "--key",
+                    "InputMethod",
+                ])
                 .output()
             {
                 if out.status.success() {
@@ -797,12 +805,28 @@ pub fn fix_kde_virtual_keyboard() -> Result<(), String> {
     let mut kwrite_ok = false;
     for cmd in &["kwriteconfig6", "kwriteconfig5"] {
         let im_ok = Command::new(cmd)
-            .args(["--file", "kwinrc", "--group", "Wayland", "--key", "InputMethod", target_desktop])
+            .args([
+                "--file",
+                "kwinrc",
+                "--group",
+                "Wayland",
+                "--key",
+                "InputMethod",
+                target_desktop,
+            ])
             .status()
             .map(|s| s.success())
             .unwrap_or(false);
         let vk_ok = Command::new(cmd)
-            .args(["--file", "kwinrc", "--group", "Wayland", "--key", "VirtualKeyboardEnabled", "true"])
+            .args([
+                "--file",
+                "kwinrc",
+                "--group",
+                "Wayland",
+                "--key",
+                "VirtualKeyboardEnabled",
+                "true",
+            ])
             .status()
             .map(|s| s.success())
             .unwrap_or(false);

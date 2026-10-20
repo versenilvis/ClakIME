@@ -1,6 +1,9 @@
 use clak_engine::autocorrect::try_autocorrect_telex;
 use clak_engine::learned_typos::{clear_for_test, observe_retype};
-use clak_engine::{ClakContext, Method, ACTION_AUTOCORRECT, ACTION_FORWARD, ACTION_COMMIT, ACTION_REPLACE, ACTION_REPLACE_SURROUNDING, ACTION_ADDRESS_BAR_FIX};
+use clak_engine::{
+    ClakContext, Method, ACTION_ADDRESS_BAR_FIX, ACTION_AUTOCORRECT, ACTION_COMMIT, ACTION_FORWARD,
+    ACTION_REPLACE, ACTION_REPLACE_SURROUNDING,
+};
 use std::ffi::CStr;
 
 fn simulate_typing_autocorrect(input: &str) -> String {
@@ -20,9 +23,9 @@ fn simulate_typing_autocorrect(input: &str) -> String {
                 doc.push_str(s);
             }
             ACTION_REPLACE
-                | ACTION_REPLACE_SURROUNDING
-                | ACTION_ADDRESS_BAR_FIX
-                | ACTION_AUTOCORRECT => {
+            | ACTION_REPLACE_SURROUNDING
+            | ACTION_ADDRESS_BAR_FIX
+            | ACTION_AUTOCORRECT => {
                 let del = action.delete_count;
                 let s = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
                 let mut doc_chars: Vec<char> = doc.chars().collect();

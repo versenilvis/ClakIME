@@ -59,6 +59,12 @@ pub struct LearnedTypos {
     config_path: Option<PathBuf>,
 }
 
+impl Default for LearnedTypos {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LearnedTypos {
     pub fn new() -> Self {
         let config_path = std::env::var("HOME")
@@ -91,8 +97,10 @@ impl LearnedTypos {
         if let Ok(content) = fs::read_to_string(path) {
             if let Ok(parsed) = toml::from_str::<LearnedFile>(&content) {
                 for entry in parsed.typos {
-                    self.typos.insert(entry.raw.to_lowercase(), entry.target.clone());
-                    self.frequencies.insert((entry.raw.to_lowercase(), entry.target), entry.count);
+                    self.typos
+                        .insert(entry.raw.to_lowercase(), entry.target.clone());
+                    self.frequencies
+                        .insert((entry.raw.to_lowercase(), entry.target), entry.count);
                 }
             }
         }
@@ -110,7 +118,11 @@ impl LearnedTypos {
             .typos
             .iter()
             .map(|(raw, target)| {
-                let count = self.frequencies.get(&(raw.clone(), target.clone())).copied().unwrap_or(2);
+                let count = self
+                    .frequencies
+                    .get(&(raw.clone(), target.clone()))
+                    .copied()
+                    .unwrap_or(2);
                 LearnedEntry {
                     raw: raw.clone(),
                     target: target.clone(),

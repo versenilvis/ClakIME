@@ -250,9 +250,9 @@ fn simulate_typing(input: &str) -> String {
                 doc.push_str(s);
             }
             ACTION_REPLACE
-                | ACTION_REPLACE_SURROUNDING
-                | ACTION_ADDRESS_BAR_FIX
-                | ACTION_AUTOCORRECT => {
+            | ACTION_REPLACE_SURROUNDING
+            | ACTION_ADDRESS_BAR_FIX
+            | ACTION_AUTOCORRECT => {
                 let del = action.delete_count;
                 let s = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
                 let mut doc_chars: Vec<char> = doc.chars().collect();
@@ -285,9 +285,9 @@ fn simulate_typing_autocorrect(input: &str) -> String {
                 doc.push_str(s);
             }
             ACTION_REPLACE
-                | ACTION_REPLACE_SURROUNDING
-                | ACTION_ADDRESS_BAR_FIX
-                | ACTION_AUTOCORRECT => {
+            | ACTION_REPLACE_SURROUNDING
+            | ACTION_ADDRESS_BAR_FIX
+            | ACTION_AUTOCORRECT => {
                 let del = action.delete_count;
                 let s = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
                 let mut doc_chars: Vec<char> = doc.chars().collect();
@@ -318,9 +318,9 @@ fn simulate_typing_fallback(input: &str) -> String {
                 doc.push_str(s);
             }
             ACTION_REPLACE
-                | ACTION_REPLACE_SURROUNDING
-                | ACTION_ADDRESS_BAR_FIX
-                | ACTION_AUTOCORRECT => {
+            | ACTION_REPLACE_SURROUNDING
+            | ACTION_ADDRESS_BAR_FIX
+            | ACTION_AUTOCORRECT => {
                 let del = action.delete_count;
                 let s = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
                 let mut doc_chars: Vec<char> = doc.chars().collect();
@@ -712,7 +712,7 @@ fn test_delayed_circumflex_and_auto_restore() {
     assert_eq!(simulate_typing("detee"), "dete");
     assert_eq!(simulate_typing_fallback("detee"), "dete");
 
-    // space after incomplete stop coda restores to dete 
+    // space after incomplete stop coda restores to dete
     assert_eq!(simulate_typing("dete "), "dete ");
     assert_eq!(simulate_typing_fallback("dete "), "dete ");
 
@@ -799,7 +799,10 @@ fn test_typing_dudowjc_with_default_config() {
                 let s = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
                 doc.push_str(s);
             }
-            ACTION_REPLACE | ACTION_REPLACE_SURROUNDING | ACTION_ADDRESS_BAR_FIX | ACTION_AUTOCORRECT => {
+            ACTION_REPLACE
+            | ACTION_REPLACE_SURROUNDING
+            | ACTION_ADDRESS_BAR_FIX
+            | ACTION_AUTOCORRECT => {
                 let del = action.delete_count;
                 let s = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
                 let mut doc_chars: Vec<char> = doc.chars().collect();

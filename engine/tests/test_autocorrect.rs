@@ -27,7 +27,10 @@ fn test_scrambled_coda_before_vowel_bnja_to_ban() {
 #[test]
 fn test_scrambled_coda_before_tone_bajn_engine_native() {
     // clak engine converts bajn to bạn natively
-    assert_eq!(clak_engine::engine::convert_telex("bajn", true, false), "bạn");
+    assert_eq!(
+        clak_engine::engine::convert_telex("bajn", true, false),
+        "bạn"
+    );
     assert_eq!(try_autocorrect_telex("bajn", true, false), None);
 }
 
@@ -41,27 +44,60 @@ fn test_scrambled_famous_khnog_to_khong() {
 
 #[test]
 fn test_scrambled_double_o_khoogn_and_khnoog_to_khong() {
-    assert_eq!(try_autocorrect_telex("khoogn", true, false), Some("không".to_string()));
-    assert_eq!(try_autocorrect_telex("khnoog", true, false), Some("không".to_string()));
+    assert_eq!(
+        try_autocorrect_telex("khoogn", true, false),
+        Some("không".to_string())
+    );
+    assert_eq!(
+        try_autocorrect_telex("khnoog", true, false),
+        Some("không".to_string())
+    );
     // khonog is handled natively via engine roof crossing
-    assert_eq!(clak_engine::engine::convert_telex("khonog", true, false), "không");
+    assert_eq!(
+        clak_engine::engine::convert_telex("khonog", true, false),
+        "không"
+    );
     assert_eq!(try_autocorrect_telex("khonog", true, false), None);
 }
 
 #[test]
 fn test_scrambled_triphthong_kieur_and_nhieuf() {
-    assert_eq!(try_autocorrect_telex("kieur", true, false), Some("kiểu".to_string()));
-    assert_eq!(try_autocorrect_telex("nhieuf", true, false), Some("nhiều".to_string()));
-    assert_eq!(try_autocorrect_telex("hieur", true, false), Some("hiểu".to_string()));
-    assert_eq!(try_autocorrect_telex("yeur", true, false), Some("yểu".to_string()));
+    assert_eq!(
+        try_autocorrect_telex("kieur", true, false),
+        Some("kiểu".to_string())
+    );
+    assert_eq!(
+        try_autocorrect_telex("nhieuf", true, false),
+        Some("nhiều".to_string())
+    );
+    assert_eq!(
+        try_autocorrect_telex("hieur", true, false),
+        Some("hiểu".to_string())
+    );
+    assert_eq!(
+        try_autocorrect_telex("yeur", true, false),
+        Some("yểu".to_string())
+    );
 }
 
 #[test]
 fn test_scrambled_dudowjc_to_duoc() {
-    assert_eq!(try_autocorrect_telex("dudowjc", true, false), Some("được".to_string()));
-    assert_eq!(try_autocorrect_telex("Dudowjc", true, false), Some("Được".to_string()));
-    assert_eq!(try_autocorrect_telex("dduowjc", true, false), Some("được".to_string()));
-    assert_eq!(try_autocorrect_telex("Dduowjc", true, false), Some("Được".to_string()));
+    assert_eq!(
+        try_autocorrect_telex("dudowjc", true, false),
+        Some("được".to_string())
+    );
+    assert_eq!(
+        try_autocorrect_telex("Dudowjc", true, false),
+        Some("Được".to_string())
+    );
+    assert_eq!(
+        try_autocorrect_telex("dduowjc", true, false),
+        Some("được".to_string())
+    );
+    assert_eq!(
+        try_autocorrect_telex("Dduowjc", true, false),
+        Some("Được".to_string())
+    );
 }
 
 #[test]
