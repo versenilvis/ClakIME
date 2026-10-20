@@ -29,6 +29,13 @@ string(REPLACE "-fno-exceptions" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 find_package(Fcitx5Core 5.0.14 REQUIRED)
 include("${FCITX_INSTALL_CMAKECONFIG_DIR}/Fcitx5Utils/Fcitx5CompilerSettings.cmake")
 
+find_package(PkgConfig QUIET)
+if(PKG_CONFIG_FOUND)
+    pkg_check_modules(Fcitx5Module IMPORTED_TARGET Fcitx5Module)
+endif()
+
+find_package(Fcitx5Module COMPONENTS Clipboard QUIET)
+
 include(CheckCXXSourceCompiles)
 set(CMAKE_REQUIRED_LIBRARIES Fcitx5::Core)
 check_cxx_source_compiles("
@@ -157,9 +164,30 @@ add_library(clak_core OBJECT ${CLAK_SOURCES})
 set_target_properties(clak_core PROPERTIES
     POSITION_INDEPENDENT_CODE ON
 )
+set(FCITX5_MODULE_INCLUDE_DIRS "")
+if(TARGET PkgConfig::Fcitx5Module)
+    list(APPEND FCITX5_MODULE_INCLUDE_DIRS "$<TARGET_PROPERTY:PkgConfig::Fcitx5Module,INTERFACE_INCLUDE_DIRECTORIES>")
+endif()
+if(TARGET Fcitx5::Module::Clipboard)
+    list(APPEND FCITX5_MODULE_INCLUDE_DIRS "$<TARGET_PROPERTY:Fcitx5::Module::Clipboard,INTERFACE_INCLUDE_DIRECTORIES>/..")
+endif()
+if(DEFINED FCITX_INSTALL_MODULE_HEADER_DIR)
+    list(APPEND FCITX5_MODULE_INCLUDE_DIRS "${FCITX_INSTALL_MODULE_HEADER_DIR}/..")
+endif()
+if(DEFINED FCITX_INSTALL_INCLUDEDIR)
+    list(APPEND FCITX5_MODULE_INCLUDE_DIRS "${FCITX_INSTALL_INCLUDEDIR}/Fcitx5/Module")
+endif()
+get_target_property(_fcitx5_core_incs Fcitx5::Core INTERFACE_INCLUDE_DIRECTORIES)
+if(_fcitx5_core_incs)
+    foreach(_inc ${_fcitx5_core_incs})
+        list(APPEND FCITX5_MODULE_INCLUDE_DIRS "${_inc}/../Module")
+    endforeach()
+endif()
+
 target_include_directories(clak_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/engine
+    ${FCITX5_MODULE_INCLUDE_DIRS}
     /usr/include/Fcitx5/Module
 )
 target_link_libraries(clak_core PUBLIC
@@ -171,6 +199,9 @@ target_link_libraries(clak_core PUBLIC
     dl
     m
 )
+if(TARGET PkgConfig::Fcitx5Module)
+    target_link_libraries(clak_core PUBLIC PkgConfig::Fcitx5Module)
+endif()
 
 add_library(clak MODULE $<TARGET_OBJECTS:clak_core>)
 set_target_properties(clak PROPERTIES

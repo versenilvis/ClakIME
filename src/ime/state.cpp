@@ -11,7 +11,10 @@
 #include <fcitx/inputcontext.h>
 #include <fcitx/instance.h>
 #include <fcitx/addonmanager.h>
+#if __has_include(<fcitx-module/clipboard/clipboard_public.h>)
+#define CLAK_HAVE_FCITX5_CLIPBOARD 1
 #include <fcitx-module/clipboard/clipboard_public.h>
+#endif
 #include <fcitx-utils/keysym.h>
 #include <fcitx-utils/utf8.h>
 
@@ -1095,6 +1098,7 @@ bool ClakState::triggerShiftAutoFix() {
     if (surr.isValid() && cur != anch) {
         selected = utils::extractSelection(surr.text(), cur, anch);
     } else if (is_address_bar || !surr.isValid()) {
+#if CLAK_HAVE_FCITX5_CLIPBOARD
         if (engine_ && engine_->instance()) {
             auto* cb = engine_->instance()->addonManager().addon("clipboard");
             if (cb) {
@@ -1105,6 +1109,7 @@ bool ClakState::triggerShiftAutoFix() {
                 }
             }
         }
+#endif
         if (!selected.empty()) {
             utils::clakLog("triggerShiftAutoFix: retrieved primary selection: '" + selected + "'");
         }
