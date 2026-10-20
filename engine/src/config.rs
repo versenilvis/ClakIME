@@ -17,6 +17,8 @@ pub struct ClakConfig {
     #[serde(default)]
     pub macros: MacroConfig,
     #[serde(default)]
+    pub pacing: PacingConfig,
+    #[serde(default)]
     pub advanced: AdvancedConfig,
     #[serde(default)]
     pub update: UpdateConfig,
@@ -99,15 +101,11 @@ pub struct MacroItem {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AdvancedConfig {
+pub struct PacingConfig {
     #[serde(default = "default_true")]
-    pub autostart: bool,
-    #[serde(default)]
-    pub uinput_ack: bool,
-    #[serde(default)]
-    pub debug_log: bool,
+    pub adaptive: bool,
     #[serde(default = "default_pacing_preset")]
-    pub pacing_preset: String,
+    pub preset: String,
     #[serde(default = "default_draftjs_delay_ms")]
     pub draftjs_delay_ms: u32,
     #[serde(default = "default_draftjs_gap_ms")]
@@ -116,6 +114,10 @@ pub struct AdvancedConfig {
     pub terminal_delay_ms: u32,
     #[serde(default = "default_terminal_gap_ms")]
     pub terminal_gap_ms: u32,
+    #[serde(default = "default_heavy_app_delay_ms")]
+    pub heavy_app_delay_ms: u32,
+    #[serde(default = "default_heavy_app_gap_ms")]
+    pub heavy_app_gap_ms: u32,
 }
 
 fn default_pacing_preset() -> String {
@@ -138,17 +140,45 @@ fn default_terminal_gap_ms() -> u32 {
     3
 }
 
+fn default_heavy_app_delay_ms() -> u32 {
+    15
+}
+
+fn default_heavy_app_gap_ms() -> u32 {
+    4
+}
+
+impl Default for PacingConfig {
+    fn default() -> Self {
+        Self {
+            adaptive: default_true(),
+            preset: default_pacing_preset(),
+            draftjs_delay_ms: default_draftjs_delay_ms(),
+            draftjs_gap_ms: default_draftjs_gap_ms(),
+            terminal_delay_ms: default_terminal_delay_ms(),
+            terminal_gap_ms: default_terminal_gap_ms(),
+            heavy_app_delay_ms: default_heavy_app_delay_ms(),
+            heavy_app_gap_ms: default_heavy_app_gap_ms(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdvancedConfig {
+    #[serde(default = "default_true")]
+    pub autostart: bool,
+    #[serde(default)]
+    pub uinput_ack: bool,
+    #[serde(default)]
+    pub debug_log: bool,
+}
+
 impl Default for AdvancedConfig {
     fn default() -> Self {
         Self {
             autostart: default_true(),
             uinput_ack: false,
             debug_log: false,
-            pacing_preset: default_pacing_preset(),
-            draftjs_delay_ms: default_draftjs_delay_ms(),
-            draftjs_gap_ms: default_draftjs_gap_ms(),
-            terminal_delay_ms: default_terminal_delay_ms(),
-            terminal_gap_ms: default_terminal_gap_ms(),
         }
     }
 }

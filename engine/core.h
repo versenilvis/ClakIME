@@ -77,11 +77,14 @@ bool        clak_config_is_app_excluded(const ClakConfig *cfg, const char *app_n
 bool        clak_config_get_remember_state(const ClakConfig *cfg);
 bool        clak_config_get_uinput_ack(const ClakConfig *cfg);
 bool        clak_config_get_debug_log(const ClakConfig *cfg);
+bool        clak_config_get_adaptive_pacing(const ClakConfig *cfg);
 int32_t     clak_config_get_pacing_preset(const ClakConfig *cfg);
 uint32_t    clak_config_get_draftjs_delay_ms(const ClakConfig *cfg);
 uint32_t    clak_config_get_draftjs_gap_ms(const ClakConfig *cfg);
 uint32_t    clak_config_get_terminal_delay_ms(const ClakConfig *cfg);
 uint32_t    clak_config_get_terminal_gap_ms(const ClakConfig *cfg);
+uint32_t    clak_config_get_heavy_app_delay_ms(const ClakConfig *cfg);
+uint32_t    clak_config_get_heavy_app_gap_ms(const ClakConfig *cfg);
 bool        clak_config_get_shift_autofix(const ClakConfig *cfg);
 void        clak_config_set_shift_autofix(ClakConfig *cfg, bool enabled);
 bool        clak_config_get_autocorrect(const ClakConfig *cfg);

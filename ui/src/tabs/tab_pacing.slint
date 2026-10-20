@@ -1,0 +1,265 @@
+import { ScrollView, Slider } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+import { Divider, SettingItem, FieldRow, SegmentedSwitch, SectionHeader, StatusIndicator } from "../components/controls.slint";
+
+// tab 3: dieu khien do tre va tu thich ung pacing
+export component TabPacing inherits VerticalLayout {
+    in-out property <bool> adaptive_pacing: true;
+    in-out property <int> pacing_preset_index: 1;
+    in-out property <int> draftjs_delay_ms: 16;
+    in-out property <int> draftjs_gap_ms: 8;
+    in-out property <int> terminal_delay_ms: 12;
+    in-out property <int> terminal_gap_ms: 3;
+    in-out property <int> heavy_app_delay_ms: 15;
+    in-out property <int> heavy_app_gap_ms: 4;
+    in property <bool> is-wide: false;
+
+    // telemetry status
+    in property <string> telemetry_compositor: "Wayland";
+    in property <string> telemetry_group: "DraftJS-Uinput";
+    in property <string> telemetry_delay: "16ms (gap 8ms)";
+
+    callback changed();
+
+    spacing: root.is-wide ? 8px : 0px;
+
+    ScrollView {
+        vertical-stretch: 1;
+
+        VerticalLayout {
+            spacing: root.is-wide ? 8px : 0px;
+
+            SectionHeader {
+                title: "ĐIỀU KHIỂN ĐỘ TRỄ";
+                show-divider: false;
+                is-wide: root.is-wide;
+            }
+
+            SettingItem {
+                title: "Tự động tối ưu độ trễ (Adaptive Pacing)";
+                subtitle: "Tự động tăng delay khi nuốt chữ và hạ dần về mức sàn khi gõ ổn định";
+                is-wide: root.is-wide;
+                checked <=> root.adaptive_pacing;
+                toggled => { root.changed(); }
+            }
+
+            FieldRow {
+                title: "Chế độ độ trễ";
+                subtitle: root.adaptive_pacing ? "Mức sàn khởi điểm cho bộ tự điều chỉnh" : "Mức độ trễ cố định áp dụng cho hệ thống";
+                is-wide: root.is-wide;
+                SegmentedSwitch {
+                    options: ["Nhanh", "Cân bằng", "An toàn", "Tùy biến"];
+                    current-index <=> root.pacing_preset_index;
+                    is-wide: root.is-wide;
+                    selected(idx) => {
+                        if idx == 0 {
+                            root.draftjs_delay_ms = 10;
+                            root.draftjs_gap_ms = 4;
+                            root.terminal_delay_ms = 6;
+                            root.terminal_gap_ms = 2;
+                            root.heavy_app_delay_ms = 10;
+                            root.heavy_app_gap_ms = 3;
+                        } else if idx == 1 {
+                            root.draftjs_delay_ms = 16;
+                            root.draftjs_gap_ms = 8;
+                            root.terminal_delay_ms = 12;
+                            root.terminal_gap_ms = 3;
+                            root.heavy_app_delay_ms = 15;
+                            root.heavy_app_gap_ms = 4;
+                        } else if idx == 2 {
+                            root.draftjs_delay_ms = 24;
+                            root.draftjs_gap_ms = 12;
+                            root.terminal_delay_ms = 20;
+                            root.terminal_gap_ms = 5;
+                            root.heavy_app_delay_ms = 22;
+                            root.heavy_app_gap_ms = 6;
+                        }
+                        root.changed();
+                    }
+                }
+            }
+
+            SectionHeader {
+                title: "TRẠNG THÁI HIỆN TẠI (TELEMETRY)";
+                show-divider: true;
+                is-wide: root.is-wide;
+            }
+
+            HorizontalLayout {
+                padding-left: 14px;
+                padding-right: 14px;
+                padding-top: 4px;
+                padding-bottom: 8px;
+
+                Rectangle {
+                    background: #141416;
+                    border-radius: Theme.radius-sm;
+                    border-width: 1px;
+                    border-color: #27272a;
+
+                    HorizontalLayout {
+                        padding-left: 16px;
+                        padding-right: 16px;
+                        padding-top: 12px;
+                        padding-bottom: 12px;
+                        spacing: 20px;
+                        alignment: space-between;
+
+                        VerticalLayout {
+                            spacing: 3px;
+                            alignment: center;
+                            Text {
+                                text: "Môi trường";
+                                color: Theme.text-muted;
+                                font-size: 11px;
+                                font-weight: 500;
+                            }
+                            Text {
+                                text: root.telemetry_compositor;
+                                color: Theme.text-primary;
+                                font-size: 13px;
+                                font-weight: 600;
+                            }
+                        }
+
+                        VerticalLayout {
+                            spacing: 3px;
+                            alignment: center;
+                            Text {
+                                text: "Nhóm ứng dụng";
+                                color: Theme.text-muted;
+                                font-size: 11px;
+                                font-weight: 500;
+                            }
+                            Text {
+                                text: root.telemetry_group;
+                                color: #60a5fa;
+                                font-size: 13px;
+                                font-weight: 600;
+                            }
+                        }
+
+                        VerticalLayout {
+                            spacing: 3px;
+                            alignment: center;
+                            Text {
+                                text: "Độ trễ áp dụng";
+                                color: Theme.text-muted;
+                                font-size: 11px;
+                                font-weight: 500;
+                            }
+                            Text {
+                                text: root.telemetry_delay;
+                                color: #34d399;
+                                font-size: 13px;
+                                font-weight: 600;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!root.adaptive_pacing || root.pacing_preset_index == 3): SectionHeader {
+                title: "TÙY CHỈNH THEO NHÓM";
+                show-divider: true;
+                is-wide: root.is-wide;
+            }
+
+            if (!root.adaptive_pacing || root.pacing_preset_index == 3): FieldRow {
+                title: "Trễ Web / DraftJS (" + root.draftjs_delay_ms + " ms)";
+                subtitle: "Thời gian chờ sau khi xóa ký tự trên React/DraftJS";
+                is-wide: root.is-wide;
+                Slider {
+                    width: root.is-wide ? 200px : 160px;
+                    minimum: 6;
+                    maximum: 40;
+                    value: root.draftjs_delay_ms;
+                    changed(val) => {
+                        root.draftjs_delay_ms = Math.round(val);
+                        root.changed();
+                    }
+                }
+            }
+
+            if (!root.adaptive_pacing || root.pacing_preset_index == 3): FieldRow {
+                title: "Giãn cách Web (" + root.draftjs_gap_ms + " ms)";
+                subtitle: "Khoảng nghỉ giữa các phím Backspace xóa liên tiếp";
+                is-wide: root.is-wide;
+                Slider {
+                    width: root.is-wide ? 200px : 160px;
+                    minimum: 2;
+                    maximum: 20;
+                    value: root.draftjs_gap_ms;
+                    changed(val) => {
+                        root.draftjs_gap_ms = Math.round(val);
+                        root.changed();
+                    }
+                }
+            }
+
+            if (!root.adaptive_pacing || root.pacing_preset_index == 3): FieldRow {
+                title: "Trễ Terminal uinput (" + root.terminal_delay_ms + " ms)";
+                subtitle: "Độ trễ xóa cho terminal non-VTE (Kitty/Alacritty/Foot)";
+                is-wide: root.is-wide;
+                Slider {
+                    width: root.is-wide ? 200px : 160px;
+                    minimum: 4;
+                    maximum: 30;
+                    value: root.terminal_delay_ms;
+                    changed(val) => {
+                        root.terminal_delay_ms = Math.round(val);
+                        root.changed();
+                    }
+                }
+            }
+
+            if (!root.adaptive_pacing || root.pacing_preset_index == 3): FieldRow {
+                title: "Giãn cách Terminal (" + root.terminal_gap_ms + " ms)";
+                subtitle: "Khoảng nghỉ giữa các phím xóa trong terminal uinput";
+                is-wide: root.is-wide;
+                Slider {
+                    width: root.is-wide ? 200px : 160px;
+                    minimum: 1;
+                    maximum: 10;
+                    value: root.terminal_gap_ms;
+                    changed(val) => {
+                        root.terminal_gap_ms = Math.round(val);
+                        root.changed();
+                    }
+                }
+            }
+
+            if (!root.adaptive_pacing || root.pacing_preset_index == 3): FieldRow {
+                title: "Trễ App đồ họa / IDE (" + root.heavy_app_delay_ms + " ms)";
+                subtitle: "Độ trễ xóa cho WPS Office, Steam CEF, JetBrains";
+                is-wide: root.is-wide;
+                Slider {
+                    width: root.is-wide ? 200px : 160px;
+                    minimum: 6;
+                    maximum: 35;
+                    value: root.heavy_app_delay_ms;
+                    changed(val) => {
+                        root.heavy_app_delay_ms = Math.round(val);
+                        root.changed();
+                    }
+                }
+            }
+
+            if (!root.adaptive_pacing || root.pacing_preset_index == 3): FieldRow {
+                title: "Giãn cách App đồ họa (" + root.heavy_app_gap_ms + " ms)";
+                subtitle: "Khoảng nghỉ giữa các phím xóa ứng dụng đồ họa";
+                is-wide: root.is-wide;
+                Slider {
+                    width: root.is-wide ? 200px : 160px;
+                    minimum: 2;
+                    maximum: 12;
+                    value: root.heavy_app_gap_ms;
+                    changed(val) => {
+                        root.heavy_app_gap_ms = Math.round(val);
+                        root.changed();
+                    }
+                }
+            }
+        }
+    }
+}

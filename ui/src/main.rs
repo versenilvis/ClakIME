@@ -1021,11 +1021,14 @@ fn save_config(
         3 => "custom",
         _ => "balanced",
     };
-    cfg_to_save.advanced.pacing_preset = pacing_str.to_string();
-    cfg_to_save.advanced.draftjs_delay_ms = window.get_draftjs_delay_ms() as u32;
-    cfg_to_save.advanced.draftjs_gap_ms = window.get_draftjs_gap_ms() as u32;
-    cfg_to_save.advanced.terminal_delay_ms = window.get_terminal_delay_ms() as u32;
-    cfg_to_save.advanced.terminal_gap_ms = window.get_terminal_gap_ms() as u32;
+    cfg_to_save.pacing.adaptive = window.get_adaptive_pacing();
+    cfg_to_save.pacing.preset = pacing_str.to_string();
+    cfg_to_save.pacing.draftjs_delay_ms = window.get_draftjs_delay_ms() as u32;
+    cfg_to_save.pacing.draftjs_gap_ms = window.get_draftjs_gap_ms() as u32;
+    cfg_to_save.pacing.terminal_delay_ms = window.get_terminal_delay_ms() as u32;
+    cfg_to_save.pacing.terminal_gap_ms = window.get_terminal_gap_ms() as u32;
+    cfg_to_save.pacing.heavy_app_delay_ms = window.get_heavy_app_delay_ms() as u32;
+    cfg_to_save.pacing.heavy_app_gap_ms = window.get_heavy_app_gap_ms() as u32;
 
     cfg_to_save.update.auto_update = window.get_auto_update_enabled();
     cfg_to_save.update.poll_index = window.get_update_poll_index();
@@ -1097,7 +1100,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     main_window.set_uinput_ack(cfg.advanced.uinput_ack);
     main_window.set_debug_log(cfg.advanced.debug_log);
 
-    let pacing_idx = match cfg.advanced.pacing_preset.as_str() {
+    main_window.set_adaptive_pacing(cfg.pacing.adaptive);
+    let pacing_idx = match cfg.pacing.preset.as_str() {
         "fast" => 0,
         "balanced" => 1,
         "safe" => 2,
@@ -1105,10 +1109,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         _ => 1,
     };
     main_window.set_pacing_preset_index(pacing_idx);
-    main_window.set_draftjs_delay_ms(cfg.advanced.draftjs_delay_ms as i32);
-    main_window.set_draftjs_gap_ms(cfg.advanced.draftjs_gap_ms as i32);
-    main_window.set_terminal_delay_ms(cfg.advanced.terminal_delay_ms as i32);
-    main_window.set_terminal_gap_ms(cfg.advanced.terminal_gap_ms as i32);
+    main_window.set_draftjs_delay_ms(cfg.pacing.draftjs_delay_ms as i32);
+    main_window.set_draftjs_gap_ms(cfg.pacing.draftjs_gap_ms as i32);
+    main_window.set_terminal_delay_ms(cfg.pacing.terminal_delay_ms as i32);
+    main_window.set_terminal_gap_ms(cfg.pacing.terminal_gap_ms as i32);
+    main_window.set_heavy_app_delay_ms(cfg.pacing.heavy_app_delay_ms as i32);
+    main_window.set_heavy_app_gap_ms(cfg.pacing.heavy_app_gap_ms as i32);
+
+    let is_wayland = std::env::var("WAYLAND_DISPLAY").is_ok()
+        || std::env::var("XDG_SESSION_TYPE")
+            .map(|s| s.eq_ignore_ascii_case("wayland"))
+            .unwrap_or(false);
+    main_window.set_telemetry_compositor(if is_wayland { "Wayland (Mutter/wlroots)".into() } else { "X11".into() });
+    main_window.set_telemetry_group("Web / DraftJS (X, TikTok)".into());
+    main_window.set_telemetry_delay(format!("{}ms (gap {}ms)", cfg.pacing.draftjs_delay_ms, cfg.pacing.draftjs_gap_ms).into());
 
     // populate models
     let apps_vec: Vec<SharedString> = cfg
@@ -1416,7 +1430,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         window.set_uinput_ack(default_cfg.advanced.uinput_ack);
         window.set_debug_log(default_cfg.advanced.debug_log);
 
-        let default_pacing_idx = match default_cfg.advanced.pacing_preset.as_str() {
+        window.set_adaptive_pacing(default_cfg.pacing.adaptive);
+        let default_pacing_idx = match default_cfg.pacing.preset.as_str() {
             "fast" => 0,
             "balanced" => 1,
             "safe" => 2,
@@ -1424,10 +1439,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => 1,
         };
         window.set_pacing_preset_index(default_pacing_idx);
-        window.set_draftjs_delay_ms(default_cfg.advanced.draftjs_delay_ms as i32);
-        window.set_draftjs_gap_ms(default_cfg.advanced.draftjs_gap_ms as i32);
-        window.set_terminal_delay_ms(default_cfg.advanced.terminal_delay_ms as i32);
-        window.set_terminal_gap_ms(default_cfg.advanced.terminal_gap_ms as i32);
+        window.set_draftjs_delay_ms(default_cfg.pacing.draftjs_delay_ms as i32);
+        window.set_draftjs_gap_ms(default_cfg.pacing.draftjs_gap_ms as i32);
+        window.set_terminal_delay_ms(default_cfg.pacing.terminal_delay_ms as i32);
+        window.set_terminal_gap_ms(default_cfg.pacing.terminal_gap_ms as i32);
+        window.set_heavy_app_delay_ms(default_cfg.pacing.heavy_app_delay_ms as i32);
+        window.set_heavy_app_gap_ms(default_cfg.pacing.heavy_app_gap_ms as i32);
 
         window.set_auto_update_enabled(default_cfg.update.auto_update);
         window.set_update_poll_index(default_cfg.update.poll_index);
@@ -1830,7 +1847,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 // nếu chưa thêm vào profile hoặc chưa nạp addon, tự động mở tab Chẩn đoán để hướng dẫn người dùng
                 if needs_setup || (addon_not_loaded && !is_deleted) {
-                    w.set_selected_tab(3);
+                    w.set_selected_tab(4);
                 }
 
                 if let Ok(mut guard) = last_report_startup.lock() {
@@ -1902,7 +1919,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         main_window.set_jetbrains_needs_fix(
             report.jetbrains.installed && !report.jetbrains.unconfigured_ides.is_empty(),
         );
-        main_window.set_selected_tab(3);
+        main_window.set_selected_tab(4);
         if let Ok(mut guard) = last_report.lock() {
             *guard = Some(report);
         }

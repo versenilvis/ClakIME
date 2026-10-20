@@ -567,11 +567,19 @@ pub unsafe extern "C" fn clak_config_get_debug_log(cfg: *const config::ClakConfi
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_config_get_adaptive_pacing(cfg: *const config::ClakConfig) -> bool {
+    if cfg.is_null() {
+        return true;
+    }
+    (*cfg).pacing.adaptive
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn clak_config_get_pacing_preset(cfg: *const config::ClakConfig) -> i32 {
     if cfg.is_null() {
         return 1;
     }
-    match (*cfg).advanced.pacing_preset.as_str() {
+    match (*cfg).pacing.preset.as_str() {
         "fast" => 0,
         "balanced" => 1,
         "safe" => 2,
@@ -585,10 +593,10 @@ pub unsafe extern "C" fn clak_config_get_draftjs_delay_ms(cfg: *const config::Cl
     if cfg.is_null() {
         return 16;
     }
-    match (*cfg).advanced.pacing_preset.as_str() {
+    match (*cfg).pacing.preset.as_str() {
         "fast" => 10,
         "safe" => 24,
-        "custom" => (*cfg).advanced.draftjs_delay_ms,
+        "custom" => (*cfg).pacing.draftjs_delay_ms,
         _ => 16,
     }
 }
@@ -598,10 +606,10 @@ pub unsafe extern "C" fn clak_config_get_draftjs_gap_ms(cfg: *const config::Clak
     if cfg.is_null() {
         return 8;
     }
-    match (*cfg).advanced.pacing_preset.as_str() {
+    match (*cfg).pacing.preset.as_str() {
         "fast" => 4,
         "safe" => 12,
-        "custom" => (*cfg).advanced.draftjs_gap_ms,
+        "custom" => (*cfg).pacing.draftjs_gap_ms,
         _ => 8,
     }
 }
@@ -611,10 +619,10 @@ pub unsafe extern "C" fn clak_config_get_terminal_delay_ms(cfg: *const config::C
     if cfg.is_null() {
         return 12;
     }
-    match (*cfg).advanced.pacing_preset.as_str() {
+    match (*cfg).pacing.preset.as_str() {
         "fast" => 6,
         "safe" => 20,
-        "custom" => (*cfg).advanced.terminal_delay_ms,
+        "custom" => (*cfg).pacing.terminal_delay_ms,
         _ => 12,
     }
 }
@@ -624,11 +632,37 @@ pub unsafe extern "C" fn clak_config_get_terminal_gap_ms(cfg: *const config::Cla
     if cfg.is_null() {
         return 3;
     }
-    match (*cfg).advanced.pacing_preset.as_str() {
+    match (*cfg).pacing.preset.as_str() {
         "fast" => 2,
         "safe" => 5,
-        "custom" => (*cfg).advanced.terminal_gap_ms,
+        "custom" => (*cfg).pacing.terminal_gap_ms,
         _ => 3,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_config_get_heavy_app_delay_ms(cfg: *const config::ClakConfig) -> u32 {
+    if cfg.is_null() {
+        return 15;
+    }
+    match (*cfg).pacing.preset.as_str() {
+        "fast" => 10,
+        "safe" => 22,
+        "custom" => (*cfg).pacing.heavy_app_delay_ms,
+        _ => 15,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_config_get_heavy_app_gap_ms(cfg: *const config::ClakConfig) -> u32 {
+    if cfg.is_null() {
+        return 4;
+    }
+    match (*cfg).pacing.preset.as_str() {
+        "fast" => 3,
+        "safe" => 6,
+        "custom" => (*cfg).pacing.heavy_app_gap_ms,
+        _ => 4,
     }
 }
 

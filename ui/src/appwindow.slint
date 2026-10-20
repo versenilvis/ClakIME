@@ -10,6 +10,7 @@ import { Sidebar } from "components/sidebar.slint";
 import { TabGeneral } from "tabs/tab_general.slint";
 import { TabTyping } from "tabs/tab_typing.slint";
 import { TabAdvanced } from "tabs/tab_advanced.slint";
+import { TabPacing } from "tabs/tab_pacing.slint";
 import { TabDoctor } from "tabs/tab_doctor.slint";
 import { TabAbout } from "tabs/tab_about.slint";
 
@@ -71,11 +72,19 @@ export component MainWindow inherits Window {
     // nang cao
     in-out property <bool> uinput_ack: false;
     in-out property <bool> debug_log: false;
+
+    // do tre va pacing
+    in-out property <bool> adaptive_pacing: true;
     in-out property <int> pacing_preset_index: 1;
     in-out property <int> draftjs_delay_ms: 16;
     in-out property <int> draftjs_gap_ms: 8;
     in-out property <int> terminal_delay_ms: 12;
     in-out property <int> terminal_gap_ms: 3;
+    in-out property <int> heavy_app_delay_ms: 15;
+    in-out property <int> heavy_app_gap_ms: 4;
+    in-out property <string> telemetry_compositor: "Wayland";
+    in-out property <string> telemetry_group: "DraftJS-Uinput";
+    in-out property <string> telemetry_delay: "16ms (gap 8ms)";
 
     // gioi thieu
     in-out property <bool> auto_update_enabled: true;
@@ -178,7 +187,7 @@ export component MainWindow inherits Window {
                 spacing: root.is-wide ? 14px : 8px;
 
                 // banner canh bao clak chua duoc kich hoat hoac chua nap trong fcitx5
-                if (root.profile_needs_setup || root.addon_needs_load) && root.selected_tab != 3: Rectangle {
+                if (root.profile_needs_setup || root.addon_needs_load) && root.selected_tab != 4: Rectangle {
                     border-radius: Theme.radius-md;
                     background: #3b82f6.with-alpha(0.12);
                     border-width: 0px;
@@ -231,7 +240,7 @@ export component MainWindow inherits Window {
 
                                 ActionButton {
                                     text: "Vào Chẩn đoán";
-                                    clicked => { root.selected_tab = 3; }
+                                    clicked => { root.selected_tab = 4; }
                                 }
 
                                 ActionButton {
@@ -251,7 +260,7 @@ export component MainWindow inherits Window {
                 }
 
                 // banner huong dan toi uu wps va jetbrains
-                if !root.profile_needs_setup && (root.wps_needs_fix || root.jetbrains_needs_fix) && root.selected_tab != 3: Rectangle {
+                if !root.profile_needs_setup && (root.wps_needs_fix || root.jetbrains_needs_fix) && root.selected_tab != 4: Rectangle {
                     border-radius: Theme.radius-md;
                     background: #8b5cf6.with-alpha(0.12);
                     border-width: 0px;
@@ -302,7 +311,7 @@ export component MainWindow inherits Window {
                             ActionButton {
                                 text: "Vào Chẩn đoán";
                                 primary: true;
-                                clicked => { root.selected_tab = 3; }
+                                clicked => { root.selected_tab = 4; }
                             }
                         }
                     }
@@ -354,47 +363,29 @@ export component MainWindow inherits Window {
                     new_app_name <=> root.new_app_name;
                     uinput_ack <=> root.uinput_ack;
                     debug_log <=> root.debug_log;
-                    pacing_preset_index <=> root.pacing_preset_index;
-                    draftjs_delay_ms <=> root.draftjs_delay_ms;
-                    draftjs_gap_ms <=> root.draftjs_gap_ms;
-                    terminal_delay_ms <=> root.terminal_delay_ms;
-                    terminal_gap_ms <=> root.terminal_gap_ms;
                     changed => { root.has_changes = true; }
                     add_excluded_app(name) => { root.add_excluded_app(name); }
                     remove_excluded_app(idx) => { root.remove_excluded_app(idx); }
                 }
 
-                if root.selected_tab == 4: ScrollView {
+                if root.selected_tab == 3: TabPacing {
                     vertical-stretch: 1;
-
-                    VerticalLayout {
-                        alignment: start;
-
-                        TabAbout {
-                            vertical-stretch: 0;
-                            is-wide: root.is-wide;
-                            app_version: root.app_version;
-                            auto_update_enabled <=> root.auto_update_enabled;
-                            git_commit_hash: root.git_commit_hash;
-                            git_commit_note: root.git_commit_note;
-                            git_commit_date: root.git_commit_date;
-                            update_poll_index <=> root.update_poll_index;
-                            update_status_text: root.update_status_text;
-                            is_updating: root.is_updating;
-                            reload_needed: root.reload_needed;
-                            reload_status_text: root.reload_status_text;
-                            is_reloading: root.is_reloading;
-                            changed => { root.has_changes = true; }
-                            open_url(url) => { root.open_url(url); }
-                            reset_defaults => { root.reset_defaults_requested(); }
-                            check_update_requested => { root.check_update_requested(); }
-                            restart_fcitx5_requested => { root.restart_fcitx5_requested(); }
-                            uninstall_requested => { root.uninstall_requested(); }
-                        }
-                    }
+                    is-wide: root.is-wide;
+                    adaptive_pacing <=> root.adaptive_pacing;
+                    pacing_preset_index <=> root.pacing_preset_index;
+                    draftjs_delay_ms <=> root.draftjs_delay_ms;
+                    draftjs_gap_ms <=> root.draftjs_gap_ms;
+                    terminal_delay_ms <=> root.terminal_delay_ms;
+                    terminal_gap_ms <=> root.terminal_gap_ms;
+                    heavy_app_delay_ms <=> root.heavy_app_delay_ms;
+                    heavy_app_gap_ms <=> root.heavy_app_gap_ms;
+                    telemetry_compositor: root.telemetry_compositor;
+                    telemetry_group: root.telemetry_group;
+                    telemetry_delay: root.telemetry_delay;
+                    changed => { root.has_changes = true; }
                 }
 
-                if root.selected_tab == 3: TabDoctor {
+                if root.selected_tab == 4: TabDoctor {
                     vertical-stretch: 1;
                     is-wide: root.is-wide;
                     lines: root.doctor_lines;
@@ -427,6 +418,36 @@ export component MainWindow inherits Window {
                     auto_fix_requested => { root.auto_fix_requested(); }
                     fix_autostart_requested => { root.fix_autostart_requested(); }
                     fix_permissions_requested => { root.fix_permissions_requested(); }
+                }
+
+                if root.selected_tab == 5: ScrollView {
+                    vertical-stretch: 1;
+
+                    VerticalLayout {
+                        alignment: start;
+
+                        TabAbout {
+                            vertical-stretch: 0;
+                            is-wide: root.is-wide;
+                            app_version: root.app_version;
+                            auto_update_enabled <=> root.auto_update_enabled;
+                            git_commit_hash: root.git_commit_hash;
+                            git_commit_note: root.git_commit_note;
+                            git_commit_date: root.git_commit_date;
+                            update_poll_index <=> root.update_poll_index;
+                            update_status_text: root.update_status_text;
+                            is_updating: root.is_updating;
+                            reload_needed: root.reload_needed;
+                            reload_status_text: root.reload_status_text;
+                            is_reloading: root.is_reloading;
+                            changed => { root.has_changes = true; }
+                            open_url(url) => { root.open_url(url); }
+                            reset_defaults => { root.reset_defaults_requested(); }
+                            check_update_requested => { root.check_update_requested(); }
+                            restart_fcitx5_requested => { root.restart_fcitx5_requested(); }
+                            uninstall_requested => { root.uninstall_requested(); }
+                        }
+                    }
                 }
 
                 // chan trang va nut bam thao tac
