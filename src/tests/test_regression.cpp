@@ -591,10 +591,10 @@ TEST_F(RegressionCorpusTest, test_regression_unknown_site_draftjs_auto_detect) {
     EXPECT_TRUE(state->isDraftJsEditor());
     EXPECT_TRUE(state->isRichTextEditor());
 
-    // next deletion must use uinput with draftjs pacing (kDraftJsPostDelayMs post_delay, kDraftJsGapMs gap)
+    // next deletion must use uinput with draftjs pacing (adaptive post_delay >= kDraftJsPostDelayMs)
     EXPECT_GT(uinput_calls, 0);
-    EXPECT_EQ(last_post_delay, config::kDraftJsPostDelayMs);
-    EXPECT_EQ(last_gap_ms, config::kDraftJsGapMs);
+    EXPECT_GE(last_post_delay, config::kDraftJsPostDelayMs);
+    EXPECT_GE(last_gap_ms, config::kDraftJsGapMs);
 }
 
 TEST_F(RegressionCorpusTest, test_regression_backspace_hold_continues_deleting_when_composing_empties) {

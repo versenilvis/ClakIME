@@ -156,6 +156,7 @@ set(CLAK_SOURCES
     src/ime/modal_handler.cpp
     src/ime/surrounding_verifier.cpp
     src/ime/key_buffer.cpp
+    src/ime/adaptive_pacing.cpp
     src/ime/state.cpp
     src/engine.cpp
 )

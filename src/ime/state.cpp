@@ -25,6 +25,7 @@ ClakState::ClakState(ClakEngine* engine, fcitx::InputContext* ic)
     : engine_(engine), ic_(ic) {
     rust_ctx_ = clak_context_new(CLAK_METHOD_TELEX);
     syncConfig();
+    pacing_engine_.loadStateFromFile();
 }
 
 void ClakState::syncConfig() {
@@ -37,6 +38,7 @@ void ClakState::syncConfig() {
 }
 
 ClakState::~ClakState() {
+    pacing_engine_.saveStateToFile();
     if (rust_ctx_) {
         clak_context_free(rust_ctx_);
         rust_ctx_ = nullptr;
@@ -314,6 +316,18 @@ void ClakState::arm_safety_timer() {
 
                 std::string app = appKey();
                 std::string site = activeSite();
+                bool is_draftjs = isDraftJsEditor() || config::isDraftJsSite(site) || config::isTikTokSite(site);
+                pacing::PacingGroup pgroup = pacing::AdaptivePacingEngine::classify(app, site, is_address_bar_fix_, is_draftjs);
+                uint64_t incident_now_us = fcitx::now(CLOCK_MONOTONIC);
+                if (is_selection_deletion_) {
+                    pacing_engine_.onIncident(pgroup, pacing::IncidentType::SelectionTimeout, incident_now_us);
+                } else if (is_address_bar_fix_) {
+                    pacing_engine_.onIncident(pgroup, pacing::IncidentType::AddressBarDelay, incident_now_us);
+                } else if (!key_buffer_.empty()) {
+                    pacing_engine_.onIncident(pgroup, pacing::IncidentType::KeyInterruption, incident_now_us);
+                } else {
+                    pacing_engine_.onIncident(pgroup, pacing::IncidentType::PacingStarvation, incident_now_us);
+                }
                 utils::clakLog("SENTINEL TIMEOUT (" + std::to_string(timeout_us / 1000) + "ms expired): giving up waiting, only " +
                                std::to_string(current_backspace_count_) + "/" + std::to_string(expected_backspaces_) +
                                 " BS returned! force committing '" + pending_commit_string_ + "' app=" + app +
@@ -353,6 +367,12 @@ void ClakState::finishUinputDeletion(uint64_t rtt_us) {
     is_selection_deletion_ = false;
     expected_backspaces_ = 0;
     current_backspace_count_ = 0;
+
+    std::string app = appKey();
+    std::string site = activeSite();
+    bool is_draftjs = isDraftJsEditor() || config::isDraftJsSite(site) || config::isTikTokSite(site);
+    pacing::PacingGroup pgroup = pacing::AdaptivePacingEngine::classify(app, site, is_address_bar_fix_, is_draftjs);
+    pacing_engine_.onTransactionSuccess(pgroup);
 
     if (op_start_us_ > 0) {
         uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
@@ -473,7 +493,13 @@ bool ClakState::handleKey(const fcitx::Key& key) {
 
     bool skip_verify = is_gecko || is_meta || currentProfile()->preventsUinput();
     if (verifier_.isPending() && use_surrounding && !skip_verify) {
+        bool was_draft = verifier_.isDraftJsEditorDirect();
         verifier_.verify(surr);
+        if (!was_draft && verifier_.isDraftJsEditorDirect()) {
+            pacing_engine_.onIncident(pacing::PacingGroup::WebDraftJs,
+                                      pacing::IncidentType::SurroundingMismatch,
+                                      fcitx::now(CLOCK_MONOTONIC));
+        }
         is_draftjs = isDraftJsEditor();
         use_surrounding = currentProfile()->allowsSurroundingText() && valid_surr && !verifier_.isRichTextEditor() && !is_draftjs;
     } else if (verifier_.isPending()) {
@@ -601,14 +627,32 @@ bool ClakState::handleKey(const fcitx::Key& key) {
 
                 apps::UinputPacing pacing = currentProfile()->uinputPacing();
                 const ClakConfig* cfg = engine_ ? engine_->config() : nullptr;
+                bool adaptive_enabled = cfg ? clak_config_get_adaptive_pacing(cfg) : true;
+                pacing_engine_.setEnabled(adaptive_enabled);
+
+                pacing::PacingGroup pgroup = pacing::AdaptivePacingEngine::classify(app, site, is_autofill, is_draftjs);
+                if (cfg) {
+                    pacing_engine_.configureGroup(pacing::PacingGroup::TerminalUinput,
+                        clak_config_get_terminal_delay_ms(cfg), clak_config_get_terminal_gap_ms(cfg), 30, 10);
+                    pacing_engine_.configureGroup(pacing::PacingGroup::WebDraftJs,
+                        clak_config_get_draftjs_delay_ms(cfg), clak_config_get_draftjs_gap_ms(cfg), 40, 20);
+                    pacing_engine_.configureGroup(pacing::PacingGroup::HeavyApp,
+                        clak_config_get_heavy_app_delay_ms(cfg), clak_config_get_heavy_app_gap_ms(cfg), 35, 12);
+                }
+
                 if (is_autofill) {
                     pacing = {config::kAddressBarPostDelayMs, 2};
+                } else if (adaptive_enabled) {
+                    pacing = pacing_engine_.uinputPacing(pgroup);
                 } else if (modal_handler_.isModalEditor() || config::isTerminalApp(app)) {
                     pacing = {cfg ? clak_config_get_terminal_delay_ms(cfg) : config::kTerminalPostDelayMs,
                               cfg ? clak_config_get_terminal_gap_ms(cfg) : config::kTerminalGapMs};
                 } else if (is_draftjs || isDraftJsEditor() || config::isTikTokSite(site)) {
                     pacing = {cfg ? clak_config_get_draftjs_delay_ms(cfg) : config::kDraftJsPostDelayMs,
                               cfg ? clak_config_get_draftjs_gap_ms(cfg) : config::kDraftJsGapMs};
+                } else if (apps::isWpsOfficeApp(app) || apps::isSteamApp(app) || apps::isJetBrainsApp(app)) {
+                    pacing = {cfg ? clak_config_get_heavy_app_delay_ms(cfg) : 15,
+                              cfg ? clak_config_get_heavy_app_gap_ms(cfg) : 4};
                 }
                 uint32_t pre_delay = 0;
 

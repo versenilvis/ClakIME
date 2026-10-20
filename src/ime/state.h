@@ -11,6 +11,7 @@
 #include "modal_handler.h"
 #include "surrounding_verifier.h"
 #include "key_buffer.h"
+#include "adaptive_pacing.h"
 #include "apps/app_profile.h"
 
 namespace clak {
@@ -57,6 +58,8 @@ public:
   void cancelRepeat() { repeat_handler_.cancel(); }
   void setEnableRepeatForMock(bool enable) { repeat_handler_.setEnableRepeatForMock(enable); }
   apps::AppProfile* currentProfile();
+  pacing::AdaptivePacingEngine& pacingEngine() { return pacing_engine_; }
+  const pacing::AdaptivePacingEngine& pacingEngine() const { return pacing_engine_; }
 
 private:
   void arm_safety_timer();
@@ -114,6 +117,7 @@ private:
   ModalHandler modal_handler_;
   SurroundingVerifier verifier_;
   KeyBuffer key_buffer_;
+  pacing::AdaptivePacingEngine pacing_engine_;
 
   std::unique_ptr<apps::AppProfile> profile_;
   std::string profile_app_;
