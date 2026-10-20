@@ -82,9 +82,6 @@ export component MainWindow inherits Window {
     in-out property <int> terminal_gap_ms: 3;
     in-out property <int> heavy_app_delay_ms: 15;
     in-out property <int> heavy_app_gap_ms: 4;
-    in-out property <string> telemetry_compositor: "Wayland";
-    in-out property <string> telemetry_group: "DraftJS-Uinput";
-    in-out property <string> telemetry_delay: "16ms (gap 8ms)";
 
     // gioi thieu
     in-out property <bool> auto_update_enabled: true;
@@ -379,9 +376,6 @@ export component MainWindow inherits Window {
                     terminal_gap_ms <=> root.terminal_gap_ms;
                     heavy_app_delay_ms <=> root.heavy_app_delay_ms;
                     heavy_app_gap_ms <=> root.heavy_app_gap_ms;
-                    telemetry_compositor: root.telemetry_compositor;
-                    telemetry_group: root.telemetry_group;
-                    telemetry_delay: root.telemetry_delay;
                     changed => { root.has_changes = true; }
                 }
 

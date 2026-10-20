@@ -1116,14 +1116,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     main_window.set_heavy_app_delay_ms(cfg.pacing.heavy_app_delay_ms as i32);
     main_window.set_heavy_app_gap_ms(cfg.pacing.heavy_app_gap_ms as i32);
 
-    let is_wayland = std::env::var("WAYLAND_DISPLAY").is_ok()
-        || std::env::var("XDG_SESSION_TYPE")
-            .map(|s| s.eq_ignore_ascii_case("wayland"))
-            .unwrap_or(false);
-    main_window.set_telemetry_compositor(if is_wayland { "Wayland (Mutter/wlroots)".into() } else { "X11".into() });
-    main_window.set_telemetry_group("Web / DraftJS (X, TikTok)".into());
-    main_window.set_telemetry_delay(format!("{}ms (gap {}ms)", cfg.pacing.draftjs_delay_ms, cfg.pacing.draftjs_gap_ms).into());
-
     // populate models
     let apps_vec: Vec<SharedString> = cfg
         .per_app
