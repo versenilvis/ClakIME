@@ -217,6 +217,11 @@ TEST_F(ClakStateTest, GivenGnomeFallbackApp_PopulatesTerminalClass) {
 TEST_F(ClakStateTest, GivenXTerminalEmul_RecognizedAsTerminalAndEditorWhenTitleMatches) {
     EXPECT_TRUE(config::isTerminalApp("x-terminal-emul"));
     EXPECT_TRUE(config::isTerminalApp("x-terminal-emulator"));
+    EXPECT_TRUE(apps::isVteTerminalApp("gnome-terminal"));
+    EXPECT_TRUE(apps::isVteTerminalApp("gnome-terminal-server"));
+    EXPECT_TRUE(apps::isVteTerminalApp("x-terminal-emulator"));
+    EXPECT_TRUE(apps::isVteTerminalApp("tilix"));
+    EXPECT_TRUE(apps::isVteTerminalApp("terminator"));
     platform::WindowInfo win{"x-terminal-emul", "nvim main.rs", 1234};
     EXPECT_TRUE(platform::isEditorActive(win));
 }

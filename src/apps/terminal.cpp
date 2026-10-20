@@ -12,7 +12,10 @@ namespace apps {
 
 bool isVteTerminalApp(const std::string& app) {
     static const std::vector<std::string> vte_terms = {
-        "ptyxis", "kgx", "gnome-console", "blackbox"
+        "ptyxis", "kgx", "gnome-console", "blackbox",
+        "gnome-terminal", "gnome-terminal-server",
+        "x-terminal-emulator", "x-terminal-emul",
+        "tilix", "terminator", "guake", "xfce4-terminal", "mate-terminal"
     };
     for (const auto& t : vte_terms) {
         if (app.find(t) != std::string::npos) return true;
@@ -25,8 +28,7 @@ bool isTerminalApp(const std::string& app) {
     if (isVteTerminalApp(app)) return true;
     static const std::vector<std::string> terms = {
         "kitty", "ghostty", "alacritty", "foot", "wezterm", "xterm",
-        "gnome-terminal", "konsole", "yakuake", "tilix", "terminator", "urxvt",
-        "terminal", "x-terminal-emulator", "x-terminal-emul"
+        "konsole", "yakuake", "urxvt", "terminal"
     };
     for (const auto& t : terms) {
         if (app.find(t) != std::string::npos) return true;
@@ -46,9 +48,10 @@ std::string detectRunningTerminalApp() {
     s_last_term_check_ms = now_ms;
 
     static const char* const kTerminals[] = {
-        "kitty", "x-terminal-emulator", "x-terminal-emul", "alacritty", "ghostty", "foot",
-        "wezterm", "gnome-terminal", "konsole", "yakuake", "xterm", "terminator", "tilix",
-        "ptyxis", "kgx", "gnome-console", "blackbox"
+        "kitty", "alacritty", "ghostty", "foot",
+        "wezterm", "gnome-terminal", "gnome-terminal-server", "konsole", "yakuake", "xterm",
+        "terminator", "tilix", "ptyxis", "kgx", "gnome-console", "blackbox",
+        "x-terminal-emulator", "x-terminal-emul"
     };
 
     DIR* proc_dir = opendir("/proc");
@@ -70,7 +73,7 @@ std::string detectRunningTerminalApp() {
             }
             for (const char* term : kTerminals) {
                 if (strcmp(comm, term) == 0 || strstr(comm, term) != nullptr) {
-                    found = (strcmp(comm, "x-terminal-emul") == 0 || strcmp(comm, "x-terminal-emulator") == 0) ? "kitty" : comm;
+                    found = comm;
                     fclose(f);
                     closedir(proc_dir);
                     s_last_term_app = found;
