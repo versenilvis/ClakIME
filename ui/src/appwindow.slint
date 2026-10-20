@@ -71,6 +71,11 @@ export component MainWindow inherits Window {
     // nang cao
     in-out property <bool> uinput_ack: false;
     in-out property <bool> debug_log: false;
+    in-out property <int> pacing_preset_index: 1;
+    in-out property <int> draftjs_delay_ms: 16;
+    in-out property <int> draftjs_gap_ms: 8;
+    in-out property <int> terminal_delay_ms: 12;
+    in-out property <int> terminal_gap_ms: 3;
 
     // gioi thieu
     in-out property <bool> auto_update_enabled: true;
@@ -349,6 +354,11 @@ export component MainWindow inherits Window {
                     new_app_name <=> root.new_app_name;
                     uinput_ack <=> root.uinput_ack;
                     debug_log <=> root.debug_log;
+                    pacing_preset_index <=> root.pacing_preset_index;
+                    draftjs_delay_ms <=> root.draftjs_delay_ms;
+                    draftjs_gap_ms <=> root.draftjs_gap_ms;
+                    terminal_delay_ms <=> root.terminal_delay_ms;
+                    terminal_gap_ms <=> root.terminal_gap_ms;
                     changed => { root.has_changes = true; }
                     add_excluded_app(name) => { root.add_excluded_app(name); }
                     remove_excluded_app(idx) => { root.remove_excluded_app(idx); }

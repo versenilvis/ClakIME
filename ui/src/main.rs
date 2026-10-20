@@ -1014,6 +1014,19 @@ fn save_config(
     cfg_to_save.advanced.uinput_ack = window.get_uinput_ack();
     cfg_to_save.advanced.debug_log = window.get_debug_log();
 
+    let pacing_str = match window.get_pacing_preset_index() {
+        0 => "fast",
+        1 => "balanced",
+        2 => "safe",
+        3 => "custom",
+        _ => "balanced",
+    };
+    cfg_to_save.advanced.pacing_preset = pacing_str.to_string();
+    cfg_to_save.advanced.draftjs_delay_ms = window.get_draftjs_delay_ms() as u32;
+    cfg_to_save.advanced.draftjs_gap_ms = window.get_draftjs_gap_ms() as u32;
+    cfg_to_save.advanced.terminal_delay_ms = window.get_terminal_delay_ms() as u32;
+    cfg_to_save.advanced.terminal_gap_ms = window.get_terminal_gap_ms() as u32;
+
     cfg_to_save.update.auto_update = window.get_auto_update_enabled();
     cfg_to_save.update.poll_index = window.get_update_poll_index();
 
@@ -1083,6 +1096,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     main_window.set_remember_app_state(cfg.per_app.remember_state);
     main_window.set_uinput_ack(cfg.advanced.uinput_ack);
     main_window.set_debug_log(cfg.advanced.debug_log);
+
+    let pacing_idx = match cfg.advanced.pacing_preset.as_str() {
+        "fast" => 0,
+        "balanced" => 1,
+        "safe" => 2,
+        "custom" => 3,
+        _ => 1,
+    };
+    main_window.set_pacing_preset_index(pacing_idx);
+    main_window.set_draftjs_delay_ms(cfg.advanced.draftjs_delay_ms as i32);
+    main_window.set_draftjs_gap_ms(cfg.advanced.draftjs_gap_ms as i32);
+    main_window.set_terminal_delay_ms(cfg.advanced.terminal_delay_ms as i32);
+    main_window.set_terminal_gap_ms(cfg.advanced.terminal_gap_ms as i32);
 
     // populate models
     let apps_vec: Vec<SharedString> = cfg
@@ -1389,6 +1415,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         window.set_remember_app_state(default_cfg.per_app.remember_state);
         window.set_uinput_ack(default_cfg.advanced.uinput_ack);
         window.set_debug_log(default_cfg.advanced.debug_log);
+
+        let default_pacing_idx = match default_cfg.advanced.pacing_preset.as_str() {
+            "fast" => 0,
+            "balanced" => 1,
+            "safe" => 2,
+            "custom" => 3,
+            _ => 1,
+        };
+        window.set_pacing_preset_index(default_pacing_idx);
+        window.set_draftjs_delay_ms(default_cfg.advanced.draftjs_delay_ms as i32);
+        window.set_draftjs_gap_ms(default_cfg.advanced.draftjs_gap_ms as i32);
+        window.set_terminal_delay_ms(default_cfg.advanced.terminal_delay_ms as i32);
+        window.set_terminal_gap_ms(default_cfg.advanced.terminal_gap_ms as i32);
+
         window.set_auto_update_enabled(default_cfg.update.auto_update);
         window.set_update_poll_index(default_cfg.update.poll_index);
 

@@ -600,10 +600,15 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                 op_group_ = classifyGroup(app, site, is_autofill, true);
 
                 apps::UinputPacing pacing = currentProfile()->uinputPacing();
+                const ClakConfig* cfg = engine_ ? engine_->config() : nullptr;
                 if (is_autofill) {
                     pacing = {config::kAddressBarPostDelayMs, 2};
-                } else if (modal_handler_.isModalEditor()) {
-                    pacing = {config::kTerminalPostDelayMs, config::kTerminalGapMs};
+                } else if (modal_handler_.isModalEditor() || config::isTerminalApp(app)) {
+                    pacing = {cfg ? clak_config_get_terminal_delay_ms(cfg) : config::kTerminalPostDelayMs,
+                              cfg ? clak_config_get_terminal_gap_ms(cfg) : config::kTerminalGapMs};
+                } else if (is_draftjs || isDraftJsEditor() || config::isTikTokSite(site)) {
+                    pacing = {cfg ? clak_config_get_draftjs_delay_ms(cfg) : config::kDraftJsPostDelayMs,
+                              cfg ? clak_config_get_draftjs_gap_ms(cfg) : config::kDraftJsGapMs};
                 }
                 uint32_t pre_delay = 0;
 

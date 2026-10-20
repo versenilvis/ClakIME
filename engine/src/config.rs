@@ -106,6 +106,36 @@ pub struct AdvancedConfig {
     pub uinput_ack: bool,
     #[serde(default)]
     pub debug_log: bool,
+    #[serde(default = "default_pacing_preset")]
+    pub pacing_preset: String,
+    #[serde(default = "default_draftjs_delay_ms")]
+    pub draftjs_delay_ms: u32,
+    #[serde(default = "default_draftjs_gap_ms")]
+    pub draftjs_gap_ms: u32,
+    #[serde(default = "default_terminal_delay_ms")]
+    pub terminal_delay_ms: u32,
+    #[serde(default = "default_terminal_gap_ms")]
+    pub terminal_gap_ms: u32,
+}
+
+fn default_pacing_preset() -> String {
+    "balanced".to_string()
+}
+
+fn default_draftjs_delay_ms() -> u32 {
+    16
+}
+
+fn default_draftjs_gap_ms() -> u32 {
+    8
+}
+
+fn default_terminal_delay_ms() -> u32 {
+    12
+}
+
+fn default_terminal_gap_ms() -> u32 {
+    3
 }
 
 impl Default for AdvancedConfig {
@@ -114,6 +144,11 @@ impl Default for AdvancedConfig {
             autostart: default_true(),
             uinput_ack: false,
             debug_log: false,
+            pacing_preset: default_pacing_preset(),
+            draftjs_delay_ms: default_draftjs_delay_ms(),
+            draftjs_gap_ms: default_draftjs_gap_ms(),
+            terminal_delay_ms: default_terminal_delay_ms(),
+            terminal_gap_ms: default_terminal_gap_ms(),
         }
     }
 }
