@@ -6,10 +6,11 @@ export component NavTab {
     in property <string> label;
     in property <bool> active: false;
     in property <bool> has-indicator: false;
+    in property <bool> is-wide: false;
     out property <bool> has-hover: tab_area.has-hover;
     callback clicked();
 
-    height: 42px;
+    height: root.is-wide ? 50px : 42px;
 
     tab_area := TouchArea {
         mouse-cursor: pointer;
@@ -25,8 +26,8 @@ export component NavTab {
                 alignment: center;
                 Image {
                     source: root.icon;
-                    width: 16px;
-                    height: 16px;
+                    width: root.is-wide ? 18px : 16px;
+                    height: root.is-wide ? 18px : 16px;
                     colorize: root.has-indicator ? #ffffff : (root.active ? #c8c8c8 : #7a7a7a);
                     animate colorize {
                         duration: 150ms;
@@ -40,7 +41,7 @@ export component NavTab {
                 Text {
                     text: root.label;
                     color: root.has-indicator ? #ffffff : (root.active ? #d6d6d6 : #8e8e8e);
-                    font-size: 14px;
+                    font-size: root.is-wide ? 15px : 14px;
                     font-weight: root.has-indicator ? 600 : (root.active ? 600 : 500);
                     vertical-alignment: center;
                     animate color {
@@ -60,9 +61,10 @@ export component SocialBadge inherits Rectangle {
     in property <length> watermark-offset-x: 10px;
     in property <length> watermark-offset-y: 0px;
     in property <string> handle: "@versenilvis";
+    in property <bool> is-wide: false;
     callback clicked();
 
-    height: 28px;
+    height: root.is-wide ? 34px : 28px;
     background: transparent;
 
     badge_ta := TouchArea {
@@ -104,8 +106,8 @@ export component SocialBadge inherits Rectangle {
                     alignment: center;
                     Image {
                         source: root.icon;
-                        width: 15px;
-                        height: 15px;
+                        width: root.is-wide ? 17px : 15px;
+                        height: root.is-wide ? 17px : 15px;
                         colorize: #ffffff;
                     }
                 }
@@ -115,7 +117,7 @@ export component SocialBadge inherits Rectangle {
                     Text {
                         text: root.handle;
                         color: #ffffff;
-                        font-size: 12px;
+                        font-size: root.is-wide ? 13px : 12px;
                         font-weight: 500;
                         vertical-alignment: center;
                     }
@@ -128,10 +130,11 @@ export component SocialBadge inherits Rectangle {
 // thanh dieu huong sidebar voi active box truot muot ma
 export component Sidebar inherits Rectangle {
     in-out property <int> selected-tab: 0;
+    in property <bool> is-wide: false;
     callback tab-selected(int);
     callback open-url(string);
 
-    width: 210px;
+    width: root.is-wide ? 250px : 210px;
     horizontal-stretch: 0;
     background: Theme.sidebar-bg;
     border-width: 0px;
@@ -147,7 +150,7 @@ export component Sidebar inherits Rectangle {
         // banner hinh anh kem gradient lam mo phia duoi
         Rectangle {
             width: parent.width;
-            height: 94px;
+            height: root.is-wide ? 116px : 94px;
             clip: true;
 
             Image {
@@ -184,7 +187,7 @@ export component Sidebar inherits Rectangle {
 
             // vung chua cac tab kem hop active truot muot ma
             tabs_box := Rectangle {
-                height: 5 * 42px;
+                height: 5 * (root.is-wide ? 50px : 42px);
 
                 property <int> hovered-tab:
                     tab0.has-hover ? 0 :
@@ -198,9 +201,9 @@ export component Sidebar inherits Rectangle {
                 // active indicator box di chuyen muot ma
                 active_indicator := Rectangle {
                     x: 0px;
-                    y: tabs_box.indicator-tab * 42px + 2px;
+                    y: tabs_box.indicator-tab * (root.is-wide ? 50px : 42px) + 2px;
                     width: parent.width;
-                    height: 38px;
+                    height: root.is-wide ? 46px : 38px;
                     border-radius: Theme.radius-sm;
                     background: Theme.tab-active-bg;
 
@@ -214,6 +217,7 @@ export component Sidebar inherits Rectangle {
                     spacing: 0px;
 
                     tab0 := NavTab {
+                        is-wide: root.is-wide;
                         icon: @image-url("../../assets/icons/keyboard.svg");
                         label: "Chung";
                         active: root.selected-tab == 0;
@@ -225,6 +229,7 @@ export component Sidebar inherits Rectangle {
                     }
 
                     tab1 := NavTab {
+                        is-wide: root.is-wide;
                         icon: @image-url("../../assets/icons/zap.svg");
                         label: "Gõ tắt";
                         active: root.selected-tab == 1;
@@ -236,6 +241,7 @@ export component Sidebar inherits Rectangle {
                     }
 
                     tab2 := NavTab {
+                        is-wide: root.is-wide;
                         icon: @image-url("../../assets/icons/grid.svg");
                         label: "Ứng dụng";
                         active: root.selected-tab == 2;
@@ -247,6 +253,7 @@ export component Sidebar inherits Rectangle {
                     }
 
                     tab3 := NavTab {
+                        is-wide: root.is-wide;
                         icon: @image-url("../../assets/icons/activity.svg");
                         label: "Chẩn đoán";
                         active: root.selected-tab == 3;
@@ -258,6 +265,7 @@ export component Sidebar inherits Rectangle {
                     }
 
                     tab4 := NavTab {
+                        is-wide: root.is-wide;
                         icon: @image-url("../../assets/icons/info.svg");
                         label: "Giới thiệu";
                         active: root.selected-tab == 4;
@@ -279,6 +287,7 @@ export component Sidebar inherits Rectangle {
                 spacing: 4px;
 
                 SocialBadge {
+                    is-wide: root.is-wide;
                     icon: @image-url("../../assets/icons/github.svg");
                     watermark: @image-url("../../assets/icons/github-watermark.svg");
                     watermark-offset-x: 10px;
@@ -287,6 +296,7 @@ export component Sidebar inherits Rectangle {
                 }
 
                 SocialBadge {
+                    is-wide: root.is-wide;
                     icon: @image-url("../../assets/icons/x.svg");
                     watermark: @image-url("../../assets/icons/x-watermark.svg");
                     watermark-offset-x: 17px;
@@ -295,6 +305,7 @@ export component Sidebar inherits Rectangle {
                 }
 
                 SocialBadge {
+                    is-wide: root.is-wide;
                     icon: @image-url("../../assets/icons/telegram.svg");
                     watermark: @image-url("../../assets/icons/telegram-watermark.svg");
                     watermark-offset-x: 12px;

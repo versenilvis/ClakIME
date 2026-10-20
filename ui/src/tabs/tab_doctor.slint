@@ -26,6 +26,7 @@ export component TabDoctor inherits VerticalLayout {
     in property <bool> permissions_needs_fix: false;
     in property <bool> has_fixable_issues: false;
     in property <bool> is_fixing: false;
+    in property <bool> is-wide: false;
 
     callback scan_requested();
     callback copy_requested();
@@ -42,6 +43,7 @@ export component TabDoctor inherits VerticalLayout {
     SectionHeader {
         title: "CHẨN ĐOÁN HỆ THỐNG";
         show-divider: false;
+        is-wide: root.is-wide;
     }
 
     // thanh trang thai va cong cu tren dau tab
@@ -139,6 +141,7 @@ export component TabDoctor inherits VerticalLayout {
                 alignment: end;
 
                 if root.has_scanned && root.has_fixable_issues: ActionButton {
+                    is-wide: root.is-wide;
                     text: root.is_fixing ? "Đang xử lý..." : "Tự động sửa lỗi";
                     primary: true;
                     enabled: !root.is_fixing && !root.is_scanning;
@@ -146,12 +149,14 @@ export component TabDoctor inherits VerticalLayout {
                 }
 
                 if root.has_scanned: ActionButton {
+                    is-wide: root.is-wide;
                     text: root.copied_toast ? "Đã sao chép!" : "Sao chép";
                     enabled: !root.is_scanning && !root.is_fixing;
                     clicked => { root.copy_requested(); }
                 }
 
                 ActionButton {
+                    is-wide: root.is-wide;
                     text: root.is_scanning ? "Đang quét..." : (root.has_scanned ? "Quét lại" : "Chẩn đoán ngay");
                     primary: !root.has_fixable_issues;
                     enabled: !root.is_scanning && !root.is_fixing;

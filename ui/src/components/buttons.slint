@@ -4,9 +4,10 @@ import { Theme } from "../theme.slint";
 export component GhostButton inherits Rectangle {
     in property <string> text;
     in property <bool> destructive: false;
+    in property <bool> is-wide: false;
     callback clicked();
 
-    height: 28px;
+    height: root.is-wide ? 34px : 28px;
     border-radius: 6px;
     background: ta.has-hover ? (root.destructive ? #c5585830 : #383838)
         : (root.destructive ? #c5585818 : #262626);
@@ -30,7 +31,7 @@ export component GhostButton inherits Rectangle {
             text: root.text;
             color: root.destructive ? (ta.has-hover ? #e57c7c : #c55858)
                 : (ta.has-hover ? #ffffff : #c0c0c0);
-            font-size: 12px;
+            font-size: root.is-wide ? 13px : 12px;
             font-weight: 500;
             vertical-alignment: center;
             horizontal-alignment: center;
@@ -45,9 +46,10 @@ export component ActionButton inherits Rectangle {
     in property <bool> primary: false;
     in property <bool> destructive: false;
     in property <bool> enabled: true;
+    in property <bool> is-wide: false;
     callback clicked();
 
-    height: 30px;
+    height: root.is-wide ? 36px : 30px;
     horizontal-stretch: 0;
     border-radius: 6px;
     background: !root.enabled ? #1a1a1a : (
@@ -68,9 +70,9 @@ export component ActionButton inherits Rectangle {
 
     hl := HorizontalLayout {
         alignment: center;
-        min-width: 56px;
-        padding-left: 12px;
-        padding-right: 12px;
+        min-width: root.is-wide ? 68px : 56px;
+        padding-left: root.is-wide ? 16px : 12px;
+        padding-right: root.is-wide ? 16px : 12px;
         padding-top: 1px;
 
         Text {
@@ -78,7 +80,7 @@ export component ActionButton inherits Rectangle {
             color: !root.enabled ? #505050 : (
                 root.destructive ? (btn_ta.has-hover ? #e57c7c : #c55858)
                 : (root.primary ? #000000 : (btn_ta.has-hover ? #ffffff : #d4d4d4)));
-            font-size: 13px;
+            font-size: root.is-wide ? 14px : 13px;
             font-weight: 600;
             vertical-alignment: center;
             horizontal-alignment: center;

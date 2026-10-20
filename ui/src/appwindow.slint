@@ -25,8 +25,10 @@ export component MainWindow inherits Window {
     min-height: 580px;
     background: Theme.bg;
     default-font-family: "SF Pro Text";
-    default-font-size: 14px;
+    default-font-size: root.is-wide ? 16px : 14px;
     default-font-weight: Theme.text-weight;
+
+    in-out property <bool> is-wide: false;
 
     in-out property <int> selected_tab: 0;
     in-out property <bool> has_changes: false;
@@ -156,6 +158,7 @@ export component MainWindow inherits Window {
 
             // sidebar dieu huong
             Sidebar {
+                is-wide: root.is-wide;
                 selected-tab <=> root.selected_tab;
                 open-url(url) => { root.open_url(url); }
             }
@@ -163,11 +166,11 @@ export component MainWindow inherits Window {
             // noi dung cac tab
             VerticalLayout {
                 horizontal-stretch: 1;
-                padding-left: 20px;
-                padding-right: 20px;
-                padding-top: 14px;
-                padding-bottom: 10px;
-                spacing: 8px;
+                padding-left: root.is-wide ? 36px : 20px;
+                padding-right: root.is-wide ? 36px : 20px;
+                padding-top: root.is-wide ? 24px : 14px;
+                padding-bottom: root.is-wide ? 18px : 10px;
+                spacing: root.is-wide ? 14px : 8px;
 
                 // banner canh bao clak chua duoc kich hoat hoac chua nap trong fcitx5
                 if (root.profile_needs_setup || root.addon_needs_load) && root.selected_tab != 3: Rectangle {
@@ -302,6 +305,7 @@ export component MainWindow inherits Window {
 
                 if root.selected_tab == 0: TabGeneral {
                     vertical-stretch: 1;
+                    is-wide: root.is-wide;
                     toggle_shortcut_text <=> root.toggle_shortcut_text;
                     is_recording_shortcut <=> root.is_recording_shortcut;
                     start_recording_shortcut => {
@@ -322,6 +326,7 @@ export component MainWindow inherits Window {
 
                 if root.selected_tab == 1: TabTyping {
                     vertical-stretch: 1;
+                    is-wide: root.is-wide;
                     short_w <=> root.short_w;
                     bracket_brackets <=> root.bracket_brackets;
                     double_space_period <=> root.double_space_period;
@@ -337,6 +342,7 @@ export component MainWindow inherits Window {
 
                 if root.selected_tab == 2: TabAdvanced {
                     vertical-stretch: 1;
+                    is-wide: root.is-wide;
                     autostart_system <=> root.autostart_system;
                     remember_app_state <=> root.remember_app_state;
                     excluded_apps <=> root.excluded_apps;
@@ -356,6 +362,7 @@ export component MainWindow inherits Window {
 
                         TabAbout {
                             vertical-stretch: 0;
+                            is-wide: root.is-wide;
                             app_version: root.app_version;
                             auto_update_enabled <=> root.auto_update_enabled;
                             git_commit_hash: root.git_commit_hash;
@@ -379,6 +386,7 @@ export component MainWindow inherits Window {
 
                 if root.selected_tab == 3: TabDoctor {
                     vertical-stretch: 1;
+                    is-wide: root.is-wide;
                     lines: root.doctor_lines;
                     has_scanned: root.doctor_has_scanned;
                     is_scanning: root.doctor_is_scanning;
@@ -415,25 +423,28 @@ export component MainWindow inherits Window {
                 Divider { }
 
                 HorizontalLayout {
-                    padding-left: 14px;
-                    padding-right: 14px;
-                    height: 38px;
+                    padding-left: root.is-wide ? 20px : 14px;
+                    padding-right: root.is-wide ? 20px : 14px;
+                    height: root.is-wide ? 48px : 38px;
                     alignment: space-between;
                     spacing: 10px;
 
                     VerticalLayout {
                         alignment: center;
                         if root.saved_toast: StatusIndicator {
+                            is-wide: root.is-wide;
                             text: "Đã lưu cấu hình";
                             dot-color: Theme.success;
                             weight: 600;
                         }
                         if !root.saved_toast && root.has_changes: StatusIndicator {
+                            is-wide: root.is-wide;
                             text: "Có thay đổi chưa lưu";
                             dot-color: Theme.warning;
                             weight: 500;
                         }
                         if !root.saved_toast && !root.has_changes: StatusIndicator {
+                            is-wide: root.is-wide;
                             text: "ESC để đóng";
                             dot-color: Theme.text-muted;
                             weight: 400;
@@ -444,10 +455,11 @@ export component MainWindow inherits Window {
                         alignment: center;
 
                         HorizontalLayout {
-                            spacing: 8px;
+                            spacing: root.is-wide ? 10px : 8px;
                             alignment: end;
 
                             ActionButton {
+                                is-wide: root.is-wide;
                                 text: "Hủy";
                                 destructive: true;
                                 enabled: true;
@@ -455,12 +467,14 @@ export component MainWindow inherits Window {
                             }
 
                             ActionButton {
+                                is-wide: root.is-wide;
                                 text: "Áp dụng";
                                 enabled: root.has_changes;
                                 clicked => { root.apply_requested(); }
                             }
 
                             ActionButton {
+                                is-wide: root.is-wide;
                                 text: "Đồng ý";
                                 primary: true;
                                 enabled: root.has_changes;

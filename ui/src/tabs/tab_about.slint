@@ -20,6 +20,7 @@ export component TabAbout inherits VerticalLayout {
     in-out property <bool> reload_needed: false;
     in-out property <string> reload_status_text: "";
     in-out property <bool> is_reloading: false;
+    in property <bool> is-wide: false;
     callback changed();
     callback open_url(string);
     callback reset_defaults();
@@ -33,6 +34,7 @@ export component TabAbout inherits VerticalLayout {
     SectionHeader {
         title: "CẬP NHẬT";
         show-divider: false;
+        is-wide: root.is-wide;
     }
 
     if root.reload_needed: Rectangle {
@@ -77,6 +79,7 @@ export component TabAbout inherits VerticalLayout {
             VerticalLayout {
                 alignment: center;
                 ActionButton {
+                    is-wide: root.is-wide;
                     text: root.is_reloading ? "Đang nạp lại..." : "Khởi động lại Fcitx5";
                     primary: true;
                     enabled: !root.is_reloading;
@@ -129,6 +132,7 @@ export component TabAbout inherits VerticalLayout {
         VerticalLayout {
             alignment: center;
             ToggleSwitch {
+                is-wide: root.is-wide;
                 checked <=> root.auto_update_enabled;
                 toggled => { root.changed(); }
             }
@@ -147,6 +151,7 @@ export component TabAbout inherits VerticalLayout {
         VerticalLayout {
             alignment: center;
             ActionButton {
+                is-wide: root.is-wide;
                 text: root.is_updating ? "Đang cập nhật..." : "Cập nhật từ nguồn";
                 primary: true;
                 enabled: !root.is_updating;
@@ -412,6 +417,7 @@ export component TabAbout inherits VerticalLayout {
                     VerticalLayout {
                         alignment: center;
                         GhostButton {
+                            is-wide: root.is-wide;
                             text: "Khôi phục";
                             destructive: true;
                             clicked => { root.reset_defaults(); }
@@ -449,6 +455,7 @@ export component TabAbout inherits VerticalLayout {
                     VerticalLayout {
                         alignment: center;
                         GhostButton {
+                            is-wide: root.is-wide;
                             text: "Gỡ cài đặt";
                             destructive: true;
                             clicked => { root.uninstall_requested(); }

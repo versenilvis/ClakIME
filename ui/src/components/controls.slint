@@ -3,13 +3,14 @@ import { Theme } from "../theme.slint";
 // cong tac switch chuyen dong muot ma
 export component ToggleSwitch {
     in-out property <bool> checked: false;
+    in property <bool> is-wide: false;
     callback toggled();
 
-    width: 40px;
-    height: 22px;
+    width: root.is-wide ? 48px : 40px;
+    height: root.is-wide ? 26px : 22px;
 
     Rectangle {
-        border-radius: 11px;
+        border-radius: root.is-wide ? 13px : 11px;
         background: root.checked ? #61ffca : (ta.has-hover ? #242424 : #1a1a1a);
         border-width: 0px;
 
@@ -17,8 +18,6 @@ export component ToggleSwitch {
             duration: 180ms;
             easing: ease-out;
         }
-
-
 
         ta := TouchArea {
             mouse-cursor: pointer;
@@ -31,9 +30,9 @@ export component ToggleSwitch {
         Rectangle {
             x: root.checked ? parent.width - self.width - 3px : 3px;
             y: (parent.height - self.height) / 2;
-            width: ta.pressed ? 19px : 16px;
-            height: 16px;
-            border-radius: 8px;
+            width: ta.pressed ? (root.is-wide ? 23px : 19px) : (root.is-wide ? 20px : 16px);
+            height: root.is-wide ? 20px : 16px;
+            border-radius: root.is-wide ? 10px : 8px;
             background: root.checked ? #0a0a0a : (ta.pressed ? #d8d8d8 : #ffffff);
             border-width: 0px;
 
@@ -61,6 +60,7 @@ export component Divider inherits Rectangle {
 export component SectionHeader inherits VerticalLayout {
     in property <string> title;
     in property <bool> show-divider: false;
+    in property <bool> is-wide: false;
 
     spacing: 0px;
     padding: 0px;
@@ -68,13 +68,13 @@ export component SectionHeader inherits VerticalLayout {
     HorizontalLayout {
         padding-left: 14px;
         padding-right: 14px;
-        padding-top: 5px;
-        padding-bottom: 2px;
+        padding-top: root.show-divider ? (root.is-wide ? 26px : 12px) : (root.is-wide ? 14px : 5px);
+        padding-bottom: root.is-wide ? 8px : 2px;
 
         Text {
             text: root.title;
             color: Theme.text-section;
-            font-size: 11px;
+            font-size: root.is-wide ? 13px : 11px;
             font-weight: Theme.section-title-weight;
             vertical-alignment: center;
         }
@@ -102,10 +102,11 @@ export component SettingItem {
     in property <string> title;
     in property <string> subtitle: "";
     in-out property <bool> checked: false;
+    in property <bool> is-wide: false;
     callback toggled();
 
     Rectangle {
-        min-height: 34px;
+        min-height: root.is-wide ? 54px : 34px;
         background: area.has-hover ? #ffffff0a : transparent;
         border-radius: Theme.radius-sm;
 
@@ -120,20 +121,20 @@ export component SettingItem {
         HorizontalLayout {
             padding-left: 14px;
             padding-right: 14px;
-            padding-top: 3px;
-            padding-bottom: 3px;
+            padding-top: root.is-wide ? 10px : 3px;
+            padding-bottom: root.is-wide ? 10px : 3px;
             alignment: space-between;
             spacing: 14px;
 
             VerticalLayout {
                 alignment: center;
-                spacing: 2px;
+                spacing: root.is-wide ? 4px : 2px;
                 padding-top: 1px;
 
                 Text {
                     text: root.title;
                     color: Theme.text-primary;
-                    font-size: 14px;
+                    font-size: root.is-wide ? 16px : 14px;
                     font-weight: Theme.feature-title-weight;
                     vertical-alignment: center;
                 }
@@ -141,7 +142,7 @@ export component SettingItem {
                 if root.subtitle != "": Text {
                     text: root.subtitle;
                     color: Theme.text-muted;
-                    font-size: 12px;
+                    font-size: root.is-wide ? 13px : 12px;
                     font-weight: Theme.text-weight;
                     wrap: word-wrap;
                     vertical-alignment: center;
@@ -151,6 +152,7 @@ export component SettingItem {
             VerticalLayout {
                 alignment: center;
                 ToggleSwitch {
+                    is-wide: root.is-wide;
                     checked <=> root.checked;
                     toggled => { root.toggled(); }
                 }
@@ -163,26 +165,27 @@ export component SettingItem {
 export component FieldRow {
     in property <string> title;
     in property <string> subtitle: "";
+    in property <bool> is-wide: false;
 
     HorizontalLayout {
-        min-height: 34px;
+        min-height: root.is-wide ? 54px : 34px;
         padding-left: 14px;
         padding-right: 14px;
-        padding-top: 3px;
-        padding-bottom: 3px;
+        padding-top: root.is-wide ? 10px : 3px;
+        padding-bottom: root.is-wide ? 10px : 3px;
         alignment: space-between;
         spacing: 14px;
 
         VerticalLayout {
             alignment: center;
-            spacing: 3px;
-            min-width: 170px;
+            spacing: root.is-wide ? 4px : 3px;
+            min-width: root.is-wide ? 200px : 170px;
             padding-top: 1px;
 
             Text {
                 text: root.title;
                 color: Theme.text-primary;
-                font-size: 14px;
+                font-size: root.is-wide ? 16px : 14px;
                 font-weight: Theme.feature-title-weight;
                 vertical-alignment: center;
             }
@@ -190,7 +193,7 @@ export component FieldRow {
             if root.subtitle != "": Text {
                 text: root.subtitle;
                 color: Theme.text-muted;
-                font-size: 12px;
+                font-size: root.is-wide ? 13px : 12px;
                 font-weight: Theme.text-weight;
                 vertical-alignment: center;
             }
@@ -245,6 +248,7 @@ export component StatusIndicator inherits HorizontalLayout {
     in property <string> text;
     in property <color> dot-color: Theme.text-muted;
     in property <int> weight: 300;
+    in property <bool> is-wide: false;
 
     spacing: 7px;
     alignment: start;
@@ -252,9 +256,9 @@ export component StatusIndicator inherits HorizontalLayout {
     VerticalLayout {
         alignment: center;
         Rectangle {
-            width: 6px;
-            height: 6px;
-            border-radius: 3px;
+            width: root.is-wide ? 8px : 6px;
+            height: root.is-wide ? 8px : 6px;
+            border-radius: root.is-wide ? 4px : 3px;
             background: root.dot-color;
         }
     }
@@ -265,7 +269,7 @@ export component StatusIndicator inherits HorizontalLayout {
         Text {
             text: root.text;
             color: root.dot-color;
-            font-size: 12px;
+            font-size: root.is-wide ? 14px : 12px;
             font-weight: root.weight;
             vertical-alignment: center;
         }
@@ -276,9 +280,10 @@ export component StatusIndicator inherits HorizontalLayout {
 export component SegmentedSwitch inherits Rectangle {
     in property <[string]> options;
     in-out property <int> current-index: 0;
+    in property <bool> is-wide: false;
     callback selected(int);
 
-    height: 32px;
+    height: root.is-wide ? 38px : 32px;
     background: #181818;
     border-radius: 8px;
 
@@ -305,14 +310,14 @@ export component SegmentedSwitch inherits Rectangle {
             }
 
             HorizontalLayout {
-                padding-left: 12px;
-                padding-right: 12px;
+                padding-left: root.is-wide ? 16px : 12px;
+                padding-right: root.is-wide ? 16px : 12px;
                 alignment: center;
 
                 Text {
                     text: opt;
                     color: idx == root.current-index ? #ffffff : (seg_ta.has-hover ? #d0d0d0 : #888888);
-                    font-size: 12px;
+                    font-size: root.is-wide ? 14px : 12px;
                     font-weight: idx == root.current-index ? 600 : 500;
                     vertical-alignment: center;
                     horizontal-alignment: center;

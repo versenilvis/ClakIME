@@ -13,20 +13,23 @@ export component TabTyping inherits VerticalLayout {
     in-out property <[MacroItemData]> macro_items: [];
     in-out property <string> new_macro_trigger: "";
     in-out property <string> new_macro_replace: "";
+    in property <bool> is-wide: false;
     callback changed();
     callback add_macro(string, string);
     callback remove_macro(int);
 
-    spacing: 0px;
+    spacing: root.is-wide ? 8px : 0px;
 
     SectionHeader {
         title: "TỰ ĐỘNG";
         show-divider: false;
+        is-wide: root.is-wide;
     }
 
     SettingItem {
         title: "Gõ w thành ư";
         subtitle: "Phím w ra chữ ư ở đầu từ";
+        is-wide: root.is-wide;
         checked <=> root.short_w;
         toggled => { root.changed(); }
     }
@@ -34,6 +37,7 @@ export component TabTyping inherits VerticalLayout {
     SettingItem {
         title: "Gõ [ ] { } thành ơ ư Ơ Ư";
         subtitle: "Gõ 2 lần ngoặc để trả lại ký tự gốc";
+        is-wide: root.is-wide;
         checked <=> root.bracket_brackets;
         toggled => { root.changed(); }
     }
@@ -41,6 +45,7 @@ export component TabTyping inherits VerticalLayout {
     SettingItem {
         title: "Nhấn Space 2 lần chèn dấu chấm";
         subtitle: "Tự động thêm dấu chấm và một khoảng trắng";
+        is-wide: root.is-wide;
         checked <=> root.double_space_period;
         toggled => { root.changed(); }
     }
@@ -48,6 +53,7 @@ export component TabTyping inherits VerticalLayout {
     SettingItem {
         title: "Tự động viết hoa đầu câu";
         subtitle: "Viết hoa chữ cái đầu tiên sau dấu chấm, chấm hỏi, chấm than";
+        is-wide: root.is-wide;
         checked <=> root.auto_capitalize;
         toggled => { root.changed(); }
     }
@@ -55,6 +61,7 @@ export component TabTyping inherits VerticalLayout {
     SettingItem {
         title: "Bật tính năng gõ tắt (Macro)";
         subtitle: "Thay thế từ viết tắt thành cụm từ đầy đủ";
+        is-wide: root.is-wide;
         checked <=> root.macros_enabled;
         toggled => { root.changed(); }
     }
@@ -62,6 +69,7 @@ export component TabTyping inherits VerticalLayout {
     SectionHeader {
         title: "BẢNG GÕ TẮT";
         show-divider: true;
+        is-wide: root.is-wide;
     }
 
     HorizontalLayout {
@@ -86,6 +94,7 @@ export component TabTyping inherits VerticalLayout {
         }
 
         GhostButton {
+            is-wide: root.is-wide;
             text: "Thêm";
             clicked => {
                 if root.new_macro_trigger != "" && root.new_macro_replace != "" {
@@ -108,7 +117,7 @@ export component TabTyping inherits VerticalLayout {
 
         Rectangle {
             vertical-stretch: 1;
-            min-height: 180px;
+            min-height: root.is-wide ? 240px : 180px;
             background: #0d0d0f;
             border-width: 0px;
             border-color: transparent;
@@ -132,7 +141,7 @@ export component TabTyping inherits VerticalLayout {
                     alignment: start;
 
                     for item[idx] in root.macro_items: Rectangle {
-                        height: 38px;
+                        height: root.is-wide ? 44px : 38px;
                         background: macro_row_ta.has-hover ? #ffffff0a : transparent;
                         border-radius: 6px;
 
@@ -151,21 +160,21 @@ export component TabTyping inherits VerticalLayout {
                                     text: item.trigger;
                                     color: #ffffff;
                                     font-weight: 600;
-                                    font-size: 13px;
+                                    font-size: root.is-wide ? 15px : 13px;
                                     vertical-alignment: center;
                                 }
 
                                 Text {
                                     text: "→";
                                     color: Theme.text-faint;
-                                    font-size: 13px;
+                                    font-size: root.is-wide ? 15px : 13px;
                                     vertical-alignment: center;
                                 }
 
                                 Text {
                                     text: item.replace;
                                     color: Theme.text-secondary;
-                                    font-size: 13px;
+                                    font-size: root.is-wide ? 14px : 13px;
                                     font-weight: 400;
                                     vertical-alignment: center;
                                 }
@@ -174,6 +183,7 @@ export component TabTyping inherits VerticalLayout {
                             VerticalLayout {
                                 alignment: center;
                                 GhostButton {
+                                    is-wide: root.is-wide;
                                     text: "Xoá";
                                     destructive: true;
                                     clicked => {

@@ -1861,6 +1861,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    // auto-detect window resize to scale text and UI for full window (Hyprland / tiling / maximized)
+    let resize_window_weak = main_window.as_weak();
+    let resize_timer = slint::Timer::default();
+    resize_timer.start(
+        slint::TimerMode::Repeated,
+        std::time::Duration::from_millis(150),
+        move || {
+            if let Some(w) = resize_window_weak.upgrade() {
+                let width = w.window().size().width;
+                let scale = w.window().scale_factor();
+                let logical_width = if scale > 0.0 {
+                    width as f32 / scale
+                } else {
+                    width as f32
+                };
+                let is_wide = logical_width >= 1150.0;
+                if w.get_is_wide() != is_wide {
+                    w.set_is_wide(is_wide);
+                }
+            }
+        },
+    );
+
     main_window.run()?;
     Ok(())
 }

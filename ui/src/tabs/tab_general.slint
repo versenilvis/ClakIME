@@ -20,23 +20,27 @@ export component TabGeneral inherits VerticalLayout {
     in-out property <bool> auto_restore: false;
     in-out property <bool> modern_tone: true;
     in-out property <string> playground_input: "";
+    in property <bool> is-wide: false;
     callback changed();
     callback start_recording_shortcut();
 
-    spacing: 0px;
+    alignment: start;
+    spacing: root.is-wide ? 10px : 0px;
 
     SectionHeader {
         title: "KIỂU GÕ";
         show-divider: false;
+        is-wide: root.is-wide;
     }
 
     FieldRow {
         title: "Phím chuyển";
         subtitle: root.is_recording_shortcut ? "Đang chờ phím... (nhấn tổ hợp phím hoặc ESC để hủy)" : "Bấm để đổi phím tắt chuyển đổi";
+        is-wide: root.is-wide;
 
         Rectangle {
-            height: 32px;
-            min-width: 140px;
+            height: root.is-wide ? 42px : 32px;
+            min-width: root.is-wide ? 180px : 140px;
             border-radius: 8px;
             background: root.is_recording_shortcut ? #3b82f6.with-alpha(0.22) : (rec_ta.has-hover ? #282828 : #1c1c1e);
             border-width: 1px;
@@ -67,7 +71,7 @@ export component TabGeneral inherits VerticalLayout {
                 if root.is_recording_shortcut: Text {
                     text: "...";
                     color: #60a5fa;
-                    font-size: 14px;
+                    font-size: root.is-wide ? 16px : 14px;
                     font-weight: 700;
                     vertical-alignment: center;
                 }
@@ -75,7 +79,7 @@ export component TabGeneral inherits VerticalLayout {
                 if !root.is_recording_shortcut: Text {
                     text: root.toggle_shortcut_text;
                     color: Theme.text-primary;
-                    font-size: 13px;
+                    font-size: root.is-wide ? 15px : 13px;
                     font-weight: 600;
                     vertical-alignment: center;
                 }
@@ -85,27 +89,33 @@ export component TabGeneral inherits VerticalLayout {
 
     FieldRow {
         title: "Kiểu gõ";
+        is-wide: root.is-wide;
         SegmentedSwitch {
             options: ["Telex", "VNI", "VIQR", "Telex + VNI"];
             current-index <=> root.method_index;
+            is-wide: root.is-wide;
             selected => { root.changed(); }
         }
     }
 
     FieldRow {
         title: "Bảng mã Unicode";
+        is-wide: root.is-wide;
         SegmentedSwitch {
             options: ["Dựng sẵn", "Tổ hợp"];
             current-index <=> root.charset_index;
+            is-wide: root.is-wide;
             selected => { root.changed(); }
         }
     }
 
     FieldRow {
         title: "Khi khởi động";
+        is-wide: root.is-wide;
         SegmentedSwitch {
             options: ["Tiếng Việt", "Tiếng Anh"];
             current-index <=> root.startup_mode_index;
+            is-wide: root.is-wide;
             selected => { root.changed(); }
         }
     }
@@ -113,11 +123,13 @@ export component TabGeneral inherits VerticalLayout {
     SectionHeader {
         title: "CHÍNH TẢ";
         show-divider: true;
+        is-wide: root.is-wide;
     }
 
     SettingItem {
         title: "Tự sửa chính tả khi gõ sai";
         subtitle: "Tự động nhận diện và sửa lỗi đảo phím khi gõ nhanh";
+        is-wide: root.is-wide;
         checked <=> root.autocorrect;
         toggled => { root.changed(); }
     }
@@ -125,6 +137,7 @@ export component TabGeneral inherits VerticalLayout {
     SettingItem {
         title: "Sửa chính tả bằng phím Shift";
         subtitle: "Nhấn nhả nhanh phím Shift để tự động sửa từ hoặc vùng chọn; nhấn lần nữa để hoàn tác";
+        is-wide: root.is-wide;
         checked <=> root.shift_autofix;
         toggled => { root.changed(); }
     }
@@ -132,6 +145,7 @@ export component TabGeneral inherits VerticalLayout {
     SettingItem {
         title: "Kiểm tra chính tả";
         subtitle: "Ngăn từ sai quy tắc tiếng Việt";
+        is-wide: root.is-wide;
         checked <=> root.spelling_enabled;
         toggled => { root.changed(); }
     }
@@ -139,6 +153,7 @@ export component TabGeneral inherits VerticalLayout {
     SettingItem {
         title: "Tự phục hồi khi sai (Auto Restore)";
         subtitle: "Trả về chuỗi gốc khi từ không hợp lệ";
+        is-wide: root.is-wide;
         checked <=> root.auto_restore;
         toggled => { root.changed(); }
     }
@@ -146,49 +161,51 @@ export component TabGeneral inherits VerticalLayout {
     SettingItem {
         title: "Dấu kiểu mới (oà, uý)";
         subtitle: "Chuẩn hiện đại theo bộ giáo dục";
+        is-wide: root.is-wide;
         checked <=> root.modern_tone;
         toggled => { root.changed(); }
     }
 
     SectionHeader {
         title: "THỬ NGHIỆM";
-        show-divider: false;
+        show-divider: true;
+        is-wide: root.is-wide;
     }
 
     // o go thu nghiem
     HorizontalLayout {
         padding-left: 14px;
         padding-right: 14px;
-        padding-top: 4px;
+        padding-top: root.is-wide ? 8px : 4px;
         padding-bottom: 2px;
 
         Rectangle {
-            min-height: 48px;
-            max-height: 76px;
-            preferred-height: 58px;
+            min-height: root.is-wide ? 130px : 48px;
+            max-height: root.is-wide ? 220px : 76px;
+            preferred-height: root.is-wide ? 160px : 58px;
             background: #121214;
             border-radius: 8px;
             border-width: 0px;
 
             // chu chim / placeholder mo
             if input.text == "": Text {
-                x: 14px;
-                y: 12px;
-                width: parent.width - 28px;
+                x: 16px;
+                y: root.is-wide ? 16px : 12px;
+                width: parent.width - 32px;
                 text: "Gõ thử tiếng Việt tại đây (kiểm tra dấu, phím tắt, tốc độ phản hồi)...";
                 color: #555555;
-                font-size: 13px;
+                font-size: root.is-wide ? 15px : 13px;
                 font-weight: 400;
             }
 
             input := TextInput {
-                x: 14px;
-                y: 12px;
-                width: parent.width - 28px;
-                height: parent.height - 24px;
+                x: 16px;
+                y: root.is-wide ? 16px : 12px;
+                width: parent.width - 32px;
+                height: parent.height - (root.is-wide ? 32px : 24px);
                 text <=> root.playground_input;
                 color: Theme.text-primary;
-                font-size: 13px;
+                font-size: root.is-wide ? 15px : 13px;
                 single-line: false;
                 wrap: word-wrap;
             }
