@@ -2,6 +2,68 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.7.0](https://github.com/versenilvis/ClakIME/releases/tag/v0.7.0) - 2026-10-20
+
+### Bug fixes
+
+- Forward cursor movement and selection navigation keys ([12fd2e](https://github.com/versenilvis/ClakIME/commit/12fd2e18839a4a9c6a373d0a54afea3badb3d56b))
+- Isolate surrounding text and tune PTY pacing constants ([c7b198](https://github.com/versenilvis/ClakIME/commit/c7b19869966a713bc33abbd5fe0c3aeef3cf4766))
+- Enable instant uinput fallback and frozen cursor detection for vscode terminal ([63325d](https://github.com/versenilvis/ClakIME/commit/63325dcdcc94d789fb99d1e39c11ec8aba8fbb05))
+- Dispatch key events to modal handler before navigation intercept ([f24ade](https://github.com/versenilvis/ClakIME/commit/f24ade1fa56ce64a9e784dd4d13634c762f533cd))
+- Suggest clak doctor --fix instead of manual command ([8a2a56](https://github.com/versenilvis/ClakIME/commit/8a2a564c413f7a07f8ef56cdfce13f62ef2324d6))
+- Allow 'gìn' syllable in CVC validator and fix e2e test scripts ([b766d5](https://github.com/versenilvis/ClakIME/commit/b766d5c52c131b6ba87b9eb63fbb20a724253be3))
+- Fix surrounding text state tracking and draftjs cursor recovery ([5cbf9d](https://github.com/versenilvis/ClakIME/commit/5cbf9d29a091518e8b79ba53a332c10df7bb22db))
+- Support fedora lib64 path and bootstrap rustup in ubuntu ci ([ae38d9](https://github.com/versenilvis/ClakIME/commit/ae38d9358e66adbb1f23db40badddbdcdc1405fe))
+- Sync lib64 paths across install, update, uninstall and bootstrap rustup in fedora ci ([cac9a2](https://github.com/versenilvis/ClakIME/commit/cac9a21ab6260db32d438174f4e78b68c2171ddd))
+- Dynamically assert distro addon path in CI and guard uninstall against package manager files ([0be625](https://github.com/versenilvis/ClakIME/commit/0be62513fc550b74b7a77d90dac12d96f16d04b3))
+- Install fcitx5 runtime packages in CI and clean user configs on managed packages ([4b9995](https://github.com/versenilvis/ClakIME/commit/4b9995850ed244bd386a9f27cdb95f4da8265c87))
+- Guard steam wrapper deletion with xmodifiers signature and preserve modified fcitx5 config ([caa6be](https://github.com/versenilvis/ClakIME/commit/caa6bea4d9a138226ea7ed75d891886f0deb1b60))
+- Batch pending commit with buffered keys to prevent wayland swallow ([bb4424](https://github.com/versenilvis/ClakIME/commit/bb44249263a682386ec910f7dfc2780cb82f3ca8))
+- Configure steam with ibus xmodifiers ([016f5f](https://github.com/versenilvis/ClakIME/commit/016f5ff526b93e5af0e3fcb41f878da1e7807b15))
+- Pass cursor move keys natively to preserve shift selection ([78c54c](https://github.com/versenilvis/ClakIME/commit/78c54c84cfb47774c7f6c9965dbaab2bb77df058))
+- Disallow circumflex crossing consonants for e and o ([bbab69](https://github.com/versenilvis/ClakIME/commit/bbab69fc52a70281534e2c31a9f1ce5001ab5e45))
+- Restore delayed circumflex with auto-restore on stop codas ([1fedf1](https://github.com/versenilvis/ClakIME/commit/1fedf193d9c90b4e5b62aad2bea937dcf40d7c9b))
+- Increase shift tap hold tolerance to 350ms and add diagnostics ([477257](https://github.com/versenilvis/ClakIME/commit/4772574626fadea5d36fb129cf3551caba4af7a5))
+- Do not call deleteSurroundingText when replacing selection ([b85c83](https://github.com/versenilvis/ClakIME/commit/b85c83d37457c0c12769cb8f581773ca44535974))
+- Forward shift release on autofix and remove blocking wl-paste ([13f1ad](https://github.com/versenilvis/ClakIME/commit/13f1adfea592f504a747bd19450892f4865ac5d0))
+- Fix TikTok input freeze, key swallowing, and sentinel deletion race ([8a34d6](https://github.com/versenilvis/ClakIME/commit/8a34d687e7419b0bcd657f1a0672af3ca7cbb47d))
+- Disable autocorrect on enter and protect foreign consonant clusters ([c3c591](https://github.com/versenilvis/ClakIME/commit/c3c59134753c3c7889446392cc7eda2e9113cfc9))
+- Auto format ([a9af2a](https://github.com/versenilvis/ClakIME/commit/a9af2a7807264946163bb579dcf233f43de707ef))
+- Improve responsive layout and spacing on full window ([737145](https://github.com/versenilvis/ClakIME/commit/737145f5e9ca73e47ed6278949035db1233216c9))
+- Dynamically detect fcitx5 module include dirs for nix and hermetic builds ([55e6e7](https://github.com/versenilvis/ClakIME/commit/55e6e712ac946494da70c3a5933479dfa1ef5159))
+
+### Documentation
+
+- Update license description ([8586f3](https://github.com/versenilvis/ClakIME/commit/8586f35155ae05729f2ce59c5c37c129705e90f4))
+- New ui ([bb04b7](https://github.com/versenilvis/ClakIME/commit/bb04b7210a956ed54397d4f259c0e96556343a28))
+
+### Features
+
+- 1-click addon activation, doctor auto-fix, and Twitter/terminal IME fixes ([#4](https://github.com/versenilvis/ClakIME/issues/4)) ([7ad696](https://github.com/versenilvis/ClakIME/commit/7ad6962ed6705d41ede5c501f2f9178a9eddfcbb))
+- Add XTest fallback for X11 when direct uinput is unavailable ([412f3f](https://github.com/versenilvis/ClakIME/commit/412f3f1e8a6e7b0ae418d630acb92e4e0023820f))
+- Support synchronous ASCII DEL erasure for VTE terminals ([613db3](https://github.com/versenilvis/ClakIME/commit/613db3f8b07832ecefae14e181659938560caa80))
+- Report XTest fallback status when uinput permission is missing ([f812b5](https://github.com/versenilvis/ClakIME/commit/f812b5a1a84b727b2fb9faa4fe7d1b24b70229c4))
+- Enhance browser domain extraction and atspi active window detection ([7f567d](https://github.com/versenilvis/ClakIME/commit/7f567d2c1f06b384b0859e4162b2ae49520ea0c6))
+- Record sentinel emission timestamp and log rtt csv ([49ffbd](https://github.com/versenilvis/ClakIME/commit/49ffbdd6de8208cc10706f575e69600ea5a9874d))
+- Add Shift tap selection and word auto-fix with quick undo ([d7f404](https://github.com/versenilvis/ClakIME/commit/d7f4045656beaedec338ac19ffbaa2556e6be68f))
+- Add primary selection fallback for address bar autofix ([f8e529](https://github.com/versenilvis/ClakIME/commit/f8e529fcacf4e367aa3cac53c3250e95c3980baa))
+- Add mid-word click to retone and modify existing words ([6c2821](https://github.com/versenilvis/ClakIME/commit/6c28214dd203e01b613ef4fd3944013d04c6e4ec))
+- Add smart autocorrect and safe adaptive typo learning ([53dc9e](https://github.com/versenilvis/ClakIME/commit/53dc9e11a56e53e61b9c71377eb84050f7b8b8fa))
+- Handle autocorrect action with shift tap undo and normal backspace ([7713d8](https://github.com/versenilvis/ClakIME/commit/7713d890c96943fff1198c77a917220d9928d7bb))
+- Reorganize settings tabs and add autocorrect toggle ([c8c3f3](https://github.com/versenilvis/ClakIME/commit/c8c3f31c3f9edce9ff3c267c148b733849240571))
+- Autocorrect scrambled dudowjc and dduowjc to được ([3c9eb4](https://github.com/versenilvis/ClakIME/commit/3c9eb4208149a9d559c157be6b4d010544831786))
+- Sync fcitx environment variables to systemd and dbus ([545179](https://github.com/versenilvis/ClakIME/commit/5451793e43637fb6786c878c5fbd984d5a940e82))
+- Add KDE Plasma support and desktop shell filtering ([bba926](https://github.com/versenilvis/ClakIME/commit/bba926f5658c907f48e2a9effb0c0c85326d714f))
+
+### Performance
+
+- Optimize user_words lookup using pre-indexed base vowels ([89c19d](https://github.com/versenilvis/ClakIME/commit/89c19d0ec54ded2c9fadc49c8a9b5eed41f9858f))
+
+### Refactors
+
+- Clean up codebase and decouple app profiles ([f65dd8](https://github.com/versenilvis/ClakIME/commit/f65dd83898e3c3717d063cc21b077d882f02b109))
+- Extract unit tests into engine/tests suite ([4f81ac](https://github.com/versenilvis/ClakIME/commit/4f81ac99a7dc5c748e9e1218e826178af828ecd9))
+
 ## [v0.5.0](https://github.com/versenilvis/ClakIME/releases/tag/v0.5.0) - 2026-10-10
 
 ### Bug fixes
