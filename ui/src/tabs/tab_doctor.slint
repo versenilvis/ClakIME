@@ -24,6 +24,10 @@ export component TabDoctor inherits VerticalLayout {
     in property <bool> jetbrains_needs_fix: false;
     in property <bool> autostart_needs_fix: false;
     in property <bool> permissions_needs_fix: false;
+    in property <bool> im_switch_needed: false;
+    in property <string> current_im_name: "";
+    in property <bool> pacing_needs_tune: false;
+    in property <string> pacing_tune_description: "";
     in property <bool> has_fixable_issues: false;
     in property <bool> is_fixing: false;
     in property <bool> is-wide: false;
@@ -37,6 +41,8 @@ export component TabDoctor inherits VerticalLayout {
     callback fix_permissions_requested();
     callback fix_wps_requested();
     callback fix_jetbrains_requested();
+    callback switch_to_clak_requested();
+    callback apply_pacing_requested();
 
     spacing: 12px;
 
@@ -142,7 +148,7 @@ export component TabDoctor inherits VerticalLayout {
 
                 if root.has_scanned && root.has_fixable_issues: ActionButton {
                     is-wide: root.is-wide;
-                    text: root.is_fixing ? "Đang xử lý..." : "Tự động sửa lỗi";
+                    text: root.is_fixing ? "Đang xử lý..." : "Tự động sửa lỗi & Cân chỉnh";
                     primary: true;
                     enabled: !root.is_fixing && !root.is_scanning;
                     clicked => { root.auto_fix_requested(); }
@@ -581,6 +587,124 @@ export component TabDoctor inherits VerticalLayout {
                     primary: true;
                     enabled: !root.is_scanning;
                     clicked => { root.fix_jetbrains_requested(); }
+                }
+            }
+        }
+    }
+
+    // card chuyen sang bo go clak
+    if root.has_scanned && root.im_switch_needed && !root.profile_needs_setup && !root.reload_needed: Rectangle {
+        border-radius: Theme.radius-md;
+        background: #3b82f6.with-alpha(0.12);
+        border-width: 0px;
+        border-color: transparent;
+
+        HorizontalLayout {
+            padding-left: 14px;
+            padding-right: 14px;
+            padding-top: 10px;
+            padding-bottom: 10px;
+            alignment: space-between;
+            spacing: 12px;
+
+            VerticalLayout {
+                alignment: center;
+                width: 24px;
+                Image {
+                    source: @image-url("../../assets/icons/zap.svg");
+                    width: 18px;
+                    height: 18px;
+                    colorize: #60a5fa;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                spacing: 2px;
+                horizontal-stretch: 1;
+
+                Text {
+                    text: "Chưa chuyển sang bộ gõ Clak";
+                    color: #60a5fa;
+                    font-size: 13px;
+                    font-weight: 600;
+                }
+
+                Text {
+                    text: "Bộ gõ đang kích hoạt là '" + root.current_im_name + "'. Nhấp để chuyển ngay sang Clak.";
+                    color: Theme.text-muted;
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+
+                ActionButton {
+                    text: "Chuyển sang Clak 1-Click";
+                    primary: true;
+                    enabled: !root.is_scanning;
+                    clicked => { root.switch_to_clak_requested(); }
+                }
+            }
+        }
+    }
+
+    // card tu dong can chinh do tre theo phan cung
+    if root.has_scanned && root.pacing_needs_tune: Rectangle {
+        border-radius: Theme.radius-md;
+        background: #8b5cf6.with-alpha(0.12);
+        border-width: 0px;
+        border-color: transparent;
+
+        HorizontalLayout {
+            padding-left: 14px;
+            padding-right: 14px;
+            padding-top: 10px;
+            padding-bottom: 10px;
+            alignment: space-between;
+            spacing: 12px;
+
+            VerticalLayout {
+                alignment: center;
+                width: 24px;
+                Image {
+                    source: @image-url("../../assets/icons/activity.svg");
+                    width: 18px;
+                    height: 18px;
+                    colorize: #a78bfa;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                spacing: 2px;
+                horizontal-stretch: 1;
+
+                Text {
+                    text: "Cân chỉnh độ trễ tối ưu cho thiết bị";
+                    color: #a78bfa;
+                    font-size: 13px;
+                    font-weight: 600;
+                }
+
+                Text {
+                    text: root.pacing_tune_description != "" ? root.pacing_tune_description : "Hồ sơ độ trễ hiện tại chưa đồng bộ với tần số quét màn hình và độ trễ uinput đo được. Nhấp để tự cân chỉnh ngay.";
+                    color: Theme.text-muted;
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+
+                ActionButton {
+                    text: "Tự cân chỉnh độ trễ";
+                    primary: true;
+                    enabled: !root.is_scanning && !root.is_fixing;
+                    clicked => { root.apply_pacing_requested(); }
                 }
             }
         }

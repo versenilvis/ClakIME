@@ -1388,13 +1388,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let wps_fix = report_for_ui.wps.installed && !report_for_ui.wps.configured;
                     let jb_fix = report_for_ui.jetbrains.installed
                         && !report_for_ui.jetbrains.unconfigured_ides.is_empty();
+
+                    let current_im_name = report_for_ui
+                        .daemon
+                        .current_im
+                        .clone()
+                        .unwrap_or_else(|| "Không rõ".to_string());
+                    let im_switch = report_for_ui.daemon.fcitx5_running
+                        && report_for_ui.daemon.current_im.as_deref() != Some("clak");
+
+                    let cur_cfg = clak_engine::config::ClakConfig::load();
+                    let pacing_differs = cur_cfg.pacing.preset != "custom"
+                        || cur_cfg.pacing.draftjs_delay_ms != report_for_ui.pacing.draftjs_post_delay_ms
+                        || cur_cfg.pacing.terminal_delay_ms != report_for_ui.pacing.terminal_post_delay_ms
+                        || cur_cfg.pacing.draftjs_gap_ms != report_for_ui.pacing.gap_ms;
+
+                    let pacing_tune_desc = format!(
+                        "Màn hình {:.0}Hz (budget {:.1}ms). Đề xuất: Terminal {}ms, Browser {}ms, DraftJS {}ms (Gap {}ms)",
+                        report_for_ui.display.effective_refresh_rate,
+                        report_for_ui.display.frame_budget_ms,
+                        report_for_ui.pacing.terminal_post_delay_ms,
+                        report_for_ui.pacing.browser_post_delay_ms,
+                        report_for_ui.pacing.draftjs_post_delay_ms,
+                        report_for_ui.pacing.gap_ms
+                    );
+
                     let has_fixable = is_deleted
                         || addon_not_loaded
                         || profile_needs
                         || autostart_needs
                         || permissions_needs
                         || wps_fix
-                        || jb_fix;
+                        || jb_fix
+                        || im_switch
+                        || pacing_differs;
 
                     w.set_reload_needed(is_deleted);
                     w.set_addon_needs_load(addon_not_loaded && !is_deleted);
@@ -1403,6 +1430,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     w.set_permissions_needs_fix(permissions_needs);
                     w.set_wps_needs_fix(wps_fix);
                     w.set_jetbrains_needs_fix(jb_fix);
+                    w.set_im_switch_needed(im_switch);
+                    w.set_current_im_name(current_im_name.into());
+                    w.set_pacing_needs_tune(pacing_differs);
+                    w.set_pacing_tune_description(pacing_tune_desc.into());
                     w.set_has_fixable_issues(has_fixable);
                     if let Ok(mut guard) = last_report_async.lock() {
                         *guard = Some(report_for_ui);
@@ -1879,6 +1910,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     });
 
+    let win_im = main_window.as_weak();
+    main_window.on_switch_to_clak_requested(move || {
+        let Some(window) = win_im.upgrade() else {
+            return;
+        };
+        clak_diagnostics::switch_to_clak();
+        window.set_im_switch_needed(false);
+        if window.get_doctor_has_scanned() {
+            window.invoke_doctor_scan_requested();
+        }
+    });
+
+    let win_pace = main_window.as_weak();
+    let last_report_pace = last_report.clone();
+    main_window.on_apply_pacing_requested(move || {
+        let Some(window) = win_pace.upgrade() else {
+            return;
+        };
+        if let Ok(guard) = last_report_pace.lock() {
+            if let Some(ref report) = *guard {
+                let _ = clak_diagnostics::apply_pacing_profile(&report.pacing);
+                let cfg = clak_engine::config::ClakConfig::load();
+                window.set_pacing_preset_index(3);
+                window.set_draftjs_delay_ms(cfg.pacing.draftjs_delay_ms as i32);
+                window.set_draftjs_gap_ms(cfg.pacing.draftjs_gap_ms as i32);
+                window.set_terminal_delay_ms(cfg.pacing.terminal_delay_ms as i32);
+                window.set_terminal_gap_ms(cfg.pacing.terminal_gap_ms as i32);
+                window.set_heavy_app_delay_ms(cfg.pacing.heavy_app_delay_ms as i32);
+                window.set_heavy_app_gap_ms(cfg.pacing.heavy_app_gap_ms as i32);
+                window.set_pacing_needs_tune(false);
+                window.invoke_doctor_scan_requested();
+            }
+        }
+    });
+
     let win_startup = main_window.as_weak();
     let last_report_startup = last_report.clone();
     std::thread::spawn(move || {
@@ -1929,13 +1995,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             !report.permissions.uinput_writable || report.permissions.input_readable_count == 0;
         let wps_fix = report.wps.installed && !report.wps.configured;
         let jb_fix = report.jetbrains.installed && !report.jetbrains.unconfigured_ides.is_empty();
+
+        let current_im_name = report
+            .daemon
+            .current_im
+            .clone()
+            .unwrap_or_else(|| "Không rõ".to_string());
+        let im_switch =
+            report.daemon.fcitx5_running && report.daemon.current_im.as_deref() != Some("clak");
+
+        let cur_cfg = clak_engine::config::ClakConfig::load();
+        let pacing_differs = cur_cfg.pacing.preset != "custom"
+            || cur_cfg.pacing.draftjs_delay_ms != report.pacing.draftjs_post_delay_ms
+            || cur_cfg.pacing.terminal_delay_ms != report.pacing.terminal_post_delay_ms
+            || cur_cfg.pacing.draftjs_gap_ms != report.pacing.gap_ms;
+
+        let pacing_tune_desc = format!(
+            "Màn hình {:.0}Hz (budget {:.1}ms). Đề xuất: Terminal {}ms, Browser {}ms, DraftJS {}ms (Gap {}ms)",
+            report.display.effective_refresh_rate,
+            report.display.frame_budget_ms,
+            report.pacing.terminal_post_delay_ms,
+            report.pacing.browser_post_delay_ms,
+            report.pacing.draftjs_post_delay_ms,
+            report.pacing.gap_ms
+        );
+
         let has_fixable = is_deleted
             || addon_not_loaded
             || needs_setup
             || autostart_needs
             || permissions_needs
             || wps_fix
-            || jb_fix;
+            || jb_fix
+            || im_switch
+            || pacing_differs;
 
         let report_for_ui = report.clone();
         let _ = slint::invoke_from_event_loop(move || {
@@ -1961,6 +2054,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 w.set_permissions_needs_fix(permissions_needs);
                 w.set_wps_needs_fix(wps_fix);
                 w.set_jetbrains_needs_fix(jb_fix);
+                w.set_im_switch_needed(im_switch);
+                w.set_current_im_name(current_im_name.into());
+                w.set_pacing_needs_tune(pacing_differs);
+                w.set_pacing_tune_description(pacing_tune_desc.into());
                 w.set_has_fixable_issues(has_fixable);
 
                 // nếu chưa thêm vào profile hoặc chưa nạp addon, tự động mở tab Chẩn đoán để hướng dẫn người dùng

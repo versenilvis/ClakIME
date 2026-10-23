@@ -28,6 +28,9 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
         if summary.pacing_fixed {
             println!("    ✔ Đã thiết lập hồ sơ độ trễ (Pacing Profile) tùy biến theo phần cứng.");
         }
+        if summary.im_switched {
+            println!("    ✔ Đã chuyển bộ gõ kích hoạt sang Clak.");
+        }
         for err in &summary.errors {
             eprintln!("    ❌ {}", err);
         }

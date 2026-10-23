@@ -321,6 +321,7 @@ pub struct AutoFixSummary {
     pub kde_fixed: bool,
     pub permissions_fixed: bool,
     pub pacing_fixed: bool,
+    pub im_switched: bool,
     pub errors: Vec<String>,
 }
 
@@ -334,7 +335,17 @@ impl AutoFixSummary {
             || self.kde_fixed
             || self.permissions_fixed
             || self.pacing_fixed
+            || self.im_switched
     }
+}
+
+// switch active input method to clak via fcitx5-remote
+pub fn switch_to_clak() -> bool {
+    std::process::Command::new("fcitx5-remote")
+        .args(["-s", "clak"])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
 }
 
 // configure custom pacing profile from measured benchmark
@@ -377,10 +388,9 @@ pub fn auto_fix_all(include_permissions: bool) -> AutoFixSummary {
         }
     } else if pre_report.daemon.fcitx5_running
         && pre_report.daemon.current_im.as_deref() != Some("clak")
+        && switch_to_clak()
     {
-        let _ = std::process::Command::new("fcitx5-remote")
-            .args(["-s", "clak"])
-            .status();
+        summary.im_switched = true;
     }
 
     // 3. Enable autostart and configure environment variables

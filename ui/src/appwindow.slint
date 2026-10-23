@@ -116,6 +116,10 @@ export component MainWindow inherits Window {
     in-out property <bool> jetbrains_needs_fix: false;
     in-out property <bool> autostart_needs_fix: false;
     in-out property <bool> permissions_needs_fix: false;
+    in-out property <bool> im_switch_needed: false;
+    in-out property <string> current_im_name: "";
+    in-out property <bool> pacing_needs_tune: false;
+    in-out property <string> pacing_tune_description: "";
     in-out property <bool> has_fixable_issues: false;
     in-out property <bool> is_fixing: false;
 
@@ -127,6 +131,8 @@ export component MainWindow inherits Window {
     callback auto_fix_requested();
     callback fix_autostart_requested();
     callback fix_permissions_requested();
+    callback switch_to_clak_requested();
+    callback apply_pacing_requested();
     callback record_shortcut_pressed(string, bool, bool, bool, bool);
 
     callback ok_requested();
@@ -401,6 +407,10 @@ export component MainWindow inherits Window {
                     jetbrains_needs_fix: root.jetbrains_needs_fix;
                     autostart_needs_fix: root.autostart_needs_fix;
                     permissions_needs_fix: root.permissions_needs_fix;
+                    im_switch_needed: root.im_switch_needed;
+                    current_im_name: root.current_im_name;
+                    pacing_needs_tune: root.pacing_needs_tune;
+                    pacing_tune_description: root.pacing_tune_description;
                     has_fixable_issues: root.has_fixable_issues;
                     is_fixing: root.is_fixing;
                     scan_requested => { root.doctor_scan_requested(); }
@@ -412,6 +422,8 @@ export component MainWindow inherits Window {
                     auto_fix_requested => { root.auto_fix_requested(); }
                     fix_autostart_requested => { root.fix_autostart_requested(); }
                     fix_permissions_requested => { root.fix_permissions_requested(); }
+                    switch_to_clak_requested => { root.switch_to_clak_requested(); }
+                    apply_pacing_requested => { root.apply_pacing_requested(); }
                 }
 
                 if root.selected_tab == 5: ScrollView {
