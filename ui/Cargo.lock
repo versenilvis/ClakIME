@@ -550,7 +550,7 @@ dependencies = [
 
 [[package]]
 name = "clak-engine"
-version = "0.7.3"
+version = "0.7.4"
 dependencies = [
  "libc",
  "serde",
@@ -559,7 +559,7 @@ dependencies = [
 
 [[package]]
 name = "clak-gui"
-version = "0.7.3"
+version = "0.7.4"
 dependencies = [
  "arboard",
  "chrono",
