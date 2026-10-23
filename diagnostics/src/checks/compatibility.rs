@@ -257,43 +257,79 @@ fn setup_profile_via_dbus() -> bool {
 
 // restart fcitx5 daemon cleanly and switch to clak
 pub fn restart_fcitx5_daemon() -> bool {
-    let mut restarted = Command::new("busctl")
-        .args([
-            "--user",
-            "call",
-            "org.fcitx.Fcitx5",
-            "/controller",
-            "org.fcitx.Fcitx.Controller1",
-            "Restart",
-        ])
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
+    let initial_pids = super::daemon::check_daemon().fcitx5_pids;
 
-    if !restarted {
-        restarted = if Command::new("systemctl")
-            .args(["--user", "is-active", "fcitx5.service"])
+    // try systemd user services if active
+    let systemd_units = [
+        "fcitx5.service",
+        "app-org.fcitx.Fcitx5.service",
+        "app-org.fcitx.Fcitx5@autostart.service",
+    ];
+    let mut restarted_via_systemd = false;
+    for unit in systemd_units {
+        let is_active = Command::new("systemctl")
+            .args(["--user", "is-active", unit])
             .output()
             .map(|o| o.status.success())
-            .unwrap_or(false)
-        {
-            Command::new("systemctl")
-                .args(["--user", "restart", "fcitx5.service"])
+            .unwrap_or(false);
+        if is_active {
+            let ok = Command::new("systemctl")
+                .args(["--user", "restart", unit])
                 .status()
                 .map(|s| s.success())
-                .unwrap_or(false)
-        } else {
-            Command::new("fcitx5")
-                .args(["-r", "-d"])
-                .status()
-                .map(|s| s.success())
-                .unwrap_or(false)
-        };
+                .unwrap_or(false);
+            if ok {
+                restarted_via_systemd = true;
+                break;
+            }
+        }
     }
 
-    std::thread::sleep(std::time::Duration::from_millis(350));
-    let _ = Command::new("fcitx5-remote").args(["-s", "clak"]).status();
-    restarted
+    // use native replace flag if not managed by systemd
+    if !restarted_via_systemd {
+        let _ = Command::new("fcitx5")
+            .args(["-r", "-d"])
+            .status();
+    }
+
+    // poll for new pid or daemon readiness
+    let mut success = false;
+    for _ in 0..15 {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        let daemon = super::daemon::check_daemon();
+        if daemon.fcitx5_running && !daemon.fcitx5_pids.is_empty() {
+            if initial_pids.is_empty() || daemon.fcitx5_pids != initial_pids {
+                success = true;
+                break;
+            }
+        }
+    }
+
+    // fallback kill and restart if previous instance refused to exit
+    if !success && !initial_pids.is_empty() {
+        for pid in &initial_pids {
+            let _ = Command::new("kill").args(["-15", &pid.to_string()]).status();
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let _ = Command::new("fcitx5").arg("-d").status();
+
+        for _ in 0..10 {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            let daemon = super::daemon::check_daemon();
+            if daemon.fcitx5_running && !daemon.fcitx5_pids.is_empty() {
+                success = true;
+                break;
+            }
+        }
+    }
+
+    // ensure clak is active input method
+    if success {
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let _ = Command::new("fcitx5-remote").args(["-s", "clak"]).status();
+    }
+
+    success
 }
 
 // automatically insert clak into fcitx5 profile, fix ubuntu paths, and reload daemon

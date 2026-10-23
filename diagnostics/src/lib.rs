@@ -539,4 +539,14 @@ mod tests {
         assert_eq!(display.effective_refresh_rate, 60.0);
         assert!(pacing.draftjs_post_delay_ms >= 16);
     }
+
+    #[test]
+    fn test_restart_fcitx5_daemon_functionality() {
+        // verify restart succeeds and leaves fcitx5 running
+        let ok = restart_fcitx5_daemon();
+        assert!(ok);
+        let status = check_daemon();
+        assert!(status.fcitx5_running);
+        assert!(!status.fcitx5_pids.is_empty());
+    }
 }
