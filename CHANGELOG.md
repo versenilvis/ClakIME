@@ -2,6 +2,25 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.7.4](https://github.com/versenilvis/ClakIME/releases/tag/v0.7.4) - 2026-10-23
+
+### Bug fixes
+
+- Fix syntax error in update.sh and detect clak-bin package ([916426](https://github.com/versenilvis/ClakIME/commit/91642638d070869ed23d18ad9587b5bf16f7207a))
+- Route Meta sites to surrounding text on Hyprland and uinput on KDE ([dc2cb7](https://github.com/versenilvis/ClakIME/commit/dc2cb778c2486f6b6dd957400f8655d9b6a2d98e))
+- Fix fcitx5 daemon restart logic to replace process and flush memory ([7e8e54](https://github.com/versenilvis/ClakIME/commit/7e8e5435344fad955a53f46977d932b03a0142bd))
+- Exclude pure ascii words from incomplete stop coda restore ([3e7cd2](https://github.com/versenilvis/ClakIME/commit/3e7cd2b8c6438a1e0b309d9aa061a4debc0ea89e))
+- Quote sed expression and use VERBATIM in install-user desktop target ([6d956b](https://github.com/versenilvis/ClakIME/commit/6d956bda4ebc6226e2fd3515c719a4ac11336836))
+- Use dbus controller to query and switch IM, add toast feedback ([f1f213](https://github.com/versenilvis/ClakIME/commit/f1f2133328d901da06ce2d164375841ff1f77421))
+- Resolve current im via group default and sync profile layout ([68e2b1](https://github.com/versenilvis/ClakIME/commit/68e2b1f23b2951d041f685af5671f61ec34c1433))
+- Skip daemon restart test in ci and headless environments ([785ae3](https://github.com/versenilvis/ClakIME/commit/785ae30e81d3b7aea613f33c6fc6cd97270ca6e2))
+
+### Features
+
+- Add multi-monitor display and latency pacing benchmark ([074d46](https://github.com/versenilvis/ClakIME/commit/074d4629fc67cfa429643d5abdb52d8b2ab7aa29))
+- Default to custom preset and auto-apply hardware pacing profile ([caa707](https://github.com/versenilvis/ClakIME/commit/caa70758ee368e7453884f218ac822eec36da552))
+- Add 1-click switch to clak and auto pacing calibration action cards ([f0b269](https://github.com/versenilvis/ClakIME/commit/f0b269ee67fa58c5629f63fcc4c3c83e7f11c2c4))
+
 ## [v0.7.3](https://github.com/versenilvis/ClakIME/releases/tag/v0.7.3) - 2026-10-23
 
 ### Features
