@@ -267,8 +267,9 @@ if(TARGET clak_gui_build)
         COMMAND ${CMAKE_COMMAND} -E make_directory "$ENV{HOME}/.local/share/applications"
         COMMAND ${CMAKE_COMMAND} -E copy "${CLAK_UI_BIN}" "$ENV{HOME}/.local/bin/clak-gui"
         COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/data/clak-gui.desktop" "$ENV{HOME}/.local/share/applications/clak-gui.desktop"
-        COMMAND sed -i "s|^Exec=.*|Exec=$ENV{HOME}/.local/bin/clak-gui|" "$ENV{HOME}/.local/share/applications/clak-gui.desktop"
-        COMMAND update-desktop-database "$ENV{HOME}/.local/share/applications" || true
+        COMMAND sed -i "s#^Exec=.*#Exec=$ENV{HOME}/.local/bin/clak-gui#" "$ENV{HOME}/.local/share/applications/clak-gui.desktop"
+        COMMAND update-desktop-database "$ENV{HOME}/.local/share/applications"
+        VERBATIM
     )
     add_dependencies(install-user clak_gui_build)
 endif()
@@ -276,6 +277,7 @@ if(TARGET clak_cli_build)
     add_custom_command(TARGET install-user POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory "$ENV{HOME}/.local/bin"
         COMMAND ${CMAKE_COMMAND} -E copy "${CLAK_CLI_BIN}" "$ENV{HOME}/.local/bin/clak"
+        VERBATIM
     )
     add_dependencies(install-user clak_cli_build)
 endif()
