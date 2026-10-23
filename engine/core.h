@@ -89,6 +89,8 @@ bool        clak_config_get_shift_autofix(const ClakConfig *cfg);
 void        clak_config_set_shift_autofix(ClakConfig *cfg, bool enabled);
 bool        clak_config_get_autocorrect(const ClakConfig *cfg);
 void        clak_config_set_autocorrect(ClakConfig *cfg, bool enabled);
+void        clak_config_set_auto_restore(ClakConfig *cfg, bool enabled);
+void        clak_config_set_spelling(ClakConfig *cfg, bool enabled);
 int32_t     clak_config_get_startup_mode(const ClakConfig *cfg);
 int32_t     clak_config_get_method(const ClakConfig *cfg);
 char       *clak_config_get_toggle_shortcut(const ClakConfig *cfg);

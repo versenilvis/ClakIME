@@ -38,9 +38,9 @@ pub struct GeneralConfig {
     pub method: String,
     #[serde(default = "default_charset")]
     pub charset: String,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub short_w: bool,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub bracket_brackets: bool,
     #[serde(default = "default_startup_mode")]
     pub startup_mode: String,
@@ -48,25 +48,25 @@ pub struct GeneralConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpellingConfig {
-    #[serde(default)]
-    pub enabled: bool,
-    #[serde(default)]
-    pub auto_restore: bool,
     #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_true")]
+    pub auto_restore: bool,
+    #[serde(default)]
     pub modern_tone: bool,
     #[serde(default = "default_true")]
     pub free_marking: bool,
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub autocorrect: bool,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TypingConfig {
     #[serde(default)]
     pub double_space_period: bool,
     #[serde(default)]
     pub auto_capitalize: bool,
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub shift_autofix: bool,
 }
 
@@ -80,7 +80,7 @@ pub struct ShortcutConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerAppConfig {
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub remember_state: bool,
     #[serde(default = "default_excluded_apps")]
     pub excluded_apps: Vec<String>,
@@ -220,8 +220,8 @@ impl Default for GeneralConfig {
         Self {
             method: default_method(),
             charset: default_charset(),
-            short_w: default_true(),
-            bracket_brackets: default_true(),
+            short_w: false,
+            bracket_brackets: false,
             startup_mode: default_startup_mode(),
         }
     }
@@ -230,11 +230,21 @@ impl Default for GeneralConfig {
 impl Default for SpellingConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
-            auto_restore: false,
-            modern_tone: default_true(),
+            enabled: default_true(),
+            auto_restore: default_true(),
+            modern_tone: false,
             free_marking: default_true(),
-            autocorrect: false,
+            autocorrect: default_true(),
+        }
+    }
+}
+
+impl Default for TypingConfig {
+    fn default() -> Self {
+        Self {
+            double_space_period: false,
+            auto_capitalize: false,
+            shift_autofix: default_true(),
         }
     }
 }
@@ -251,7 +261,7 @@ impl Default for ShortcutConfig {
 impl Default for PerAppConfig {
     fn default() -> Self {
         Self {
-            remember_state: default_true(),
+            remember_state: false,
             excluded_apps: default_excluded_apps(),
         }
     }

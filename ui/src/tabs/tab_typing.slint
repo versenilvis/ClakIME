@@ -7,8 +7,8 @@ import { GhostButton } from "../components/buttons.slint";
 export component TabTyping inherits VerticalLayout {
     in-out property <bool> double_space_period: false;
     in-out property <bool> auto_capitalize: false;
-    in-out property <bool> short_w: true;
-    in-out property <bool> bracket_brackets: true;
+    in-out property <bool> short_w: false;
+    in-out property <bool> bracket_brackets: false;
     in-out property <bool> macros_enabled: true;
     in-out property <[MacroItemData]> macro_items: [];
     in-out property <string> new_macro_trigger: "";

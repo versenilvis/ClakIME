@@ -697,6 +697,20 @@ pub unsafe extern "C" fn clak_config_set_autocorrect(cfg: *mut config::ClakConfi
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_config_set_auto_restore(cfg: *mut config::ClakConfig, v: bool) {
+    if !cfg.is_null() {
+        unsafe { (*cfg).spelling.auto_restore = v };
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_config_set_spelling(cfg: *mut config::ClakConfig, v: bool) {
+    if !cfg.is_null() {
+        unsafe { (*cfg).spelling.enabled = v };
+    }
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn clak_config_get_startup_mode(cfg: *const config::ClakConfig) -> i32 {
     if cfg.is_null() {
         return 0;

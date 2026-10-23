@@ -39,16 +39,16 @@ export component MainWindow inherits Window {
     // kieu go
     in-out property <int> method_index: 0;
     in-out property <int> charset_index: 0;
-    in-out property <bool> short_w: true;
-    in-out property <bool> bracket_brackets: true;
+    in-out property <bool> short_w: false;
+    in-out property <bool> bracket_brackets: false;
     in-out property <int> startup_mode_index: 0;
 
     // chinh ta
-    in-out property <bool> autocorrect: false;
-    in-out property <bool> shift_autofix: false;
-    in-out property <bool> spelling_enabled: false;
-    in-out property <bool> auto_restore: false;
-    in-out property <bool> modern_tone: true;
+    in-out property <bool> autocorrect: true;
+    in-out property <bool> shift_autofix: true;
+    in-out property <bool> spelling_enabled: true;
+    in-out property <bool> auto_restore: true;
+    in-out property <bool> modern_tone: false;
 
     // go tat va tu dong sua
     in-out property <bool> double_space_period: false;
@@ -65,7 +65,7 @@ export component MainWindow inherits Window {
 
     // theo ung dung
     in-out property <bool> autostart_system: true;
-    in-out property <bool> remember_app_state: true;
+    in-out property <bool> remember_app_state: false;
     in-out property <[string]> excluded_apps: [];
     in-out property <string> new_app_name: "";
 

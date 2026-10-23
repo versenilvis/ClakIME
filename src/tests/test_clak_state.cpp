@@ -588,6 +588,7 @@ TEST_F(ClakStateTest, GivenShiftHeldWithMouseClick_DoesNotTriggerAutoFix) {
 
 TEST_F(ClakStateTest, GivenAutocorrectInGecko_BuffersSubsequentKeystrokesAndReplaysCleanly) {
     clak_config_set_autocorrect(const_cast<ClakConfig*>(engine_->config()), true);
+    clak_config_set_auto_restore(const_cast<ClakConfig*>(engine_->config()), false);
     platform::setMockActiveWindow(platform::WindowInfo{"zen", "Zen Browser", 1234});
     MockInputContext ic(instance_->inputContextManager(), "zen");
     ime::ClakState state(engine_.get(), &ic);
@@ -633,6 +634,7 @@ TEST_F(ClakStateTest, GivenAutocorrectInGecko_BuffersSubsequentKeystrokesAndRepl
 TEST_F(ClakStateTest, GivenAutocorrect_ShiftTapUndoesAndRestoresOriginalWord) {
     clak_config_set_autocorrect(const_cast<ClakConfig*>(engine_->config()), true);
     clak_config_set_shift_autofix(const_cast<ClakConfig*>(engine_->config()), true);
+    clak_config_set_auto_restore(const_cast<ClakConfig*>(engine_->config()), false);
 
     MockInputContext ic(instance_->inputContextManager(), "test-app");
     ic.auto_update_surrounding = true;

@@ -15,10 +15,10 @@ export component TabGeneral inherits VerticalLayout {
     in-out property <int> charset_index: 0;
     in-out property <int> startup_mode_index: 0;
     in-out property <bool> autocorrect: true;
-    in-out property <bool> shift_autofix: false;
-    in-out property <bool> spelling_enabled: false;
-    in-out property <bool> auto_restore: false;
-    in-out property <bool> modern_tone: true;
+    in-out property <bool> shift_autofix: true;
+    in-out property <bool> spelling_enabled: true;
+    in-out property <bool> auto_restore: true;
+    in-out property <bool> modern_tone: false;
     in-out property <string> playground_input: "";
     in property <bool> is-wide: false;
     callback changed();

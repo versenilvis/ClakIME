@@ -118,6 +118,7 @@ fn test_toggle_auto_restore() {
 
     // auto restore off: telex marks remain
     let mut ctx_off = ClakContext::new(Method::Telex);
+    cfg_off.general.short_w = true;
     ctx_off.apply_config(&cfg_off);
     type_text(&mut ctx_off, "w");
     let acts_off = type_text(&mut ctx_off, "o");
