@@ -542,6 +542,7 @@ dependencies = [
 name = "clak-diagnostics"
 version = "0.3.2"
 dependencies = [
+ "clak-engine",
  "libc",
  "serde",
  "serde_json",

@@ -25,6 +25,9 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
         if summary.permissions_fixed {
             println!("    ✔ Đã cấp quyền thiết bị input/uinput thành công.");
         }
+        if summary.pacing_fixed {
+            println!("    ✔ Đã thiết lập hồ sơ độ trễ (Pacing Profile) tùy biến theo phần cứng.");
+        }
         for err in &summary.errors {
             eprintln!("    ❌ {}", err);
         }

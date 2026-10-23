@@ -121,7 +121,7 @@ pub struct PacingConfig {
 }
 
 fn default_pacing_preset() -> String {
-    "balanced".to_string()
+    "custom".to_string()
 }
 
 fn default_draftjs_delay_ms() -> u32 {

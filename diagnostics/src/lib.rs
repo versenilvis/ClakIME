@@ -320,6 +320,7 @@ pub struct AutoFixSummary {
     pub jetbrains_patched: usize,
     pub kde_fixed: bool,
     pub permissions_fixed: bool,
+    pub pacing_fixed: bool,
     pub errors: Vec<String>,
 }
 
@@ -332,7 +333,21 @@ impl AutoFixSummary {
             || self.jetbrains_patched > 0
             || self.kde_fixed
             || self.permissions_fixed
+            || self.pacing_fixed
     }
+}
+
+// configure custom pacing profile from measured benchmark
+pub fn apply_pacing_profile(pacing: &checks::pacing_calc::PacingRecommendation) -> Result<(), std::io::Error> {
+    let mut cfg = clak_engine::config::ClakConfig::load();
+    cfg.pacing.preset = "custom".to_string();
+    cfg.pacing.draftjs_delay_ms = pacing.draftjs_post_delay_ms;
+    cfg.pacing.draftjs_gap_ms = pacing.gap_ms;
+    cfg.pacing.terminal_delay_ms = pacing.terminal_post_delay_ms;
+    cfg.pacing.terminal_gap_ms = (pacing.gap_ms / 2).max(2);
+    cfg.pacing.heavy_app_delay_ms = pacing.heavy_app_post_delay_ms;
+    cfg.pacing.heavy_app_gap_ms = (pacing.gap_ms * 2 / 3).max(3);
+    cfg.save()
 }
 
 pub fn auto_fix_all(include_permissions: bool) -> AutoFixSummary {
@@ -426,6 +441,14 @@ pub fn auto_fix_all(include_permissions: bool) -> AutoFixSummary {
                 .errors
                 .push(format!("Lỗi cấp quyền thiết bị: {}", e)),
         }
+    }
+
+    // 7. Auto-configure hardware-specific pacing profile
+    match apply_pacing_profile(&pre_report.pacing) {
+        Ok(_) => summary.pacing_fixed = true,
+        Err(e) => summary
+            .errors
+            .push(format!("Lỗi lưu cấu hình pacing: {}", e)),
     }
 
     summary
@@ -548,5 +571,29 @@ mod tests {
         let status = check_daemon();
         assert!(status.fcitx5_running);
         assert!(!status.fcitx5_pids.is_empty());
+    }
+
+    #[test]
+    fn test_apply_pacing_profile() {
+        let pacing = checks::pacing_calc::PacingRecommendation {
+            gap_ms: 5,
+            terminal_post_delay_ms: 10,
+            browser_post_delay_ms: 14,
+            draftjs_post_delay_ms: 18,
+            heavy_app_post_delay_ms: 22,
+            estimated_replace_ms: 28.0,
+            flicker_risk: "Thấp".to_string(),
+            explanation: "test profile".to_string(),
+        };
+
+        let res = apply_pacing_profile(&pacing);
+        assert!(res.is_ok());
+
+        let cfg = clak_engine::config::ClakConfig::load();
+        assert_eq!(cfg.pacing.preset, "custom");
+        assert_eq!(cfg.pacing.draftjs_delay_ms, 18);
+        assert_eq!(cfg.pacing.draftjs_gap_ms, 5);
+        assert_eq!(cfg.pacing.terminal_delay_ms, 10);
+        assert_eq!(cfg.pacing.heavy_app_delay_ms, 22);
     }
 }

@@ -577,14 +577,14 @@ pub unsafe extern "C" fn clak_config_get_adaptive_pacing(cfg: *const config::Cla
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn clak_config_get_pacing_preset(cfg: *const config::ClakConfig) -> i32 {
     if cfg.is_null() {
-        return 1;
+        return 3;
     }
     match (*cfg).pacing.preset.as_str() {
         "fast" => 0,
         "balanced" => 1,
         "safe" => 2,
         "custom" => 3,
-        _ => 1,
+        _ => 3,
     }
 }
 
@@ -596,8 +596,9 @@ pub unsafe extern "C" fn clak_config_get_draftjs_delay_ms(cfg: *const config::Cl
     match (*cfg).pacing.preset.as_str() {
         "fast" => 10,
         "safe" => 24,
+        "balanced" => 16,
         "custom" => (*cfg).pacing.draftjs_delay_ms,
-        _ => 16,
+        _ => (*cfg).pacing.draftjs_delay_ms,
     }
 }
 
@@ -609,8 +610,9 @@ pub unsafe extern "C" fn clak_config_get_draftjs_gap_ms(cfg: *const config::Clak
     match (*cfg).pacing.preset.as_str() {
         "fast" => 4,
         "safe" => 12,
+        "balanced" => 8,
         "custom" => (*cfg).pacing.draftjs_gap_ms,
-        _ => 8,
+        _ => (*cfg).pacing.draftjs_gap_ms,
     }
 }
 
@@ -622,8 +624,9 @@ pub unsafe extern "C" fn clak_config_get_terminal_delay_ms(cfg: *const config::C
     match (*cfg).pacing.preset.as_str() {
         "fast" => 6,
         "safe" => 20,
+        "balanced" => 12,
         "custom" => (*cfg).pacing.terminal_delay_ms,
-        _ => 12,
+        _ => (*cfg).pacing.terminal_delay_ms,
     }
 }
 
@@ -635,8 +638,9 @@ pub unsafe extern "C" fn clak_config_get_terminal_gap_ms(cfg: *const config::Cla
     match (*cfg).pacing.preset.as_str() {
         "fast" => 2,
         "safe" => 5,
+        "balanced" => 3,
         "custom" => (*cfg).pacing.terminal_gap_ms,
-        _ => 3,
+        _ => (*cfg).pacing.terminal_gap_ms,
     }
 }
 
@@ -648,8 +652,9 @@ pub unsafe extern "C" fn clak_config_get_heavy_app_delay_ms(cfg: *const config::
     match (*cfg).pacing.preset.as_str() {
         "fast" => 10,
         "safe" => 22,
+        "balanced" => 15,
         "custom" => (*cfg).pacing.heavy_app_delay_ms,
-        _ => 15,
+        _ => (*cfg).pacing.heavy_app_delay_ms,
     }
 }
 
@@ -661,8 +666,9 @@ pub unsafe extern "C" fn clak_config_get_heavy_app_gap_ms(cfg: *const config::Cl
     match (*cfg).pacing.preset.as_str() {
         "fast" => 3,
         "safe" => 6,
+        "balanced" => 4,
         "custom" => (*cfg).pacing.heavy_app_gap_ms,
-        _ => 4,
+        _ => (*cfg).pacing.heavy_app_gap_ms,
     }
 }
 
