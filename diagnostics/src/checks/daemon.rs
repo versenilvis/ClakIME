@@ -34,21 +34,49 @@ pub fn check_daemon() -> DaemonStatus {
     let fcitx5_running = !fcitx5_pids.is_empty();
 
     let current_im = if fcitx5_running {
-        Command::new("fcitx5-remote")
-            .arg("-n")
+        // try querying controller CurrentInputMethod via busctl first
+        Command::new("busctl")
+            .args([
+                "--user",
+                "call",
+                "org.fcitx.Fcitx5",
+                "/controller",
+                "org.fcitx.Fcitx.Controller1",
+                "CurrentInputMethod",
+            ])
             .output()
             .ok()
             .and_then(|out| {
                 if out.status.success() {
-                    let im = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                    if !im.is_empty() {
-                        Some(im)
-                    } else {
-                        None
+                    let s = String::from_utf8_lossy(&out.stdout);
+                    if let Some(start) = s.find('"') {
+                        if let Some(end) = s[start + 1..].find('"') {
+                            let name = s[start + 1..start + 1 + end].trim().to_string();
+                            if !name.is_empty() {
+                                return Some(name);
+                            }
+                        }
                     }
-                } else {
-                    None
                 }
+                None
+            })
+            .or_else(|| {
+                Command::new("fcitx5-remote")
+                    .arg("-n")
+                    .output()
+                    .ok()
+                    .and_then(|out| {
+                        if out.status.success() {
+                            let im = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                            if !im.is_empty() {
+                                Some(im)
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    })
             })
     } else {
         None

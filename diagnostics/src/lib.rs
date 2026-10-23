@@ -339,8 +339,23 @@ impl AutoFixSummary {
     }
 }
 
-// switch active input method to clak via fcitx5-remote
+// switch active input method to clak via dbus controller and fcitx5-remote
 pub fn switch_to_clak() -> bool {
+    let _ = std::process::Command::new("busctl")
+        .args([
+            "--user",
+            "call",
+            "org.fcitx.Fcitx5",
+            "/controller",
+            "org.fcitx.Fcitx.Controller1",
+            "SetCurrentIM",
+            "s",
+            "clak",
+        ])
+        .status();
+    let _ = std::process::Command::new("fcitx5-remote")
+        .args(["-o"])
+        .status();
     std::process::Command::new("fcitx5-remote")
         .args(["-s", "clak"])
         .status()

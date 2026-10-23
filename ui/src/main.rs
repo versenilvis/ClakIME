@@ -1917,9 +1917,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         clak_diagnostics::switch_to_clak();
         window.set_im_switch_needed(false);
-        if window.get_doctor_has_scanned() {
-            window.invoke_doctor_scan_requested();
-        }
+        window.set_saved_toast(true);
+        let win_toast = win_im.clone();
+        slint::Timer::single_shot(std::time::Duration::from_millis(1500), move || {
+            if let Some(w) = win_toast.upgrade() {
+                w.set_saved_toast(false);
+            }
+        });
+        let win_async = win_im.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(250));
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(w) = win_async.upgrade() {
+                    if w.get_doctor_has_scanned() {
+                        w.invoke_doctor_scan_requested();
+                    }
+                }
+            });
+        });
     });
 
     let win_pace = main_window.as_weak();
@@ -1940,7 +1955,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 window.set_heavy_app_delay_ms(cfg.pacing.heavy_app_delay_ms as i32);
                 window.set_heavy_app_gap_ms(cfg.pacing.heavy_app_gap_ms as i32);
                 window.set_pacing_needs_tune(false);
-                window.invoke_doctor_scan_requested();
+                window.set_saved_toast(true);
+                let win_toast = win_pace.clone();
+                slint::Timer::single_shot(std::time::Duration::from_millis(1500), move || {
+                    if let Some(w) = win_toast.upgrade() {
+                        w.set_saved_toast(false);
+                    }
+                });
+                let win_async = win_pace.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(250));
+                    let _ = slint::invoke_from_event_loop(move || {
+                        if let Some(w) = win_async.upgrade() {
+                            if w.get_doctor_has_scanned() {
+                                w.invoke_doctor_scan_requested();
+                            }
+                        }
+                    });
+                });
             }
         }
     });
