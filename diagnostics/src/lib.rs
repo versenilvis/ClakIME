@@ -14,9 +14,12 @@ pub use checks::compatibility::{
 pub use checks::config::{check_config, ConfigStatus};
 pub use checks::conflicts::{check_conflicts, AppConflict};
 pub use checks::daemon::{check_daemon, DaemonStatus};
+pub use checks::display::{check_display, DisplayEnvironment, MonitorInfo};
 pub use checks::environment::{check_environment, EnvironmentStatus};
 pub use checks::frontends::{check_frontends, FrontendStatus};
+pub use checks::latency::{check_latency, LatencyBenchmark};
 pub use checks::memory::{check_memory, MemoryInspection};
+pub use checks::pacing_calc::{calculate_pacing, PacingRecommendation};
 pub use checks::permissions::{check_permissions, fix_input_permissions, PermissionChecks};
 pub use checks::system::{check_system, SystemInfo};
 
@@ -48,6 +51,9 @@ pub struct DiagnosticReport {
     pub wps: WpsStatus,
     pub jetbrains: JetBrainsStatus,
     pub kde: KdeStatus,
+    pub display: DisplayEnvironment,
+    pub latency: LatencyBenchmark,
+    pub pacing: PacingRecommendation,
     pub conflicts: Vec<AppConflict>,
     pub issues: Vec<DiagnosticIssue>,
     pub warnings: Vec<DiagnosticWarning>,
@@ -268,6 +274,21 @@ pub fn run_diagnostics() -> DiagnosticReport {
         });
     }
 
+    let display = check_display();
+    let latency = check_latency();
+    let pacing = calculate_pacing(&display, &latency);
+
+    if display.is_mixed_refresh_rate {
+        warnings.push(DiagnosticWarning {
+            title: "Màn hình hỗn hợp (Mixed Refresh Rate)".to_string(),
+            message: format!(
+                "Phát hiện nhiều màn hình có tần số quét khác nhau. Khuyến nghị áp dụng mốc {:.0}Hz an toàn để chống nuốt chữ",
+                display.effective_refresh_rate
+            ),
+            fix_command: None,
+        });
+    }
+
     DiagnosticReport {
         system,
         permissions,
@@ -281,6 +302,9 @@ pub fn run_diagnostics() -> DiagnosticReport {
         wps,
         jetbrains,
         kde,
+        display,
+        latency,
+        pacing,
         conflicts,
         issues,
         warnings,
@@ -417,6 +441,8 @@ mod tests {
         assert!(!report.system.architecture.is_empty());
         let md = report.to_markdown();
         assert!(md.contains("# Clak Doctor: Báo Cáo Chẩn Đoán Hệ Thống"));
+        assert!(md.contains("## 9. Màn Hình & VSync Budget"));
+        assert!(md.contains("## 10. Độ Trễ Phần Cứng & Pacing Đề Xuất"));
     }
 
     #[test]
@@ -427,5 +453,90 @@ mod tests {
         assert!(json.contains("permissions"));
         assert!(json.contains("environment"));
         assert!(json.contains("frontends"));
+        assert!(json.contains("display"));
+        assert!(json.contains("latency"));
+        assert!(json.contains("pacing"));
+    }
+
+    #[test]
+    fn test_pacing_calculation_formula() {
+        let display = DisplayEnvironment {
+            monitors: vec![MonitorInfo {
+                name: "eDP-1".to_string(),
+                width: 2560,
+                height: 1600,
+                refresh_rate: 120.0,
+                is_active_focus: true,
+                is_primary: true,
+            }],
+            effective_refresh_rate: 120.0,
+            frame_budget_ms: 8.33,
+            is_mixed_refresh_rate: false,
+            detection_method: "Test".to_string(),
+        };
+
+        let latency = LatencyBenchmark {
+            uinput_accessible: true,
+            uinput_write_us: 10.0,
+            measured_rtt_ms: 2.0,
+            measured_jitter_ms: 0.5,
+            keyboard_repeat_delay_ms: 500,
+            keyboard_repeat_interval_ms: 30,
+            scheduler_preempt: "PREEMPT_DYNAMIC".to_string(),
+            system_load: 0.8,
+        };
+
+        let pacing = calculate_pacing(&display, &latency);
+        assert!(pacing.gap_ms >= 2);
+        assert!(pacing.gap_ms <= 15);
+        assert!(pacing.terminal_post_delay_ms >= 4);
+        assert!(pacing.browser_post_delay_ms >= 6);
+        assert!(pacing.draftjs_post_delay_ms >= 8);
+        assert!(pacing.estimated_replace_ms > 0.0);
+    }
+
+    #[test]
+    fn test_mixed_refresh_rate_fail_safe() {
+        // simulation of laptop 120hz and external 60hz without active focus
+        let display = DisplayEnvironment {
+            monitors: vec![
+                MonitorInfo {
+                    name: "eDP-1".to_string(),
+                    width: 1920,
+                    height: 1080,
+                    refresh_rate: 120.0,
+                    is_active_focus: false,
+                    is_primary: true,
+                },
+                MonitorInfo {
+                    name: "HDMI-A-1".to_string(),
+                    width: 2560,
+                    height: 1440,
+                    refresh_rate: 60.0,
+                    is_active_focus: false,
+                    is_primary: false,
+                },
+            ],
+            effective_refresh_rate: 60.0,
+            frame_budget_ms: 16.67,
+            is_mixed_refresh_rate: true,
+            detection_method: "Test Multi".to_string(),
+        };
+
+        let latency = LatencyBenchmark {
+            uinput_accessible: true,
+            uinput_write_us: 15.0,
+            measured_rtt_ms: 2.5,
+            measured_jitter_ms: 0.8,
+            keyboard_repeat_delay_ms: 600,
+            keyboard_repeat_interval_ms: 25,
+            scheduler_preempt: "PREEMPT".to_string(),
+            system_load: 1.2,
+        };
+
+        let pacing = calculate_pacing(&display, &latency);
+        assert!(pacing.explanation.contains("Fail-Safe đa màn hình"));
+        assert_eq!(display.effective_refresh_rate, 60.0);
+        assert!(pacing.draftjs_post_delay_ms >= 16);
     }
 }

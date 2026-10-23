@@ -242,6 +242,75 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
         out.push('\n');
     }
 
+    out.push_str("## 9. Màn Hình & VSync Budget\n");
+    out.push_str(&format!(
+        "- Phương thức phát hiện: {}\n",
+        report.display.detection_method
+    ));
+    out.push_str(&format!(
+        "- Tần số quét hiệu dụng: {:.1} Hz (Frame budget: {:.2} ms)\n",
+        report.display.effective_refresh_rate, report.display.frame_budget_ms
+    ));
+    if report.display.is_mixed_refresh_rate {
+        out.push_str(
+            "- Cảnh báo đa màn hình: Phát hiện hỗn hợp tần số quét (khóa mốc an toàn tối thiểu)\n",
+        );
+    }
+    out.push_str("- Danh sách màn hình:\n");
+    for mon in &report.display.monitors {
+        let focus_tag = if mon.is_active_focus {
+            " [Active Focus]"
+        } else {
+            ""
+        };
+        let primary_tag = if mon.is_primary { " (Primary)" } else { "" };
+        out.push_str(&format!(
+            "  * `{}`: {}x{} @ {:.1} Hz{}{}\n",
+            mon.name, mon.width, mon.height, mon.refresh_rate, primary_tag, focus_tag
+        ));
+    }
+    out.push('\n');
+
+    out.push_str("## 10. Độ Trễ Phần Cứng & Pacing Đề Xuất\n");
+    out.push_str(&format!(
+        "- Phản hồi Uinput: {:.2} ms (Jitter: ±{:.2} ms, Write: {:.1} µs)\n",
+        report.latency.measured_rtt_ms,
+        report.latency.measured_jitter_ms,
+        report.latency.uinput_write_us
+    ));
+    out.push_str(&format!(
+        "- Bàn phím lặp lại: Delay {} ms, Interval {} ms\n",
+        report.latency.keyboard_repeat_delay_ms, report.latency.keyboard_repeat_interval_ms
+    ));
+    out.push_str(&format!(
+        "- Tải hệ thống: {:.2} (Preempt: {})\n",
+        report.latency.system_load, report.latency.scheduler_preempt
+    ));
+    out.push_str(&format!(
+        "- Nguy cơ nhấp nháy: {}\n",
+        report.pacing.flicker_risk
+    ));
+    out.push_str(&format!("  * {}\n", report.pacing.explanation));
+    out.push_str("- Bảng cấu hình Pacing tối ưu:\n");
+    out.push_str(&format!("  * `gap_ms`: {} ms\n", report.pacing.gap_ms));
+    out.push_str(&format!(
+        "  * `terminal_post_delay_ms`: {} ms\n",
+        report.pacing.terminal_post_delay_ms
+    ));
+    out.push_str(&format!(
+        "  * `browser_post_delay_ms`: {} ms\n",
+        report.pacing.browser_post_delay_ms
+    ));
+    out.push_str(&format!(
+        "  * `draftjs_post_delay_ms`: {} ms\n",
+        report.pacing.draftjs_post_delay_ms
+    ));
+    out.push_str(&format!(
+        "  * `heavy_app_post_delay_ms`: {} ms\n",
+        report.pacing.heavy_app_post_delay_ms
+    ));
+    out.push('\n');
+
     out.push_str("## Kết Luận & Hướng Xử Lý\n");
     if report.issues.is_empty() && report.warnings.is_empty() {
         out.push_str("Tất cả kiểm tra đều hoàn hảo. Clak sẵn sàng hoạt động tối ưu.\n");

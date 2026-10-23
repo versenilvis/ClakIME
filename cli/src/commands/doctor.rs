@@ -48,7 +48,7 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
 
     println!("=== CLAK DOCTOR: HỆ THỐNG CHẨN ĐOÁN MÔI TRƯỜNG ===");
 
-    println!("\n[1/8] Môi trường hệ thống:");
+    println!("\n[1/10] Môi trường hệ thống:");
     println!(
         "  • Hệ điều hành: {} ({})",
         report.system.os_name, report.system.architecture
@@ -59,7 +59,7 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
         report.system.session_type, report.system.desktop_environment
     );
 
-    println!("\n[2/8] Thiết bị ảo và Quyền hạn:");
+    println!("\n[2/10] Thiết bị ảo và Quyền hạn:");
     if report.permissions.uinput_writable {
         println!("  • /dev/uinput: \x1b[32m[OK]\x1b[0m Khả dụng (chống nuốt chữ Kitty, Ghostty, Chrome, VSCode)");
     } else if report.permissions.xtest_available {
@@ -76,7 +76,7 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
         println!("  • /dev/input (Mouse Tracking): \x1b[33m[CẢNH BÁO]\x1b[0m Không đọc được thiết bị input");
     }
 
-    println!("\n[3/8] Trạng thái Daemon Fcitx5:");
+    println!("\n[3/10] Trạng thái Daemon Fcitx5:");
     if report.daemon.fcitx5_running {
         let pids_str = report
             .daemon
@@ -98,7 +98,7 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
         println!("  • fcitx5-remote: Không thể kết nối tới Fcitx5");
     }
 
-    println!("\n[4/8] Kiểm tra Binary & Nạp bộ nhớ (RAM):");
+    println!("\n[4/10] Kiểm tra Binary & Nạp bộ nhớ (RAM):");
     if report.memory.clak_loaded {
         let path = report.memory.mapped_path.as_deref().unwrap_or("libclak.so");
         if report.memory.is_deleted_inode {
@@ -113,7 +113,7 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
         println!("  • Bộ nhớ: \x1b[31m[LỖI]\x1b[0m libclak.so chưa được Fcitx5 nạp vào tiến trình");
     }
 
-    println!("\n[5/8] Cấu hình và Nhật ký (Log):");
+    println!("\n[5/10] Cấu hình và Nhật ký (Log):");
     if report.config.config_file_exists {
         println!(
             "  • File cấu hình: \x1b[32m[OK]\x1b[0m {}",
@@ -140,7 +140,7 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
         println!("  • Khởi động cùng hệ thống: \x1b[33m[CẢNH BÁO]\x1b[0m Chưa kích hoạt tự động chạy khi đăng nhập");
     }
 
-    println!("\n[6/8] Biến Môi Trường Input Method:");
+    println!("\n[6/10] Biến Môi Trường Input Method:");
     let gtk_str = report
         .environment
         .gtk_im_module
@@ -165,7 +165,7 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
         println!("  • File 99-clak-im.conf: \x1b[33m[LƯU Ý]\x1b[0m Chưa có file môi trường");
     }
 
-    println!("\n[7/8] Thư Viện Frontend Fcitx5:");
+    println!("\n[7/10] Thư Viện Frontend Fcitx5:");
     if let Some(ref p) = report.frontends.gtk3_path {
         println!("  • GTK 3: \x1b[32m[OK]\x1b[0m {}", p);
     } else {
@@ -187,7 +187,7 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
         println!("  • Qt 6: \x1b[33m[CHƯA CÓ]\x1b[0m Chưa tìm thấy plugin frontend");
     }
 
-    println!("\n[8/8] Cấu Hình Fcitx5 & Tương Thích Ứng Dụng:");
+    println!("\n[8/10] Cấu Hình Fcitx5 & Tương Thích Ứng Dụng:");
     if report.profile.clak_in_profile {
         if report.profile.is_default_im {
             println!("  • Fcitx5 Profile: \x1b[32m[OK]\x1b[0m Đã kích hoạt và là bộ gõ mặc định");
@@ -229,6 +229,58 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
             );
         }
     }
+
+    println!("\n[9/10] Màn Hình & VSync Frame Budget:");
+    println!(
+        "  • Tần số quét hiệu dụng: \x1b[32m{:.1} Hz\x1b[0m (Chu kỳ khung hình: {:.2} ms)",
+        report.display.effective_refresh_rate, report.display.frame_budget_ms
+    );
+    if report.display.is_mixed_refresh_rate {
+        println!(
+            "  • Đa màn hình: \x1b[33m[HỖN HỢP]\x1b[0m Khóa mốc an toàn tối thiểu {:.0} Hz",
+            report.display.effective_refresh_rate
+        );
+    }
+    for mon in &report.display.monitors {
+        let tag = if mon.is_active_focus {
+            " \x1b[32m[Active Focus]\x1b[0m"
+        } else {
+            ""
+        };
+        let pri = if mon.is_primary { " (Primary)" } else { "" };
+        println!(
+            "    - {}: {}x{} @ {:.1} Hz{}{}",
+            mon.name, mon.width, mon.height, mon.refresh_rate, pri, tag
+        );
+    }
+
+    println!("\n[10/10] Đo Độ Trễ Phần Cứng & Pacing Đề Xuất:");
+    println!(
+        "  • Uinput RTT: {:.2} ms (Jitter: ±{:.2} ms, Write: {:.1} µs)",
+        report.latency.measured_rtt_ms,
+        report.latency.measured_jitter_ms,
+        report.latency.uinput_write_us
+    );
+    println!(
+        "  • Bàn phím lặp lại: Delay {} ms, Interval {} ms",
+        report.latency.keyboard_repeat_delay_ms, report.latency.keyboard_repeat_interval_ms
+    );
+    println!(
+        "  • Nguy cơ nhấp nháy: \x1b[32m{}\x1b[0m",
+        report.pacing.flicker_risk
+    );
+    println!("  • Phân tích: {}", report.pacing.explanation);
+    println!("  • Cấu hình Pacing tối ưu:");
+    println!(
+        "    - Gap: {} ms | Terminal Delay: {} ms",
+        report.pacing.gap_ms, report.pacing.terminal_post_delay_ms
+    );
+    println!(
+        "    - Web Browser Delay: {} ms | DraftJS Delay: {} ms | Heavy App Delay: {} ms",
+        report.pacing.browser_post_delay_ms,
+        report.pacing.draftjs_post_delay_ms,
+        report.pacing.heavy_app_post_delay_ms
+    );
 
     if !report.conflicts.is_empty() {
         println!("\nỨng dụng xung đột:");

@@ -286,7 +286,7 @@ fn format_doctor_lines(report: &DiagnosticReport, time_tag: &str) -> Vec<DoctorL
     });
 
     lines.push(DoctorLineData {
-        text: "[1/8] Môi trường hệ thống:".into(),
+        text: "[1/10] Môi trường hệ thống:".into(),
         color: header_color,
         bold: true,
     });
@@ -320,7 +320,7 @@ fn format_doctor_lines(report: &DiagnosticReport, time_tag: &str) -> Vec<DoctorL
     });
 
     lines.push(DoctorLineData {
-        text: "[2/8] Thiết bị ảo và Quyền hạn:".into(),
+        text: "[2/10] Thiết bị ảo và Quyền hạn:".into(),
         color: header_color,
         bold: true,
     });
@@ -364,7 +364,7 @@ fn format_doctor_lines(report: &DiagnosticReport, time_tag: &str) -> Vec<DoctorL
     });
 
     lines.push(DoctorLineData {
-        text: "[3/8] Trạng thái Daemon Fcitx5:".into(),
+        text: "[3/10] Trạng thái Daemon Fcitx5:".into(),
         color: header_color,
         bold: true,
     });
@@ -409,7 +409,7 @@ fn format_doctor_lines(report: &DiagnosticReport, time_tag: &str) -> Vec<DoctorL
     });
 
     lines.push(DoctorLineData {
-        text: "[4/8] Kiểm tra Binary & Nạp bộ nhớ (RAM):".into(),
+        text: "[4/10] Kiểm tra Binary & Nạp bộ nhớ (RAM):".into(),
         color: header_color,
         bold: true,
     });
@@ -446,7 +446,7 @@ fn format_doctor_lines(report: &DiagnosticReport, time_tag: &str) -> Vec<DoctorL
     });
 
     lines.push(DoctorLineData {
-        text: "[5/8] Cấu hình và Nhật ký (Log):".into(),
+        text: "[5/10] Cấu hình và Nhật ký (Log):".into(),
         color: header_color,
         bold: true,
     });
@@ -512,7 +512,7 @@ fn format_doctor_lines(report: &DiagnosticReport, time_tag: &str) -> Vec<DoctorL
         bold: false,
     });
     lines.push(DoctorLineData {
-        text: "[6/8] Biến Môi Trường Input Method:".into(),
+        text: "[6/10] Biến Môi Trường Input Method:".into(),
         color: header_color,
         bold: true,
     });
@@ -584,7 +584,7 @@ fn format_doctor_lines(report: &DiagnosticReport, time_tag: &str) -> Vec<DoctorL
         bold: false,
     });
     lines.push(DoctorLineData {
-        text: "[7/8] Thư Viện Frontend Fcitx5:".into(),
+        text: "[7/10] Thư Viện Frontend Fcitx5:".into(),
         color: header_color,
         bold: true,
     });
@@ -647,7 +647,7 @@ fn format_doctor_lines(report: &DiagnosticReport, time_tag: &str) -> Vec<DoctorL
         bold: false,
     });
     lines.push(DoctorLineData {
-        text: "[8/8] Cấu Hình Fcitx5 & Tương Thích Ứng Dụng:".into(),
+        text: "[8/10] Cấu Hình Fcitx5 & Tương Thích Ứng Dụng:".into(),
         color: header_color,
         bold: true,
     });
@@ -741,6 +741,124 @@ fn format_doctor_lines(report: &DiagnosticReport, time_tag: &str) -> Vec<DoctorL
             });
         }
     }
+
+    lines.push(DoctorLineData {
+        text: "".into(),
+        color: normal_color,
+        bold: false,
+    });
+    lines.push(DoctorLineData {
+        text: "[9/10] Màn Hình & VSync Frame Budget:".into(),
+        color: header_color,
+        bold: true,
+    });
+    lines.push(DoctorLineData {
+        text: format!(
+            "  • Tần số quét hiệu dụng: {:.1} Hz (Chu kỳ khung hình: {:.2} ms)",
+            report.display.effective_refresh_rate, report.display.frame_budget_ms
+        )
+        .into(),
+        color: ok_color,
+        bold: false,
+    });
+    if report.display.is_mixed_refresh_rate {
+        lines.push(DoctorLineData {
+            text: format!(
+                "  • Đa màn hình: [HỖN HỢP] Khóa mốc an toàn tối thiểu {:.0} Hz",
+                report.display.effective_refresh_rate
+            )
+            .into(),
+            color: warn_color,
+            bold: true,
+        });
+    }
+    for mon in &report.display.monitors {
+        let tag = if mon.is_active_focus {
+            " [Active Focus]"
+        } else {
+            ""
+        };
+        let pri = if mon.is_primary { " (Primary)" } else { "" };
+        lines.push(DoctorLineData {
+            text: format!(
+                "    - {}: {}x{} @ {:.1} Hz{}{}",
+                mon.name, mon.width, mon.height, mon.refresh_rate, pri, tag
+            )
+            .into(),
+            color: normal_color,
+            bold: mon.is_active_focus,
+        });
+    }
+
+    lines.push(DoctorLineData {
+        text: "".into(),
+        color: normal_color,
+        bold: false,
+    });
+    lines.push(DoctorLineData {
+        text: "[10/10] Đo Độ Trễ Phần Cứng & Pacing Đề Xuất:".into(),
+        color: header_color,
+        bold: true,
+    });
+    lines.push(DoctorLineData {
+        text: format!(
+            "  • Uinput RTT: {:.2} ms (Jitter: ±{:.2} ms, Write: {:.1} µs)",
+            report.latency.measured_rtt_ms,
+            report.latency.measured_jitter_ms,
+            report.latency.uinput_write_us
+        )
+        .into(),
+        color: normal_color,
+        bold: false,
+    });
+    lines.push(DoctorLineData {
+        text: format!(
+            "  • Bàn phím lặp lại: Delay {} ms, Interval {} ms",
+            report.latency.keyboard_repeat_delay_ms, report.latency.keyboard_repeat_interval_ms
+        )
+        .into(),
+        color: normal_color,
+        bold: false,
+    });
+    lines.push(DoctorLineData {
+        text: format!("  • Nguy cơ nhấp nháy: {}", report.pacing.flicker_risk).into(),
+        color: if report.pacing.estimated_replace_ms <= 30.0 {
+            ok_color
+        } else {
+            warn_color
+        },
+        bold: true,
+    });
+    lines.push(DoctorLineData {
+        text: format!("  • Phân tích: {}", report.pacing.explanation).into(),
+        color: normal_color,
+        bold: false,
+    });
+    lines.push(DoctorLineData {
+        text: "  • Cấu hình Pacing tối ưu:".into(),
+        color: header_color,
+        bold: false,
+    });
+    lines.push(DoctorLineData {
+        text: format!(
+            "    - Gap: {} ms | Terminal Delay: {} ms",
+            report.pacing.gap_ms, report.pacing.terminal_post_delay_ms
+        )
+        .into(),
+        color: ok_color,
+        bold: false,
+    });
+    lines.push(DoctorLineData {
+        text: format!(
+            "    - Web Browser: {} ms | DraftJS: {} ms | Heavy App: {} ms",
+            report.pacing.browser_post_delay_ms,
+            report.pacing.draftjs_post_delay_ms,
+            report.pacing.heavy_app_post_delay_ms
+        )
+        .into(),
+        color: ok_color,
+        bold: false,
+    });
 
     lines.push(DoctorLineData {
         text: "".into(),

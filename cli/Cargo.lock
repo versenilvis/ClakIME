@@ -68,6 +68,7 @@ version = "0.3.2"
 dependencies = [
  "libc",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
