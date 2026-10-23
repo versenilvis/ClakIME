@@ -529,6 +529,10 @@ pub fn is_valid_cvc(s: &str) -> bool {
 }
 
 pub fn is_incomplete_stop_coda(s: &str) -> bool {
+    // pure ascii words cannot be vietnamese diacritic stop codas
+    if s.is_ascii() {
+        return false;
+    }
     let (_, vo, lc) = split_cvc(s);
     if vo.is_empty() {
         return false;

@@ -817,3 +817,55 @@ fn test_typing_dudowjc_with_default_config() {
     }
     assert_eq!(doc, "được ");
 }
+
+#[test]
+fn test_typing_desktop() {
+    let mut cfg = clak_engine::config::ClakConfig::default();
+    cfg.spelling.auto_restore = true;
+
+    let simulate = |input: &str| -> String {
+        let mut local_ctx = ClakContext::new(Method::Telex);
+        local_ctx.apply_config(&cfg);
+        let mut doc = String::new();
+        for ch in input.chars() {
+            let key_str = ch.to_string();
+            let cur = doc.chars().count();
+            let action = local_ctx.process_key(ch as u32, &key_str, false, Some(&doc), cur, cur);
+            match action.action_type {
+                ACTION_FORWARD => doc.push(ch),
+                ACTION_COMMIT => {
+                    let s = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
+                    doc.push_str(s);
+                }
+                ACTION_REPLACE
+                | ACTION_REPLACE_SURROUNDING
+                | ACTION_ADDRESS_BAR_FIX
+                | ACTION_AUTOCORRECT => {
+                    let del = action.delete_count;
+                    let s = unsafe { CStr::from_ptr(action.commit_str).to_str().unwrap() };
+                    let mut doc_chars: Vec<char> = doc.chars().collect();
+                    for _ in 0..del {
+                        doc_chars.pop();
+                    }
+                    doc = doc_chars.into_iter().collect();
+                    doc.push_str(s);
+                }
+                _ => {}
+            }
+        }
+        doc
+    };
+
+    // test typing desktop both directly and with double s tone cancellation
+    assert_eq!(simulate("desktop "), "desktop ");
+    assert_eq!(simulate("dessktop "), "desktop ");
+    assert_eq!(simulate("desktop"), "desktop");
+    assert_eq!(simulate("dessktop"), "desktop");
+
+    // test other english words ending with stop codas
+    assert_eq!(simulate("test "), "tét ");
+    assert_eq!(simulate("tesst "), "test ");
+    assert_eq!(simulate("laptop "), "laptop ");
+    assert_eq!(simulate("react "), "react ");
+}
+
