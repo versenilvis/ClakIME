@@ -1,17 +1,26 @@
 #include "apps/sites.h"
 #include "config/config.h"
+#include "de/kde.h"
 #include <vector>
 
 namespace clak {
 namespace apps {
 
 bool isMetaSite(const std::string& site) {
-    static const std::vector<std::string> meta_sites = {
-        "facebook.com", "messenger.com", "threads.net",
-        "instagram.com", "web.whatsapp.com", "facebook", "messenger"
+    static const std::vector<std::string> base_meta_sites = {
+        "instagram.com", "web.whatsapp.com"
     };
-    for (const auto& s : meta_sites) {
+    static const std::vector<std::string> hypr_meta_sites = {
+        "facebook.com", "messenger.com", "facebook", "messenger"
+    };
+    for (const auto& s : base_meta_sites) {
         if (site == s || site.find(s) != std::string::npos) return true;
+    }
+    // on hyprland and non-kde sessions, keep facebook and messenger on surrounding text
+    if (!de::isKdeSession()) {
+        for (const auto& s : hypr_meta_sites) {
+            if (site == s || site.find(s) != std::string::npos) return true;
+        }
     }
     return false;
 }
@@ -30,8 +39,17 @@ bool isDraftJsSite(const std::string& site) {
     static const std::vector<std::string> draftjs_sites = {
         "x.com", "twitter.com", "threads.net"
     };
+    static const std::vector<std::string> kde_meta_sites = {
+        "facebook.com", "messenger.com", "facebook", "messenger"
+    };
     for (const auto& s : draftjs_sites) {
         if (site == s || site.find(s) != std::string::npos) return true;
+    }
+    // on kde plasma sessions, route facebook and messenger to uinput
+    if (de::isKdeSession()) {
+        for (const auto& s : kde_meta_sites) {
+            if (site == s || site.find(s) != std::string::npos) return true;
+        }
     }
     return false;
 }
