@@ -273,21 +273,13 @@ get_installed_version() {
     # check if installed via pacman or aur
     if command -v pacman >/dev/null 2>&1; then
         local p_ver
-        p_ver=$(pacman -Q clak 2>/dev/null | awk '{print $2}' || true)
-        if [ -n "$p_ver" ]; then
-            echo "v${p_ver%%-*}"
-            return
-        fi
-        p_ver=$(pacman -Q clak-git 2>/dev/null | awk '{print $2}' || true)
-        if [ -n "$p_ver" ]; then
-            echo "v${p_ver%%-*}"
-            return
-        fi
-        p_ver=$(pacman -Q fcitx5-clak 2>/dev/null | awk '{print $2}' || true)
-        if [ -n "$p_ver" ]; then
-            echo "v${p_ver%%-*}"
-            return
-        fi
+        for pkg in clak clak-bin clak-git fcitx5-clak; do
+            p_ver=$(pacman -Q "$pkg" 2>/dev/null | awk '{print $2}' || true)
+            if [ -n "$p_ver" ]; then
+                echo "v${p_ver%%-*}"
+                return
+            fi
+        done
     fi
 
     # check if installed via dpkg
@@ -319,10 +311,12 @@ get_installed_version() {
 detect_install_source() {
     # 1. arch linux pacman or aur
     if command -v pacman >/dev/null 2>&1; then
-        if pacman -Qi clak >/dev/null 2>&1 || pacman -Qi clak-git >/dev/null 2>&1 || pacman -Qi fcitx5-clak >/dev/null 2>&1; then
-            echo "aur"
-            return
-        fi
+        for pkg in clak clak-bin clak-git fcitx5-clak; do
+            if pacman -Qi "$pkg" >/dev/null 2>&1; then
+                echo "aur"
+                return
+            fi
+        done
     fi
 
     # debian or ubuntu dpkg package
@@ -569,25 +563,29 @@ run_update() {
         fi
 
         if [ -n "$helper" ]; then
+            local aur_pkg="clak"
+            for pkg in clak-bin clak-git fcitx5-clak clak; do
+                if pacman -Qi "$pkg" >/dev/null 2>&1; then
+                    aur_pkg="$pkg"
+                    break
+                fi
+            done
+
             echo ""
             echo -e "  ${c_purple}╭─ CẬP NHẬT QUA AUR ─────────────────────────────────────────╮${c_reset}"
             echo -e "  ${c_purple}│${c_reset}  Khuyên dùng công cụ AUR để cập nhật đồng bộ package:      ${c_purple}│${c_reset}"
-            if [ "$helper" = "yay" ]; then
-                echo -e "  ${c_purple}│${c_reset}    ${c_bold}yay -S clak${c_reset}                                             ${c_purple}│${c_reset}"
-            else
-                echo -e "  ${c_purple}│${c_reset}    ${c_bold}paru -S clak${c_reset}                                            ${c_purple}│${c_reset}"
-            fi
+            echo -e "  ${c_purple}│${c_reset}    ${c_bold}${helper} -S ${aur_pkg}${c_reset}"
             echo -e "  ${c_purple}╰────────────────────────────────────────────────────────────╯${c_reset}"
             echo ""
 
             local aur_reply="y"
             if [ "$assume_yes" -eq 0 ]; then
-                read -r -p "Bạn có muốn chạy '${helper} -S clak' để cập nhật ngay bây giờ? [Y/n] " aur_reply < /dev/tty || aur_reply="y"
+                read -r -p "Bạn có muốn chạy '${helper} -S ${aur_pkg}' để cập nhật ngay bây giờ? [Y/n] " aur_reply < /dev/tty || aur_reply="y"
             fi
 
             case "$aur_reply" in
                 [yY][eE][sS]|[yY]|"")
-                    $helper -S clak < /dev/tty
+                    $helper -S "$aur_pkg" < /dev/tty
                     spin_step "Đang nạp lại daemon Fcitx5..." 0.6
                     reload_fcitx5
                     local updated_ver
@@ -813,6 +811,8 @@ run_update() {
                 log_step "$lbl_check" "Xác thực SHA256 thành công (${actual_hash:0:16}...)"
             fi
         fi
+    fi
+
     # install deb package directly if dpkg managed
     if [ "$source_type" = "dpkg" ] && [[ "$archive_name" == *.deb ]]; then
         log_step "$lbl_update" "Cập nhật gói qua dpkg..."
