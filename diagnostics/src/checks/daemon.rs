@@ -10,6 +10,90 @@ pub struct DaemonStatus {
     pub current_im: Option<String>,
 }
 
+fn extract_first_quote(s: &str) -> Option<String> {
+    let start = s.find('"')?;
+    let end = s[start + 1..].find('"')?;
+    let val = s[start + 1..start + 1 + end].trim().to_string();
+    if !val.is_empty() {
+        Some(val)
+    } else {
+        None
+    }
+}
+
+fn extract_second_quote(s: &str) -> Option<String> {
+    let mut count = 0;
+    let mut in_quote = false;
+    let mut cur = String::new();
+    let mut escaped = false;
+    for ch in s.chars() {
+        if escaped {
+            cur.push(ch);
+            escaped = false;
+        } else if ch == '\\' {
+            escaped = true;
+        } else if ch == '"' {
+            if in_quote {
+                count += 1;
+                if count == 2 {
+                    let val = cur.trim().to_string();
+                    return if !val.is_empty() { Some(val) } else { None };
+                }
+                cur.clear();
+            }
+            in_quote = !in_quote;
+        } else if in_quote {
+            cur.push(ch);
+        }
+    }
+    None
+}
+
+fn get_group_default_im() -> Option<String> {
+    let group = Command::new("busctl")
+        .args([
+            "--user",
+            "call",
+            "org.fcitx.Fcitx5",
+            "/controller",
+            "org.fcitx.Fcitx.Controller1",
+            "CurrentInputMethodGroup",
+        ])
+        .output()
+        .ok()
+        .and_then(|out| {
+            if out.status.success() {
+                let s = String::from_utf8_lossy(&out.stdout);
+                extract_first_quote(&s)
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| "Default".to_string());
+
+    Command::new("busctl")
+        .args([
+            "--user",
+            "call",
+            "org.fcitx.Fcitx5",
+            "/controller",
+            "org.fcitx.Fcitx.Controller1",
+            "FullInputMethodGroupInfo",
+            "s",
+            &group,
+        ])
+        .output()
+        .ok()
+        .and_then(|out| {
+            if out.status.success() {
+                let s = String::from_utf8_lossy(&out.stdout);
+                extract_second_quote(&s)
+            } else {
+                None
+            }
+        })
+}
+
 pub fn check_daemon() -> DaemonStatus {
     let mut fcitx5_pids = Vec::new();
 
@@ -34,8 +118,7 @@ pub fn check_daemon() -> DaemonStatus {
     let fcitx5_running = !fcitx5_pids.is_empty();
 
     let current_im = if fcitx5_running {
-        // try querying controller CurrentInputMethod via busctl first
-        Command::new("busctl")
+        let active_im = Command::new("busctl")
             .args([
                 "--user",
                 "call",
@@ -49,16 +132,10 @@ pub fn check_daemon() -> DaemonStatus {
             .and_then(|out| {
                 if out.status.success() {
                     let s = String::from_utf8_lossy(&out.stdout);
-                    if let Some(start) = s.find('"') {
-                        if let Some(end) = s[start + 1..].find('"') {
-                            let name = s[start + 1..start + 1 + end].trim().to_string();
-                            if !name.is_empty() {
-                                return Some(name);
-                            }
-                        }
-                    }
+                    extract_first_quote(&s)
+                } else {
+                    None
                 }
-                None
             })
             .or_else(|| {
                 Command::new("fcitx5-remote")
@@ -77,7 +154,16 @@ pub fn check_daemon() -> DaemonStatus {
                             None
                         }
                     })
-            })
+            });
+
+        // on wayland/dbus, currentinputmethod returns layout fallback when unfocused
+        if active_im.as_deref() == Some("clak") {
+            Some("clak".to_string())
+        } else if let Some(group_im) = get_group_default_im() {
+            Some(group_im)
+        } else {
+            active_im
+        }
     } else {
         None
     };

@@ -203,6 +203,9 @@ fn setup_profile_via_dbus() -> bool {
         i += 2;
     }
 
+    if !items.iter().any(|(name, _)| name == "keyboard-us") {
+        items.insert(0, ("keyboard-us".to_string(), "".to_string()));
+    }
     if !items.iter().any(|(name, _)| name == "clak") {
         items.push(("clak".to_string(), "".to_string()));
     }
@@ -423,17 +426,37 @@ Layout=
     } else if let Ok(content) = fs::read_to_string(&profile_path) {
         let mut lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
         let has_clak = lines.iter().any(|l| l.trim() == "Name=clak");
+        let has_keyboard_us = lines.iter().any(|l| l.trim() == "Name=keyboard-us");
 
-        if !has_clak {
-            let item_count = lines
-                .iter()
-                .filter(|l| l.contains("[Groups/0/Items/"))
-                .count();
-
+        if !has_keyboard_us {
             let insert_idx = lines
                 .iter()
                 .position(|l| l.trim() == "[GroupOrder]")
                 .unwrap_or(lines.len());
+            let item_count = lines
+                .iter()
+                .filter(|l| l.contains("[Groups/0/Items/"))
+                .count();
+            let mut block = vec![
+                format!("[Groups/0/Items/{}]", item_count),
+                "Name=keyboard-us".to_string(),
+                "Layout=".to_string(),
+                "".to_string(),
+            ];
+            for (i, bline) in block.drain(..).enumerate() {
+                lines.insert(insert_idx + i, bline);
+            }
+        }
+
+        if !has_clak {
+            let insert_idx = lines
+                .iter()
+                .position(|l| l.trim() == "[GroupOrder]")
+                .unwrap_or(lines.len());
+            let item_count = lines
+                .iter()
+                .filter(|l| l.contains("[Groups/0/Items/"))
+                .count();
 
             let mut block = vec![
                 format!("[Groups/0/Items/{}]", item_count),

@@ -341,6 +341,7 @@ impl AutoFixSummary {
 
 // switch active input method to clak via dbus controller and fcitx5-remote
 pub fn switch_to_clak() -> bool {
+    let _ = checks::compatibility::fix_fcitx5_profile();
     let _ = std::process::Command::new("busctl")
         .args([
             "--user",
