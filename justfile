@@ -37,12 +37,14 @@ restart:
 # clean build artifacts
 [group("dev")]
 clean:
-    rm -rf build engine/target ui/target target .scratch vendor clak-vendor.tar.gz clak-vendor.tar.gz.sha256
+    rm -rf build engine/target ui/target cli/target diagnostics/target target .scratch vendor clak-vendor.tar.gz clak-vendor.tar.gz.sha256
 
 # prune stale cargo cache and incremental artifacts
 [group("dev")]
 prune:
     cargo clean --manifest-path engine/Cargo.toml
+    cargo clean --manifest-path diagnostics/Cargo.toml
+    cargo clean --manifest-path cli/Cargo.toml
     cargo clean --manifest-path ui/Cargo.toml
     rm -rf .scratch
 
@@ -183,11 +185,13 @@ tag version:
     sed -i "s/^pkgrel=[0-9]\+/pkgrel=1/" packaging/aur-bin/PKGBUILD
 
     cargo check --manifest-path engine/Cargo.toml --quiet
+    cargo check --manifest-path diagnostics/Cargo.toml --quiet
+    cargo check --manifest-path cli/Cargo.toml --quiet
     cargo check --manifest-path ui/Cargo.toml --quiet
     (cd packaging/aur && makepkg --printsrcinfo > .SRCINFO)
     (cd packaging/aur-bin && makepkg --printsrcinfo > .SRCINFO)
 
-    git add CMakeLists.txt data/clak-addon.conf.in engine/Cargo.toml engine/Cargo.lock ui/Cargo.toml ui/Cargo.lock packaging/aur/PKGBUILD packaging/aur/.SRCINFO packaging/aur-bin/PKGBUILD packaging/aur-bin/.SRCINFO
+    git add CMakeLists.txt data/clak-addon.conf.in engine/Cargo.toml engine/Cargo.lock diagnostics/Cargo.lock cli/Cargo.lock ui/Cargo.toml ui/Cargo.lock packaging/aur/PKGBUILD packaging/aur/.SRCINFO packaging/aur-bin/PKGBUILD packaging/aur-bin/.SRCINFO
     git commit -m "chore: release ${tag}"
     git tag -a "${tag}" -m "release: ${tag}"
 
