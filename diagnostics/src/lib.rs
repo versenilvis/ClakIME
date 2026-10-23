@@ -338,7 +338,9 @@ impl AutoFixSummary {
 }
 
 // configure custom pacing profile from measured benchmark
-pub fn apply_pacing_profile(pacing: &checks::pacing_calc::PacingRecommendation) -> Result<(), std::io::Error> {
+pub fn apply_pacing_profile(
+    pacing: &checks::pacing_calc::PacingRecommendation,
+) -> Result<(), std::io::Error> {
     let mut cfg = clak_engine::config::ClakConfig::load();
     cfg.pacing.preset = "custom".to_string();
     cfg.pacing.draftjs_delay_ms = pacing.draftjs_post_delay_ms;

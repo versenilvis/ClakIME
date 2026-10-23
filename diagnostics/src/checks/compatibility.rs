@@ -287,9 +287,7 @@ pub fn restart_fcitx5_daemon() -> bool {
 
     // use native replace flag if not managed by systemd
     if !restarted_via_systemd {
-        let _ = Command::new("fcitx5")
-            .args(["-r", "-d"])
-            .status();
+        let _ = Command::new("fcitx5").args(["-r", "-d"]).status();
     }
 
     // poll for new pid or daemon readiness
@@ -297,18 +295,21 @@ pub fn restart_fcitx5_daemon() -> bool {
     for _ in 0..15 {
         std::thread::sleep(std::time::Duration::from_millis(150));
         let daemon = super::daemon::check_daemon();
-        if daemon.fcitx5_running && !daemon.fcitx5_pids.is_empty() {
-            if initial_pids.is_empty() || daemon.fcitx5_pids != initial_pids {
-                success = true;
-                break;
-            }
+        if daemon.fcitx5_running
+            && !daemon.fcitx5_pids.is_empty()
+            && (initial_pids.is_empty() || daemon.fcitx5_pids != initial_pids)
+        {
+            success = true;
+            break;
         }
     }
 
     // fallback kill and restart if previous instance refused to exit
     if !success && !initial_pids.is_empty() {
         for pid in &initial_pids {
-            let _ = Command::new("kill").args(["-15", &pid.to_string()]).status();
+            let _ = Command::new("kill")
+                .args(["-15", &pid.to_string()])
+                .status();
         }
         std::thread::sleep(std::time::Duration::from_millis(200));
         let _ = Command::new("fcitx5").arg("-d").status();

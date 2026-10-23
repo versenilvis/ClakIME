@@ -868,4 +868,3 @@ fn test_typing_desktop() {
     assert_eq!(simulate("laptop "), "laptop ");
     assert_eq!(simulate("react "), "react ");
 }
-
