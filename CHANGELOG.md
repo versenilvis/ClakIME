@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.7.3](https://github.com/versenilvis/ClakIME/releases/tag/v0.7.3) - 2026-10-23
+
+### Features
+
+- Align default settings with user profile ([1deb1b](https://github.com/versenilvis/ClakIME/commit/1deb1b70e9e48a9fd75971eb32190707eb817e51))
+
 ## [v0.7.2](https://github.com/versenilvis/ClakIME/releases/tag/v0.7.2) - 2026-10-20
 
 ### Bug fixes
