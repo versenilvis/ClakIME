@@ -32,6 +32,7 @@ struct PacingMetrics {
     uint32_t floor_gap_ms{8};
     uint32_t ceiling_gap_ms{20};
     uint32_t consecutive_clean_words{0};
+    uint32_t drift_compensation_ms{0};
 };
 
 class AdaptivePacingEngine {
@@ -47,11 +48,13 @@ public:
 
     // pure event handlers
     void onIncident(PacingGroup group, IncidentType incident, uint64_t now_us, uint64_t key_interval_us = 0);
+    void observeTimerDrift(PacingGroup group, uint64_t deadline_us, uint64_t fired_at_us);
     void onTransactionSuccess(PacingGroup group);
 
     // retrieval
     PacingMetrics metrics(PacingGroup group) const;
     apps::UinputPacing uinputPacing(PacingGroup group) const;
+    uint32_t driftCompensation(PacingGroup group) const;
 
     // classify app and site into pacing group
     static PacingGroup classify(const std::string& app, const std::string& site, bool is_autofill, bool is_draftjs = false);

@@ -308,11 +308,13 @@ void ClakState::arm_safety_timer() {
     uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
     uint64_t timeout_us = is_selection_deletion_ ? config::kSelectionDeletionTimeoutUs :
                           ((is_address_bar_fix_ ? (config::kSafetyTimeoutUs * 2) : config::kSafetyTimeoutUs) + adaptive_extra_us_);
+    uint64_t deadline_us = now_us + timeout_us;
     safety_timer_ = engine_->instance()->eventLoop().addTimeEvent(
         CLOCK_MONOTONIC,
-        now_us + timeout_us,
+        deadline_us,
         1000,
-        [this, timeout_us](fcitx::EventSourceTime*, uint64_t) {
+        [this, timeout_us, deadline_us](fcitx::EventSourceTime*, uint64_t) {
+            uint64_t actual_fired_us = fcitx::now(CLOCK_MONOTONIC);
             if (is_deleting_) {
                 if (adaptive_extra_us_ < 100000) {
                     adaptive_extra_us_ = std::min<uint64_t>(100000, adaptive_extra_us_ + 20000);
@@ -323,7 +325,8 @@ void ClakState::arm_safety_timer() {
                 std::string site = activeSite();
                 bool is_draftjs = isDraftJsEditor() || config::isDraftJsSite(site) || config::isTikTokSite(site);
                 pacing::PacingGroup pgroup = pacing::AdaptivePacingEngine::classify(app, site, is_address_bar_fix_, is_draftjs);
-                uint64_t incident_now_us = fcitx::now(CLOCK_MONOTONIC);
+                pacing_engine_.observeTimerDrift(pgroup, deadline_us, actual_fired_us);
+                uint64_t incident_now_us = actual_fired_us;
                 if (is_selection_deletion_) {
                     pacing_engine_.onIncident(pgroup, pacing::IncidentType::SelectionTimeout, incident_now_us);
                 } else if (is_address_bar_fix_) {

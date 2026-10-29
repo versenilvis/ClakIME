@@ -115,12 +115,28 @@ void AdaptivePacingEngine::onIncident(PacingGroup group, IncidentType incident, 
     g.metrics.consecutive_clean_words = 0;
 }
 
+void AdaptivePacingEngine::observeTimerDrift(PacingGroup group, uint64_t deadline_us, uint64_t fired_at_us) {
+    if (!enabled_ || fired_at_us <= deadline_us) {
+        return;
+    }
+    uint64_t drift_us = fired_at_us - deadline_us;
+    if (drift_us >= 5000) {
+        auto& g = getGroup(group);
+        uint32_t drift_ms = static_cast<uint32_t>((drift_us + 999) / 1000);
+        g.metrics.drift_compensation_ms = std::min(15u, std::max(g.metrics.drift_compensation_ms, drift_ms));
+        utils::clakLog("adaptive pacing: event loop drift " + std::to_string(drift_ms) + "ms detected, compensating");
+    }
+}
+
 void AdaptivePacingEngine::onTransactionSuccess(PacingGroup group) {
     if (!enabled_) {
         return;
     }
 
     auto& g = getGroup(group);
+    if (g.metrics.drift_compensation_ms > 0) {
+        g.metrics.drift_compensation_ms -= 1;
+    }
     g.metrics.consecutive_clean_words++;
 
     // slow decay towards floor
@@ -141,7 +157,12 @@ PacingMetrics AdaptivePacingEngine::metrics(PacingGroup group) const {
 
 apps::UinputPacing AdaptivePacingEngine::uinputPacing(PacingGroup group) const {
     const auto& m = getGroup(group).metrics;
-    return {m.post_delay_ms, m.gap_ms};
+    uint32_t eff_post = std::min(m.ceiling_post_ms, m.post_delay_ms + m.drift_compensation_ms);
+    return {eff_post, m.gap_ms};
+}
+
+uint32_t AdaptivePacingEngine::driftCompensation(PacingGroup group) const {
+    return getGroup(group).metrics.drift_compensation_ms;
 }
 
 PacingGroup AdaptivePacingEngine::classify(const std::string& app, const std::string& site, bool is_autofill, bool is_draftjs) {

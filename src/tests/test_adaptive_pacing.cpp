@@ -169,3 +169,25 @@ TEST(AdaptivePacingTest, SubFrameMismatchIgnored) {
     EXPECT_EQ(m.post_delay_ms, 20u);
     EXPECT_EQ(m.gap_ms, 10u);
 }
+
+TEST(AdaptivePacingTest, EventLoopTimerDriftCompensation) {
+    AdaptivePacingEngine engine;
+
+    // drift < 5ms ignored
+    engine.observeTimerDrift(PacingGroup::WebDraftJs, 1000000ULL, 1003000ULL);
+    EXPECT_EQ(engine.driftCompensation(PacingGroup::WebDraftJs), 0u);
+
+    // drift >= 5ms increases compensation
+    engine.observeTimerDrift(PacingGroup::WebDraftJs, 1000000ULL, 1008000ULL);
+    EXPECT_EQ(engine.driftCompensation(PacingGroup::WebDraftJs), 8u);
+    auto pacing = engine.uinputPacing(PacingGroup::WebDraftJs);
+    EXPECT_EQ(pacing.post_delay_ms, 24u);
+
+    // drift capped at 15ms
+    engine.observeTimerDrift(PacingGroup::WebDraftJs, 1000000ULL, 1030000ULL);
+    EXPECT_EQ(engine.driftCompensation(PacingGroup::WebDraftJs), 15u);
+
+    // success decays drift compensation
+    engine.onTransactionSuccess(PacingGroup::WebDraftJs);
+    EXPECT_EQ(engine.driftCompensation(PacingGroup::WebDraftJs), 14u);
+}
