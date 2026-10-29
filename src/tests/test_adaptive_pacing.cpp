@@ -152,3 +152,20 @@ TEST(AdaptivePacingTest, FilePersistence) {
 
     std::filesystem::remove(test_path);
 }
+
+TEST(AdaptivePacingTest, SubFrameMismatchIgnored) {
+    AdaptivePacingEngine engine;
+    uint64_t t0 = 1000000ULL;
+
+    // sub-frame ipc latency (< 16ms) ignored
+    engine.onIncident(PacingGroup::WebDraftJs, IncidentType::SurroundingMismatch, t0, 8000ULL);
+    auto m = engine.metrics(PacingGroup::WebDraftJs);
+    EXPECT_EQ(m.post_delay_ms, 16u);
+    EXPECT_EQ(m.gap_ms, 8u);
+
+    // intervals >= 16ms accounted for
+    engine.onIncident(PacingGroup::WebDraftJs, IncidentType::SurroundingMismatch, t0 + 100000ULL, 20000ULL);
+    m = engine.metrics(PacingGroup::WebDraftJs);
+    EXPECT_EQ(m.post_delay_ms, 20u);
+    EXPECT_EQ(m.gap_ms, 10u);
+}

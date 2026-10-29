@@ -46,7 +46,7 @@ public:
                         uint32_t ceiling_delay_ms, uint32_t ceiling_gap_ms);
 
     // pure event handlers
-    void onIncident(PacingGroup group, IncidentType incident, uint64_t now_us);
+    void onIncident(PacingGroup group, IncidentType incident, uint64_t now_us, uint64_t key_interval_us = 0);
     void onTransactionSuccess(PacingGroup group);
 
     // retrieval

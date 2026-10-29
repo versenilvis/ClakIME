@@ -79,7 +79,7 @@ void AdaptivePacingEngine::configureGroup(PacingGroup group, uint32_t floor_dela
     }
 }
 
-void AdaptivePacingEngine::onIncident(PacingGroup group, IncidentType incident, uint64_t now_us) {
+void AdaptivePacingEngine::onIncident(PacingGroup group, IncidentType incident, uint64_t now_us, uint64_t key_interval_us) {
     if (!enabled_) {
         return;
     }
@@ -88,6 +88,13 @@ void AdaptivePacingEngine::onIncident(PacingGroup group, IncidentType incident, 
     if (incident == IncidentType::KeyInterruption ||
         incident == IncidentType::SelectionTimeout ||
         incident == IncidentType::AddressBarDelay) {
+        return;
+    }
+
+    // ignore sub-frame surrounding mismatches caused by in-flight wayland ipc
+    if (incident == IncidentType::SurroundingMismatch && key_interval_us > 0 && key_interval_us < 16000) {
+        utils::clakLog("adaptive pacing: ignored sub-frame surrounding mismatch (interval=" +
+                       std::to_string(key_interval_us / 1000) + "ms < 16ms)");
         return;
     }
 

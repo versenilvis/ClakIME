@@ -96,6 +96,8 @@ private:
 
   std::string pending_commit_string_;
   std::unique_ptr<fcitx::EventSourceTime> safety_timer_;
+  uint64_t last_key_time_us_{0};
+  uint64_t last_key_interval_us_{0};
 
   uint64_t last_site_check_us_{0};
   std::string cached_site_;

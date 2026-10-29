@@ -79,6 +79,8 @@ void ClakState::reset(bool force) {
         last_autofix_original_.clear();
         last_autofix_converted_chars_ = 0;
         last_autofix_time_us_ = 0;
+        last_key_time_us_ = 0;
+        last_key_interval_us_ = 0;
     }
     last_text_len_ = 0;
     if (safety_timer_) {
@@ -405,6 +407,10 @@ bool ClakState::handleKey(const fcitx::Key& key) {
         return false;
     }
 
+    uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
+    last_key_interval_us_ = (last_key_time_us_ > 0 && now_us > last_key_time_us_) ? (now_us - last_key_time_us_) : 0;
+    last_key_time_us_ = now_us;
+
     bool has_ctrl_alt = key.states().test(fcitx::KeyState::Ctrl) ||
                         key.states().test(fcitx::KeyState::Alt) ||
                         key.states().test(fcitx::KeyState::Super);
@@ -508,7 +514,8 @@ bool ClakState::handleKey(const fcitx::Key& key) {
         if (!was_draft && verifier_.isDraftJsEditorDirect()) {
             pacing_engine_.onIncident(pacing::PacingGroup::WebDraftJs,
                                       pacing::IncidentType::SurroundingMismatch,
-                                      fcitx::now(CLOCK_MONOTONIC));
+                                      fcitx::now(CLOCK_MONOTONIC),
+                                      last_key_interval_us_);
         }
         is_draftjs = isDraftJsEditor();
         use_surrounding = currentProfile()->allowsSurroundingText() && valid_surr && !verifier_.isRichTextEditor() && !is_draftjs;
