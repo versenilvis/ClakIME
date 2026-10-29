@@ -994,6 +994,49 @@ TEST_F(RegressionCorpusTest, test_regression_vscode_terminal_capability_flag_imm
     EXPECT_TRUE(state->currentProfile()->forcesUinput());
 }
 
+TEST_F(RegressionCorpusTest, test_regression_surrounding_subframe_rapid_replacement_buffered_and_replayed) {
+    platform::setMockActiveWindow(platform::WindowInfo{"antigravity-ide", "antigravity", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "antigravity-ide");
+    ic.setFrontend("wayland_v2");
+    auto* state = ic.propertyFor(&engine_->factory());
+
+    // type d, o, d to get đo
+    ic.setSurrounding("", 0, 0);
+    ic.typeChar('d', state);
+    ic.setSurrounding("d", 1, 1);
+    ic.typeChar('o', state);
+    ic.setSurrounding("do", 2, 2);
+    ic.typeChar('d', state);
+
+    // type o, replaces đo with đô
+    ic.setSurrounding("đo", 2, 2);
+    ic.typeChar('o', state);
+
+    // rapid tone key j arrives while surrounding text is lagging at đo
+    ic.typeChar('j', state);
+    EXPECT_EQ(state->bufferedKeysCount(), 1u);
+
+    // wayland roundtrip completes and updates surrounding text to đô
+    ic.setSurrounding("đô", 2, 2);
+
+    auto exit_timer = instance_->eventLoop().addTimeEvent(
+        CLOCK_MONOTONIC,
+        fcitx::now(CLOCK_MONOTONIC) + 25000ULL,
+        1000,
+        [this](fcitx::EventSourceTime*, uint64_t) {
+            instance_->eventLoop().exit();
+            return true;
+        }
+    );
+    instance_->eventLoop().exec();
+
+    // after replay, buffered key j replaces ô with ộ without corruption
+    EXPECT_EQ(state->bufferedKeysCount(), 0u);
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "ộ");
+    EXPECT_FALSE(state->isRichTextEditor());
+}
+
 TEST_F(RegressionCorpusTest, test_regression_twitter_early_completion_preserves_sentinel_absorption) {
     // When text-input reactivation completes uinput deletion early during DraftJS typing,
     // subsequent reset or deactivate events must not wipe out in_flight_sentinel_count_,

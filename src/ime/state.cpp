@@ -89,6 +89,10 @@ void ClakState::reset(bool force) {
     if (commit_timer_) {
         commit_timer_.reset();
     }
+    if (surr_lag_timer_) {
+        surr_lag_timer_.reset();
+    }
+    is_surr_lag_replaying_ = false;
     repeat_handler_.cancel();
     modal_handler_.reset();
     if (profile_) {
@@ -376,6 +380,10 @@ void ClakState::finishUinputDeletion(uint64_t rtt_us) {
     if (commit_timer_) {
         commit_timer_.reset();
     }
+    if (surr_lag_timer_) {
+        surr_lag_timer_.reset();
+    }
+    is_surr_lag_replaying_ = false;
     if (expected_backspaces_ > current_backspace_count_) {
         in_flight_sentinel_count_ = expected_backspaces_ - current_backspace_count_;
         sentinel_grace_until_us_ = fcitx::now(CLOCK_MONOTONIC) + 500000;
@@ -543,6 +551,32 @@ bool ClakState::handleKey(const fcitx::Key& key) {
 
     bool skip_verify = is_gecko || is_meta || currentProfile()->preventsUinput();
     if (verifier_.isPending() && use_surrounding && !skip_verify) {
+        std::string actualWord = utils::extractWordBeforeCursor(surr.text(), surr.cursor());
+        // delay key if previous surrounding replacement is still in flight on wayland ipc
+        if (actualWord == verifier_.preWord() &&
+            (now_us - last_commit_time_us_ < 20000) &&
+            !is_surr_lag_replaying_ &&
+            engine_ && engine_->instance() && std::string(ic_->frontend()) != "mock") {
+            key_buffer_.push(key);
+            uint64_t elapsed_us = now_us - last_commit_time_us_;
+            uint64_t delay_us = (elapsed_us < 16000) ? (16000 - elapsed_us) : 8000;
+            utils::clakLog("handleKey: surrounding replacement lagging in app=" + app +
+                           " (" + std::to_string(elapsed_us / 1000) + "ms since commit), buffering key for " +
+                           std::to_string(delay_us / 1000) + "ms");
+            surr_lag_timer_ = engine_->instance()->eventLoop().addTimeEvent(
+                CLOCK_MONOTONIC,
+                now_us + delay_us,
+                1000,
+                [this](fcitx::EventSourceTime*, uint64_t) {
+                    surr_lag_timer_.reset();
+                    is_surr_lag_replaying_ = true;
+                    replayBufferedKeys();
+                    is_surr_lag_replaying_ = false;
+                    return true;
+                }
+            );
+            return true;
+        }
         bool was_draft = verifier_.isDraftJsEditorDirect();
         verifier_.verify(surr);
         if (!was_draft && verifier_.isDraftJsEditorDirect()) {
@@ -1098,7 +1132,7 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
         return;
     }
 
-    if (is_deleting_) {
+    if (is_deleting_ || (surr_lag_timer_ && !is_surr_lag_replaying_)) {
         key_buffer_.push(key);
         keyEvent.filterAndAccept();
         return;

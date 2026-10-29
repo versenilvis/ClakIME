@@ -21,7 +21,8 @@ public:
     MockInputContext(fcitx::InputContextManager& mgr, const std::string& program = "test-app");
     ~MockInputContext() override;
 
-    const char* frontend() const override { return "mock"; }
+    const char* frontend() const override { return frontend_.c_str(); }
+    void setFrontend(const std::string& f) { frontend_ = f; }
 
     void commitStringImpl(const std::string& text) override;
     void deleteSurroundingTextImpl(int offset, unsigned int size) override;
@@ -52,6 +53,7 @@ public:
 
     // auto-update internal surrounding text buffer on commit/delete
     bool auto_update_surrounding{false};
+    std::string frontend_{"mock"};
 
     void clearHistory();
 };

@@ -26,6 +26,8 @@ public:
 
   bool isPending() const { return verify_.pending; }
   void clearPending() { verify_.pending = false; }
+  const std::string& preWord() const { return verify_.preWord; }
+  const std::string& expectWord() const { return verify_.expectWord; }
   int mismatchCount() const { return mismatch_count_; }
   void clearMismatches() { mismatch_count_ = 0; }
 

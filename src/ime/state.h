@@ -97,6 +97,8 @@ private:
   std::string pending_commit_string_;
   std::unique_ptr<fcitx::EventSourceTime> safety_timer_;
   std::unique_ptr<fcitx::EventSourceTime> commit_timer_;
+  std::unique_ptr<fcitx::EventSourceTime> surr_lag_timer_;
+  bool is_surr_lag_replaying_{false};
   uint64_t last_key_time_us_{0};
   uint64_t last_key_interval_us_{0};
 
