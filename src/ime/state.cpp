@@ -520,17 +520,17 @@ bool ClakState::handleKey(const fcitx::Key& key) {
 
     bool valid_surr = has_surrounding && surr.isValid() &&
                       surr.cursor() <= surr.text().size() &&
-                      !verifier_.isCanvasEditor();
-    bool use_surrounding = valid_surr && !verifier_.isRichTextEditor() &&
-                           currentProfile()->allowsSurroundingText();
+                      !verifier_.isCanvasEditor() &&
+                      !verifier_.isRichTextEditor();
+    bool use_surrounding = valid_surr && currentProfile()->allowsSurroundingText();
 
     // detect frozen surrounding cursor in vscode (e.g. xterm.js in integrated terminal)
     bool is_printable = (!key_str.empty() && sym < 0xff00);
     bool is_bs_on_text = (sym == FcitxKey_BackSpace && surr.cursor() > 0);
-    if (!currentProfile()->preventsUinput() && config::isVSCodeApp(app) && valid_surr && (is_printable || is_bs_on_text) && !has_ctrl_alt) {
+    if (!currentProfile()->preventsUinput() && config::isVSCodeApp(app) && has_surrounding && surr.isValid() && (is_printable || is_bs_on_text) && !has_ctrl_alt) {
         if (last_surr_cursor_ == surr.cursor() && last_surr_text_len_ == surr.text().size()) {
             surr_keystroke_count_++;
-            if (surr_keystroke_count_ >= 3) {
+            if (surr_keystroke_count_ >= 2) {
                 verifier_.setRichTextEditor(true);
                 valid_surr = false;
                 use_surrounding = false;
@@ -539,8 +539,10 @@ bool ClakState::handleKey(const fcitx::Key& key) {
             }
         } else {
             surr_keystroke_count_ = 0;
-            if (verifier_.isRichTextEditor()) {
+            // only restore surrounding text when text is substantial (> 4 chars), terminal only has dummy chars (<= 2)
+            if (verifier_.isRichTextEditor() && surr.text().size() > 4) {
                 verifier_.setRichTextEditor(false);
+                valid_surr = true;
                 use_surrounding = currentProfile()->allowsSurroundingText();
                 utils::clakLog("handleKey: surrounding cursor resumed moving in app=" + app + ", restored surrounding text");
             }

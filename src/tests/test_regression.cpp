@@ -982,6 +982,51 @@ TEST_F(RegressionCorpusTest, test_regression_vscode_terminal_frozen_cursor_non_z
     EXPECT_TRUE(state->isRichTextEditor());
 }
 
+TEST_F(RegressionCorpusTest, test_regression_vscode_terminal_git_push_keeps_uinput_across_space_and_word_boundary) {
+    platform::setMockActiveWindow(platform::WindowInfo{"antigravity-ide", "antigravity", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "antigravity-ide");
+    auto* state = ic.propertyFor(&engine_->factory());
+
+    size_t uinput_calls = 0;
+    uinput::UinputTool::instance().setMockHandler([&](size_t, uint32_t, uint32_t, uint32_t) {
+        uinput_calls++;
+        return true;
+    });
+
+    // type "git" in terminal with frozen cursor at empty string
+    ic.setSurrounding("", 0, 0);
+    ic.typeChar('g', state);
+    ic.typeChar('i', state);
+    ic.typeChar('t', state);
+    EXPECT_TRUE(state->isRichTextEditor());
+
+    // terminal helper textarea updates to a single dummy space
+    ic.setSurrounding(" ", 1, 1);
+    ic.typeChar(' ', state);
+    EXPECT_TRUE(state->isRichTextEditor());
+
+    // type "push": "p", "u", "s" where 's' forms 'pú'
+    // must stay in uinput mode and not call deleteSurroundingText
+    ic.typeChar('p', state);
+    ic.typeChar('u', state);
+    ic.typeChar('s', state);
+    EXPECT_GT(uinput_calls, 0u);
+    EXPECT_TRUE(ic.deletions.empty());
+    EXPECT_TRUE(state->isRichTextEditor());
+
+    // complete uinput backspace deletion
+    while (state->isDeleting()) {
+        ic.sendCleanBackspace(state);
+    }
+
+    // second 's' cancels tone to "pus" via uinput backspace
+    size_t uinput_before_second_s = uinput_calls;
+    ic.typeChar('s', state);
+    EXPECT_GT(uinput_calls, uinput_before_second_s);
+    EXPECT_TRUE(ic.deletions.empty());
+    EXPECT_TRUE(state->isRichTextEditor());
+}
+
 TEST_F(RegressionCorpusTest, test_regression_vscode_terminal_capability_flag_immediately_uses_terminal_profile) {
     platform::setMockActiveWindow(platform::WindowInfo{"antigravity-ide", "antigravity", 1234});
     MockInputContext ic(instance_->inputContextManager(), "antigravity-ide");
