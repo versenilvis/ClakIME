@@ -86,6 +86,9 @@ void ClakState::reset(bool force) {
     if (safety_timer_) {
         safety_timer_.reset();
     }
+    if (commit_timer_) {
+        commit_timer_.reset();
+    }
     repeat_handler_.cancel();
     modal_handler_.reset();
     if (profile_) {
@@ -366,11 +369,13 @@ void ClakState::finishUinputDeletion(uint64_t rtt_us) {
     if (safety_timer_) {
         safety_timer_.reset();
     }
+    if (commit_timer_) {
+        commit_timer_.reset();
+    }
     if (expected_backspaces_ > current_backspace_count_) {
         in_flight_sentinel_count_ = expected_backspaces_ - current_backspace_count_;
         sentinel_grace_until_us_ = fcitx::now(CLOCK_MONOTONIC) + 500000;
     }
-    is_deleting_ = false;
     is_address_bar_fix_ = false;
     is_selection_deletion_ = false;
     expected_backspaces_ = 0;
@@ -392,7 +397,25 @@ void ClakState::finishUinputDeletion(uint64_t rtt_us) {
     op_start_us_ = 0;
     std::string to_commit = pending_commit_string_;
     pending_commit_string_.clear();
-    replayBufferedKeys(to_commit);
+
+    uint32_t compensation_ms = pacing_engine_.driftCompensation(pgroup);
+    if (compensation_ms > 0 && engine_ && engine_->instance()) {
+        utils::clakLog("compensatory wait: delaying commit by " + std::to_string(compensation_ms) + "ms");
+        commit_timer_ = engine_->instance()->eventLoop().addTimeEvent(
+            CLOCK_MONOTONIC,
+            fcitx::now(CLOCK_MONOTONIC) + compensation_ms * 1000ULL,
+            1000,
+            [this, to_commit](fcitx::EventSourceTime*, uint64_t) {
+                is_deleting_ = false;
+                replayBufferedKeys(to_commit);
+                commit_timer_.reset();
+                return true;
+            }
+        );
+    } else {
+        is_deleting_ = false;
+        replayBufferedKeys(to_commit);
+    }
 }
 
 void ClakState::replayBufferedKeys(const std::string& initial_batch) {
