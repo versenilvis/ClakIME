@@ -113,6 +113,10 @@ fn tone_vowel_index(ls: &[Letter], modern: bool) -> Option<usize> {
     if start > end {
         start = end;
     }
+    // foreign initial consonant j never takes vietnamese tones
+    if start > 0 && ls[0].c.to_ascii_lowercase() == 'j' {
+        return None;
+    }
     let count = end - start + 1;
     if count < 3 {
         for i in (start..=end).rev() {

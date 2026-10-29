@@ -834,6 +834,19 @@ mod tests {
     }
 
     #[test]
+    fn test_foreign_initial_consonants_no_tone() {
+        let e = eng(true, false);
+        assert_eq!(e.transform("just"), "just");
+        assert_eq!(e.transform("jus"), "jus");
+        assert_eq!(e.transform("fast"), "fast");
+
+        let e = eng(true, true);
+        assert_eq!(e.transform("just"), "just");
+        assert_eq!(e.transform("jus"), "jus");
+        assert_eq!(e.transform("fast"), "fast");
+    }
+
+    #[test]
     fn auto_restore_shortw_ww_english_word() {
         let mut e = eng(true, false);
         e.set_short_w(true);
