@@ -464,6 +464,38 @@ pub fn is_valid_cvc(s: &str) -> bool {
         }
     }
 
+    // gh and ngh only combine with e, ê, i
+    if (fc == ['g', 'h'] || fc == ['n', 'g', 'h']) && !vo.is_empty() {
+        let first_vowel = vo[0];
+        if !matches!(first_vowel, 'e' | 'ê' | 'i') {
+            return false;
+        }
+    }
+
+    // c cannot combine with e, ê, i, y
+    if fc.len() == 1 && fc[0] == 'c' && !vo.is_empty() {
+        let first_vowel = vo[0];
+        if matches!(first_vowel, 'e' | 'ê' | 'i' | 'y') {
+            return false;
+        }
+    }
+
+    // g without h or i cannot combine with e, ê
+    if fc.len() == 1 && fc[0] == 'g' && !vo.is_empty() {
+        let first_vowel = vo[0];
+        if matches!(first_vowel, 'e' | 'ê') {
+            return false;
+        }
+    }
+
+    // ng cannot combine with e, ê, i
+    if fc == ['n', 'g'] && !vo.is_empty() {
+        let first_vowel = vo[0];
+        if matches!(first_vowel, 'e' | 'ê' | 'i') {
+            return false;
+        }
+    }
+
     // Debug: uncomment to trace CVC split
     // eprintln!("is_valid_cvc({s:?}): fc={fc:?} vo={vo:?} lc={lc:?}");
 

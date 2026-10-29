@@ -847,6 +847,24 @@ mod tests {
     }
 
     #[test]
+    fn test_invalid_initial_consonant_vowel_pairs_no_tone() {
+        let e = eng(true, false);
+        assert_eq!(e.transform("ghos"), "ghos");
+        assert_eq!(e.transform("ghoss"), "ghoss");
+        assert_eq!(e.transform("ghost"), "ghost");
+        assert_eq!(e.transform("ghostty"), "ghostty");
+        assert_eq!(e.transform("nghos"), "nghos");
+        assert_eq!(e.transform("ghes"), "ghé");
+        assert_eq!(e.transform("nghes"), "nghé");
+
+        let e = eng(true, true);
+        assert_eq!(e.transform("ghos"), "ghos");
+        assert_eq!(e.transform("ghoss"), "ghoss");
+        assert_eq!(e.transform("ghost"), "ghost");
+        assert_eq!(e.transform("ghostty"), "ghostty");
+    }
+
+    #[test]
     fn auto_restore_shortw_ww_english_word() {
         let mut e = eng(true, false);
         e.set_short_w(true);

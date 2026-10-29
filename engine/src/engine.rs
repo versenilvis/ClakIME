@@ -97,6 +97,64 @@ fn last_dstroke_index(ls: &[Letter]) -> Option<usize> {
     ls.iter().rposition(|lt| lt.is_dstroke)
 }
 
+fn is_valid_vietnamese_initial(initial: &[Letter], first_vowel: char) -> bool {
+    let fv = first_vowel.to_ascii_lowercase();
+    match initial.len() {
+        0 => true,
+        1 => {
+            let c0 = initial[0].c.to_ascii_lowercase();
+            match c0 {
+                'j' | 'w' | 'z' => false,
+                'k' => matches!(fv, 'e' | 'i' | 'y'),
+                'c' => !matches!(fv, 'e' | 'i' | 'y'),
+                'q' => fv == 'u',
+                'g' => fv != 'e',
+                _ => true,
+            }
+        }
+        2 => {
+            let c0 = initial[0].c.to_ascii_lowercase();
+            let c1 = initial[1].c.to_ascii_lowercase();
+            match (c0, c1) {
+                ('g', 'h') => matches!(fv, 'e' | 'i'),
+                ('n', 'g') => !matches!(fv, 'e' | 'i'),
+                ('c', 'h')
+                | ('g', 'i')
+                | ('k', 'h')
+                | ('n', 'h')
+                | ('p', 'h')
+                | ('q', 'u')
+                | ('t', 'h')
+                | ('t', 'r') => true,
+                _ => false,
+            }
+        }
+        3 => {
+            let c0 = initial[0].c.to_ascii_lowercase();
+            let c1 = initial[1].c.to_ascii_lowercase();
+            let c2 = initial[2].c.to_ascii_lowercase();
+            c0 == 'n' && c1 == 'g' && c2 == 'h' && matches!(fv, 'e' | 'i')
+        }
+        _ => false,
+    }
+}
+
+fn is_valid_vietnamese_coda(coda: &[Letter]) -> bool {
+    match coda.len() {
+        0 => true,
+        1 => matches!(
+            coda[0].c.to_ascii_lowercase(),
+            'c' | 'm' | 'n' | 'p' | 't' | 'w'
+        ),
+        2 => {
+            let c0 = coda[0].c.to_ascii_lowercase();
+            let c1 = coda[1].c.to_ascii_lowercase();
+            matches!((c0, c1), ('c', 'h') | ('n', 'g') | ('n', 'h'))
+        }
+        _ => false,
+    }
+}
+
 fn tone_vowel_index(ls: &[Letter], modern: bool) -> Option<usize> {
     let end = last_vowel_index(ls)?;
     let mut start = end;
@@ -113,8 +171,11 @@ fn tone_vowel_index(ls: &[Letter], modern: bool) -> Option<usize> {
     if start > end {
         start = end;
     }
-    // foreign initial consonant j never takes vietnamese tones
-    if start > 0 && ls[0].c.to_ascii_lowercase() == 'j' {
+    // disallow tone on invalid initial consonants or coda
+    if start > 0 && !is_valid_vietnamese_initial(&ls[..start], ls[start].c) {
+        return None;
+    }
+    if end + 1 < ls.len() && !is_valid_vietnamese_coda(&ls[end + 1..]) {
         return None;
     }
     let count = end - start + 1;
