@@ -57,7 +57,7 @@ public:
     uint32_t driftCompensation(PacingGroup group) const;
 
     // classify app and site into pacing group
-    static PacingGroup classify(const std::string& app, const std::string& site, bool is_autofill, bool is_draftjs = false);
+    static PacingGroup classify(const std::string& app, const std::string& site, bool is_autofill, bool is_draftjs = false, bool is_terminal = false);
 
     // persistence: serialization to/from simple json string or state file
     std::string serializeState() const;

@@ -165,7 +165,10 @@ uint32_t AdaptivePacingEngine::driftCompensation(PacingGroup group) const {
     return getGroup(group).metrics.drift_compensation_ms;
 }
 
-PacingGroup AdaptivePacingEngine::classify(const std::string& app, const std::string& site, bool is_autofill, bool is_draftjs) {
+PacingGroup AdaptivePacingEngine::classify(const std::string& app, const std::string& site, bool is_autofill, bool is_draftjs, bool is_terminal) {
+    if (is_terminal) {
+        return PacingGroup::TerminalUinput;
+    }
     if (is_draftjs || config::isDraftJsSite(site) || config::isTikTokSite(site)) {
         return PacingGroup::WebDraftJs;
     }

@@ -968,6 +968,32 @@ TEST_F(RegressionCorpusTest, test_regression_vscode_terminal_frozen_cursor_resto
     EXPECT_FALSE(state->isRichTextEditor());
 }
 
+TEST_F(RegressionCorpusTest, test_regression_vscode_terminal_frozen_cursor_non_zero_switches_to_uinput) {
+    platform::setMockActiveWindow(platform::WindowInfo{"antigravity-ide", "antigravity", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "antigravity-ide");
+    auto* state = ic.propertyFor(&engine_->factory());
+
+    // 4 consecutive keys with frozen cursor at existing command text
+    ic.setSurrounding("uus", 3, 3);
+    ic.typeChar('p', state);
+    ic.typeChar('u', state);
+    ic.typeChar('s', state);
+    ic.typeChar('h', state);
+    EXPECT_TRUE(state->isRichTextEditor());
+}
+
+TEST_F(RegressionCorpusTest, test_regression_vscode_terminal_capability_flag_immediately_uses_terminal_profile) {
+    platform::setMockActiveWindow(platform::WindowInfo{"antigravity-ide", "antigravity", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "antigravity-ide");
+    ic.setCapabilityFlags(fcitx::CapabilityFlag::Terminal);
+    auto* state = ic.propertyFor(&engine_->factory());
+
+    // terminal capability flag immediately disables surrounding text
+    EXPECT_EQ(state->currentProfile()->name(), "Terminal-Uinput");
+    EXPECT_FALSE(state->currentProfile()->allowsSurroundingText());
+    EXPECT_TRUE(state->currentProfile()->forcesUinput());
+}
+
 TEST_F(RegressionCorpusTest, test_regression_twitter_early_completion_preserves_sentinel_absorption) {
     // When text-input reactivation completes uinput deletion early during DraftJS typing,
     // subsequent reset or deactivate events must not wipe out in_flight_sentinel_count_,

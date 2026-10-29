@@ -197,14 +197,17 @@ apps::AppProfile* ClakState::currentProfile() {
     bool has_url_cap = ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Url);
     bool is_autofill = has_url_cap;
     bool is_draftjs = isDraftJsEditor();
+    bool is_terminal = ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal);
 
     if (!profile_ || profile_app_ != app || profile_site_ != site ||
-        profile_autofill_ != is_autofill || profile_draftjs_ != is_draftjs) {
-        profile_ = apps::createAppProfile(app, site, is_autofill, is_draftjs);
+        profile_autofill_ != is_autofill || profile_draftjs_ != is_draftjs ||
+        profile_terminal_ != is_terminal) {
+        profile_ = apps::createAppProfile(app, site, is_autofill, is_draftjs, is_terminal);
         profile_app_ = app;
         profile_site_ = site;
         profile_autofill_ = is_autofill;
         profile_draftjs_ = is_draftjs;
+        profile_terminal_ = is_terminal;
     }
     return profile_.get();
 }
@@ -327,7 +330,8 @@ void ClakState::arm_safety_timer() {
                 std::string app = appKey();
                 std::string site = activeSite();
                 bool is_draftjs = isDraftJsEditor() || config::isDraftJsSite(site) || config::isTikTokSite(site);
-                pacing::PacingGroup pgroup = pacing::AdaptivePacingEngine::classify(app, site, is_address_bar_fix_, is_draftjs);
+                bool is_terminal = ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal);
+                pacing::PacingGroup pgroup = pacing::AdaptivePacingEngine::classify(app, site, is_address_bar_fix_, is_draftjs, is_terminal);
                 pacing_engine_.observeTimerDrift(pgroup, deadline_us, actual_fired_us);
                 uint64_t incident_now_us = actual_fired_us;
                 if (is_selection_deletion_) {
@@ -384,7 +388,8 @@ void ClakState::finishUinputDeletion(uint64_t rtt_us) {
     std::string app = appKey();
     std::string site = activeSite();
     bool is_draftjs = isDraftJsEditor() || config::isDraftJsSite(site) || config::isTikTokSite(site);
-    pacing::PacingGroup pgroup = pacing::AdaptivePacingEngine::classify(app, site, is_address_bar_fix_, is_draftjs);
+    bool is_terminal = ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal);
+    pacing::PacingGroup pgroup = pacing::AdaptivePacingEngine::classify(app, site, is_address_bar_fix_, is_draftjs, is_terminal);
     pacing_engine_.onTransactionSuccess(pgroup);
 
     if (op_start_us_ > 0) {
@@ -512,14 +517,17 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                            currentProfile()->allowsSurroundingText();
 
     // detect frozen surrounding cursor in vscode (e.g. xterm.js in integrated terminal)
-    if (!currentProfile()->preventsUinput() && config::isVSCodeApp(app) && valid_surr && !key_str.empty() && sym < 0xff00 && !has_ctrl_alt) {
+    bool is_printable = (!key_str.empty() && sym < 0xff00);
+    bool is_bs_on_text = (sym == FcitxKey_BackSpace && surr.cursor() > 0);
+    if (!currentProfile()->preventsUinput() && config::isVSCodeApp(app) && valid_surr && (is_printable || is_bs_on_text) && !has_ctrl_alt) {
         if (last_surr_cursor_ == surr.cursor() && last_surr_text_len_ == surr.text().size()) {
             surr_keystroke_count_++;
-            if (surr_keystroke_count_ >= 5 && surr.cursor() == 0 && surr.text().size() <= 1) {
+            if (surr_keystroke_count_ >= 3) {
                 verifier_.setRichTextEditor(true);
                 valid_surr = false;
                 use_surrounding = false;
-                utils::clakLog("handleKey: detected frozen surrounding cursor in app=" + app + ", auto-switched to uinput");
+                utils::clakLog("handleKey: detected frozen surrounding cursor in app=" + app + " (cursor=" +
+                               std::to_string(surr.cursor()) + " len=" + std::to_string(surr.text().size()) + "), auto-switched to uinput");
             }
         } else {
             surr_keystroke_count_ = 0;
@@ -673,7 +681,8 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                 bool adaptive_enabled = cfg ? clak_config_get_adaptive_pacing(cfg) : true;
                 pacing_engine_.setEnabled(adaptive_enabled);
 
-                pacing::PacingGroup pgroup = pacing::AdaptivePacingEngine::classify(app, site, is_autofill, is_draftjs);
+                bool is_terminal = ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal);
+                pacing::PacingGroup pgroup = pacing::AdaptivePacingEngine::classify(app, site, is_autofill, is_draftjs, is_terminal);
                 if (cfg) {
                     pacing_engine_.configureGroup(pacing::PacingGroup::TerminalUinput,
                         clak_config_get_terminal_delay_ms(cfg), clak_config_get_terminal_gap_ms(cfg), 30, 10);

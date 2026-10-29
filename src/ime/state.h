@@ -127,6 +127,7 @@ private:
   std::string profile_site_;
   bool profile_autofill_{false};
   bool profile_draftjs_{false};
+  bool profile_terminal_{false};
 };
 
 } // namespace ime

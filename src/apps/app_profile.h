@@ -66,7 +66,8 @@ std::unique_ptr<AppProfile> createAppProfile(
     const std::string& app,
     const std::string& site,
     bool is_autofill,
-    bool is_draftjs
+    bool is_draftjs,
+    bool is_terminal = false
 );
 
 } // namespace apps
