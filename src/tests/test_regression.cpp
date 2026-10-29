@@ -948,6 +948,31 @@ TEST_F(RegressionCorpusTest, test_regression_vscode_fast_typing_does_not_falsely
     EXPECT_EQ(uinput_calls, 0u);
 }
 
+TEST_F(RegressionCorpusTest, test_regression_vscode_editor_fast_consecutive_keys_never_triggers_uinput) {
+    platform::setMockActiveWindow(platform::WindowInfo{"antigravity-ide", "antigravity", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "antigravity-ide");
+    auto* state = ic.propertyFor(&engine_->factory());
+
+    size_t uinput_calls = 0;
+    uinput::UinputTool::instance().setMockHandler([&](size_t, uint32_t, uint32_t, uint32_t) {
+        uinput_calls++;
+        return true;
+    });
+
+    // typing in antigravity chat or code editor with existing sentence
+    ic.setSurrounding("thanh status bar chi credit ", 28, 28);
+    ic.typeChar('u', state);
+    ic.typeChar('s', state);
+    ic.typeChar('s', state);
+    ic.typeChar('a', state);
+
+    // must never switch to rich text or uinput
+    EXPECT_FALSE(state->isRichTextEditor());
+    EXPECT_FALSE(state->isDraftJsEditor());
+    EXPECT_EQ(uinput_calls, 0u);
+    EXPECT_EQ(state->currentProfile()->name(), "VSCode-SurroundingText");
+}
+
 TEST_F(RegressionCorpusTest, test_regression_vscode_terminal_frozen_cursor_restores_when_resumed) {
     platform::setMockActiveWindow(platform::WindowInfo{"antigravity-ide", "antigravity", 1234});
     MockInputContext ic(instance_->inputContextManager(), "antigravity-ide");

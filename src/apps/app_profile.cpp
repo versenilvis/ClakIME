@@ -40,6 +40,9 @@ std::unique_ptr<AppProfile> createAppProfile(
     if (isTerminalApp(app)) {
         return createTerminalProfile();
     }
+    if (isVSCodeApp(app)) {
+        return createVSCodeProfile();
+    }
     if (isMetaSite(site) || isMetaSite(app)) {
         return createMetaSiteProfile();
     }
@@ -54,9 +57,6 @@ std::unique_ptr<AppProfile> createAppProfile(
     }
     if (isGeckoApp(app)) {
         return createGeckoProfile();
-    }
-    if (isVSCodeApp(app)) {
-        return createVSCodeProfile();
     }
     return createDefaultProfile();
 }

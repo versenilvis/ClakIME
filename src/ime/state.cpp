@@ -510,7 +510,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
             verifier_.setCanvasEditor(false);
         }
         bool is_twitter_placeholder = (text.find("happening") != std::string::npos || text.find("diễn ra") != std::string::npos);
-        if ((config::isDraftJsSite(site) || is_twitter_placeholder) &&
+        if (!config::isVSCodeApp(app) && (config::isDraftJsSite(site) || is_twitter_placeholder) &&
             text.size() >= 2 && text.compare(text.size() - 2, 2, "\n\n") == 0) {
             verifier_.setDraftJsEditor(true);
             verifier_.setRichTextEditor(true);
@@ -528,7 +528,9 @@ bool ClakState::handleKey(const fcitx::Key& key) {
     bool is_printable = (!key_str.empty() && sym < 0xff00);
     bool is_bs_on_text = (sym == FcitxKey_BackSpace && surr.cursor() > 0);
     if (!currentProfile()->preventsUinput() && config::isVSCodeApp(app) && has_surrounding && surr.isValid() && (is_printable || is_bs_on_text) && !has_ctrl_alt) {
-        if (last_surr_cursor_ == surr.cursor() && last_surr_text_len_ == surr.text().size()) {
+        bool in_flight_commit = (now_us - last_commit_time_us_ < 60000);
+        bool is_terminal_dummy_text = (surr.text().size() <= 3 && surr.text().find('\n') == std::string::npos);
+        if (is_terminal_dummy_text && !in_flight_commit && last_surr_cursor_ == surr.cursor() && last_surr_text_len_ == surr.text().size()) {
             surr_keystroke_count_++;
             if (surr_keystroke_count_ >= 2) {
                 verifier_.setRichTextEditor(true);
@@ -542,6 +544,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
             // only restore surrounding text when text is substantial (> 4 chars), terminal only has dummy chars (<= 2)
             if (verifier_.isRichTextEditor() && surr.text().size() > 4) {
                 verifier_.setRichTextEditor(false);
+                verifier_.setDraftJsEditor(false);
                 valid_surr = true;
                 use_surrounding = currentProfile()->allowsSurroundingText();
                 utils::clakLog("handleKey: surrounding cursor resumed moving in app=" + app + ", restored surrounding text");
@@ -678,7 +681,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                                address_bar_autofill ||
                                (isBrowser() && isAutofillCertain(surr));
             if (real_bs > 0 && surr.isValid() && surr.cursor() < real_bs) {
-                if (!currentProfile()->preventsUinput()) {
+                if (!config::isVSCodeApp(app) && !currentProfile()->preventsUinput()) {
                     use_surrounding = false;
                     verifier_.setDraftJsEditor(true);
                     verifier_.setRichTextEditor(true);
