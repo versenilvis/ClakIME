@@ -109,6 +109,9 @@ void ClakState::reset(bool force) {
     surr_keystroke_count_ = 0;
     if (force) {
         verifier_.reset(/*hard_reset=*/false);
+        if (config::isVSCodeApp(appKey())) {
+            verifier_.setRichTextEditor(false);
+        }
         address_bar_has_space_ = false;
     } else {
         verifier_.clearPending();
@@ -476,19 +479,26 @@ bool ClakState::handleKey(const fcitx::Key& key) {
     bool use_surrounding = valid_surr && !verifier_.isRichTextEditor() &&
                            currentProfile()->allowsSurroundingText();
 
-    // detect frozen surrounding cursor (e.g. xterm.js in vscode integrated terminal)
-    if (!currentProfile()->preventsUinput() && config::isVSCodeApp(app) && use_surrounding && !key_str.empty() && sym < 0xff00 && !has_ctrl_alt) {
-        if (surr_keystroke_count_ >= 2 &&
-            last_surr_cursor_ == surr.cursor() &&
-            last_surr_text_len_ == surr.text().size()) {
-            verifier_.setRichTextEditor(true);
-            valid_surr = false;
-            use_surrounding = false;
-            utils::clakLog("handleKey: detected frozen surrounding cursor in app=" + app + ", auto-switched to uinput");
+    // detect frozen surrounding cursor in vscode (e.g. xterm.js in integrated terminal)
+    if (!currentProfile()->preventsUinput() && config::isVSCodeApp(app) && valid_surr && !key_str.empty() && sym < 0xff00 && !has_ctrl_alt) {
+        if (last_surr_cursor_ == surr.cursor() && last_surr_text_len_ == surr.text().size()) {
+            surr_keystroke_count_++;
+            if (surr_keystroke_count_ >= 5 && surr.cursor() == 0 && surr.text().size() <= 1) {
+                verifier_.setRichTextEditor(true);
+                valid_surr = false;
+                use_surrounding = false;
+                utils::clakLog("handleKey: detected frozen surrounding cursor in app=" + app + ", auto-switched to uinput");
+            }
+        } else {
+            surr_keystroke_count_ = 0;
+            if (verifier_.isRichTextEditor()) {
+                verifier_.setRichTextEditor(false);
+                use_surrounding = currentProfile()->allowsSurroundingText();
+                utils::clakLog("handleKey: surrounding cursor resumed moving in app=" + app + ", restored surrounding text");
+            }
         }
         last_surr_cursor_ = surr.cursor();
         last_surr_text_len_ = surr.text().size();
-        surr_keystroke_count_++;
     }
 
     bool skip_verify = is_gecko || is_meta || currentProfile()->preventsUinput();

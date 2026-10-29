@@ -912,6 +912,62 @@ TEST_F(RegressionCorpusTest, test_regression_brave_fast_typing_stale_surrounding
     }
 }
 
+TEST_F(RegressionCorpusTest, test_regression_vscode_fast_typing_does_not_falsely_switch_to_uinput) {
+    platform::setMockActiveWindow(platform::WindowInfo{"antigravity-ide", "antigravity", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "antigravity-ide");
+    auto* state = ic.propertyFor(&engine_->factory());
+
+    size_t uinput_calls = 0;
+    uinput::UinputTool::instance().setMockHandler([&](size_t, uint32_t, uint32_t, uint32_t) {
+        uinput_calls++;
+        return true;
+    });
+
+    // fast typing in editor must not trigger uinput
+    ic.setSurrounding("xo\n", 2, 2);
+    ic.typeChar('a', state);
+
+    ic.setSurrounding("xoa\n", 3, 3);
+    ic.typeChar('s', state);
+
+    EXPECT_FALSE(ic.deletions.empty());
+    EXPECT_EQ(uinput_calls, 0u);
+    EXPECT_FALSE(state->isRichTextEditor());
+
+    // immediate space arrives before wayland roundtrip
+    ic.typeChar(' ', state);
+    EXPECT_FALSE(state->isRichTextEditor());
+    EXPECT_EQ(uinput_calls, 0u);
+
+    // subsequent typing continues using surrounding text
+    ic.setSurrounding("xóa \n", 4, 4);
+    ic.typeChar('e', state);
+    ic.setSurrounding("xóa e\n", 5, 5);
+    ic.typeChar('e', state);
+    EXPECT_FALSE(state->isRichTextEditor());
+    EXPECT_EQ(uinput_calls, 0u);
+}
+
+TEST_F(RegressionCorpusTest, test_regression_vscode_terminal_frozen_cursor_restores_when_resumed) {
+    platform::setMockActiveWindow(platform::WindowInfo{"antigravity-ide", "antigravity", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "antigravity-ide");
+    auto* state = ic.propertyFor(&engine_->factory());
+
+    // 5 consecutive keys with frozen cursor at empty text in terminal
+    ic.setSurrounding("", 0, 0);
+    ic.typeChar('k', state);
+    ic.typeChar('l', state);
+    ic.typeChar('m', state);
+    ic.typeChar('n', state);
+    ic.typeChar('p', state);
+    EXPECT_TRUE(state->isRichTextEditor());
+
+    // cursor moves when switching to editor, restoring surrounding text
+    ic.setSurrounding("function test()", 8, 8);
+    ic.typeChar('a', state);
+    EXPECT_FALSE(state->isRichTextEditor());
+}
+
 TEST_F(RegressionCorpusTest, test_regression_twitter_early_completion_preserves_sentinel_absorption) {
     // When text-input reactivation completes uinput deletion early during DraftJS typing,
     // subsequent reset or deactivate events must not wipe out in_flight_sentinel_count_,
