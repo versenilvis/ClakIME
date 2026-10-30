@@ -497,6 +497,16 @@ pub fn is_valid_cvc(s: &str) -> bool {
         }
     }
 
+    // d and đ cannot combine with oe
+    if (fc == ['d'] || fc == ['đ']) && vo.starts_with(&['o', 'e']) {
+        return false;
+    }
+
+    // d and đ cannot combine with in
+    if (fc == ['d'] || fc == ['đ']) && vo == ['i'] && lc == ['n'] {
+        return false;
+    }
+
     // Debug: uncomment to trace CVC split
     // eprintln!("is_valid_cvc({s:?}): fc={fc:?} vo={vo:?} lc={lc:?}");
 

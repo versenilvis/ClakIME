@@ -859,6 +859,17 @@ mod tests {
         assert_eq!(e.transform("mixxer"), "mixer");
         assert_eq!(e.transform("fixx"), "fix");
 
+        // contraction stems and tech identifiers
+        assert_eq!(e.transform("doesn"), "doesn");
+        assert_eq!(e.transform("doesnt"), "doesnt");
+        assert_eq!(e.transform("didn"), "didn");
+        assert_eq!(e.transform("didnt"), "didnt");
+        assert_eq!(e.transform("wasn"), "wasn");
+        assert_eq!(e.transform("wasnt"), "wasnt");
+        assert_eq!(e.transform("isnt"), "isnt");
+        assert_eq!(e.transform("nginx"), "nginx");
+        assert_eq!(e.transform("docker"), "docker");
+
         let e = eng(true, true);
         assert_eq!(e.transform("boss"), "boss");
         assert_eq!(e.transform("error"), "error");
@@ -944,6 +955,7 @@ mod tests {
         let e = eng(true, false);
         assert_eq!(e.transform("ddc"), "đc");
         assert_eq!(e.transform("ddi"), "đi");
+        assert_eq!(e.transform("DDaf"), "Đà");
         assert_eq!(e.transform("vcdd"), "vcđ");
         assert_eq!(e.transform("kdd"), "kđ");
         assert_eq!(e.transform("cmdd"), "cmđ");
