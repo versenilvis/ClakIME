@@ -438,6 +438,7 @@ fn split_cvc(s: &str) -> (Vec<char>, Vec<char>, Vec<char>) {
 /// Returns `true` if `s` can be parsed as a valid Vietnamese syllable.
 /// `s` should already be in composed form (with diacritics applied).
 pub fn is_valid_cvc(s: &str) -> bool {
+    let s = s.trim_start_matches(|c: char| c.is_ascii_digit());
     if s.is_empty() || s.chars().count() <= 1 {
         return !s.is_empty(); // empty is invalid, single char is always valid (partial input)
     }

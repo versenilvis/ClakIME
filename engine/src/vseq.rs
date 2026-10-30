@@ -256,7 +256,12 @@ pub(crate) fn try_insert_horn(ls: &mut Vec<Letter>, short_w: bool, upper: bool) 
         true
     });
 
-    if short_w && !has_real_vowel && !ls.last().is_some_and(|lt| lt.c == 'w' && !lt.is_vowel) {
+    let is_unit_w = ls.last().is_some_and(|lt| lt.c.is_ascii_digit());
+    if short_w
+        && !is_unit_w
+        && !has_real_vowel
+        && !ls.last().is_some_and(|lt| lt.c == 'w' && !lt.is_vowel)
+    {
         ls.push(Letter::new_standalone_u(upper));
         return true;
     }

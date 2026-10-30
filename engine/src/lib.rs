@@ -110,6 +110,10 @@ impl ClakCore {
     }
 
     fn dict_known(&self, word: &str) -> bool {
+        let word = word.trim_start_matches(|c: char| c.is_ascii_digit());
+        if word.is_empty() {
+            return false;
+        }
         let base = charset::remove_tone(word);
         if base != word {
             if self.user_words.contains(word) || dict().binary_search(&word).is_ok() {
@@ -905,9 +909,22 @@ mod tests {
         assert_eq!(e.transform("wwayland"), "wayland");
         assert_eq!(e.transform("wwindow"), "window");
 
+        // w after digits is a unit, not u-horn
+        assert_eq!(e.transform("100w"), "100w");
+        assert_eq!(e.transform("100W"), "100W");
+        assert_eq!(e.transform("65w"), "65w");
+        assert_eq!(e.transform("2w"), "2w");
+
+        // digits starting a vietnamese word
+        assert_eq!(e.transform("1casi"), "1cái");
+        assert_eq!(e.transform("5trawm"), "5trăm");
+        assert_eq!(e.transform("4tuoori"), "4tuổi");
+
         let mut e = eng(true, true);
         e.set_short_w(true);
         assert_eq!(e.transform("wwayland"), "wayland");
+        assert_eq!(e.transform("100w"), "100w");
+        assert_eq!(e.transform("1casi"), "1cái");
     }
 
     #[test]

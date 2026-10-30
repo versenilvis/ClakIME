@@ -172,7 +172,12 @@ fn tone_vowel_index(ls: &[Letter], modern: bool) -> Option<usize> {
         start = end;
     }
     // disallow tone on invalid initial consonants or coda
-    if start > 0 && !is_valid_vietnamese_initial(&ls[..start], ls[start].c) {
+    let digit_prefix_len = ls[..start]
+        .iter()
+        .take_while(|lt| lt.c.is_ascii_digit())
+        .count();
+    let initial_slice = &ls[digit_prefix_len..start];
+    if !initial_slice.is_empty() && !is_valid_vietnamese_initial(initial_slice, ls[start].c) {
         return None;
     }
     if end + 1 < ls.len() && !is_valid_vietnamese_coda(&ls[end + 1..]) {
