@@ -39,6 +39,7 @@ pub struct ClakContext {
     pub autocorrect: bool,
     pub last_committed: Option<(String, String, std::time::Instant)>,
     pub pending_retype: Option<(String, String)>,
+    in_identifier: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -75,6 +76,7 @@ impl ClakContext {
             autocorrect: false,
             last_committed: None,
             pending_retype: None,
+            in_identifier: false,
         }
     }
 
@@ -111,6 +113,7 @@ impl ClakContext {
         self.typed_over_selection = false;
         self.delete_buf = CString::default();
         self.last_surr = None;
+        self.in_identifier = false;
     }
 
     pub fn process_key(
@@ -133,6 +136,18 @@ impl ClakContext {
         if key_sym == 0xff08 {
             self.just_deleted = true;
             self.sentence_cap_state = SentenceCapState::Normal;
+
+            // pass through backspace inside identifier token
+            if self.in_identifier {
+                if !self.raw_buffer.is_empty() {
+                    self.raw_buffer.pop();
+                    self.last_composed = self.raw_buffer.clone();
+                }
+                if self.raw_buffer.is_empty() {
+                    self.in_identifier = false;
+                }
+                return self.forward();
+            }
 
             // detect backspace after committed word for adaptive learning
             if let Some((last_raw, last_com, last_time)) = &self.last_committed {
@@ -551,6 +566,35 @@ impl ClakContext {
             self.sentence_cap_state = SentenceCapState::Normal;
         } else if key_ch.is_alphabetic() {
             self.sentence_cap_state = SentenceCapState::Normal;
+        }
+
+        // protect file extensions and code identifiers after boundaries
+        if self.raw_buffer.is_empty() && key_ch.is_alphabetic() {
+            if let Some(text) = surrounding_text {
+                let chars: Vec<char> = text.chars().collect();
+                let cur = std::cmp::min(chars.len(), cursor);
+                if cur > 0 {
+                    let prev_ch = chars[cur - 1];
+                    let is_ident_boundary = match prev_ch {
+                        '_' | '/' => true,
+                        '.' => cur > 1 && !chars[cur - 2].is_whitespace(),
+                        '-' => cur > 1 && chars[cur - 2].is_alphabetic(),
+                        _ => false,
+                    };
+                    if is_ident_boundary {
+                        self.in_identifier = true;
+                    }
+                }
+            }
+        }
+
+        if self.in_identifier {
+            self.raw_buffer.push_str(key_str);
+            self.last_composed = self.raw_buffer.clone();
+            if let Some(text) = surrounding_text {
+                self.last_surr = Some((text.to_string(), cursor));
+            }
+            return self.forward();
         }
 
         self.raw_buffer.push_str(key_str_to_use);

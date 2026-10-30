@@ -379,6 +379,20 @@ fn test_fallback_vietnamese_typing() {
 }
 
 #[test]
+fn test_contractions_and_boundary_punctuation() {
+    // boundary characters like apostrophe, dot and underscore guard identifiers
+    assert_eq!(simulate_typing("doesn't"), "doesn't");
+    assert_eq!(simulate_typing("didn't"), "didn't");
+    assert_eq!(simulate_typing("wasn't"), "wasn't");
+    assert_eq!(simulate_typing("it's"), "it's");
+    assert_eq!(simulate_typing("nginx.conf"), "nginx.conf");
+    assert_eq!(simulate_typing("my_dir"), "my_dir");
+    assert_eq!(simulate_typing("image.gif"), "image.gif");
+    assert_eq!(simulate_typing("100w"), "100w");
+    assert_eq!(simulate_typing("1casi"), "1cái");
+}
+
+#[test]
 fn test_chuns_progression() {
     let mut ctx = ClakContext::new(Method::Telex);
     let keys = ["c", "h", "u", "n", "s"];
