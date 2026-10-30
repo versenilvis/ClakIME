@@ -287,9 +287,11 @@ pub fn convert_telex(input: &str, modern: bool, short_w: bool) -> String {
 pub fn convert_telex_auto_restore(input: &str, modern: bool, short_w: bool) -> String {
     let composed = convert_telex_impl(input, modern, short_w);
     let all_ascii = composed.is_ascii();
-    let swallowed_char = !crate::has_consecutive_modifiers(input) && input.len() > composed.len();
+    let is_en = crate::english_dict::is_english(input);
+    let swallowed_char =
+        (!crate::has_consecutive_modifiers(input) || is_en) && input.len() > composed.len();
     if composed != input
-        && (!all_ascii || swallowed_char)
+        && (!all_ascii || swallowed_char || is_en)
         && !crate::spelling::is_valid_cvc(&composed)
         && !crate::has_vn_markers(input)
     {

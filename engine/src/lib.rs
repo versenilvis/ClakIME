@@ -156,9 +156,11 @@ impl ClakCore {
         } else {
             Self::is_valid(&composed)
         };
-        let swallowed_char = !has_consecutive_modifiers(input) && input.len() > composed.len();
+        let is_en = crate::english_dict::is_english(input);
+        let swallowed_char =
+            (!has_consecutive_modifiers(input) || is_en) && input.len() > composed.len();
         if self.auto_restore
-            && (!all_ascii || swallowed_char)
+            && (!all_ascii || swallowed_char || is_en)
             && composed != input
             && !known
             && !has_vn_markers(input)
@@ -831,6 +833,32 @@ mod tests {
 
         let e = eng(true, true);
         assert_eq!(e.transform("dowwnload"), "download");
+    }
+
+    #[test]
+    fn test_doubled_modifier_english_words_and_un_toning() {
+        // preserve doubled modifier letters for english words
+        let e = eng(true, false);
+        assert_eq!(e.transform("boss"), "boss");
+        assert_eq!(e.transform("pass"), "pass");
+        assert_eq!(e.transform("class"), "class");
+        assert_eq!(e.transform("less"), "less");
+        assert_eq!(e.transform("err"), "err");
+        assert_eq!(e.transform("error"), "error");
+        assert_eq!(e.transform("sorry"), "sorry");
+        assert_eq!(e.transform("tomorrow"), "tomorrow");
+        assert_eq!(e.transform("deepseek"), "deepseek");
+        assert_eq!(e.transform("DeepSeek"), "DeepSeek");
+
+        // un-toning telex cleanup
+        assert_eq!(e.transform("mixx"), "mix");
+        assert_eq!(e.transform("mixxer"), "mixer");
+        assert_eq!(e.transform("fixx"), "fix");
+
+        let e = eng(true, true);
+        assert_eq!(e.transform("boss"), "boss");
+        assert_eq!(e.transform("error"), "error");
+        assert_eq!(e.transform("mixx"), "mix");
     }
 
     #[test]
