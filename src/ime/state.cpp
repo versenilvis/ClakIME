@@ -398,6 +398,7 @@ void ClakState::finishUinputDeletion(uint64_t rtt_us) {
     bool is_draftjs = isDraftJsEditor() || config::isDraftJsSite(site) || config::isTikTokSite(site);
     bool is_terminal = ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal);
     pacing::PacingGroup pgroup = pacing::AdaptivePacingEngine::classify(app, site, is_address_bar_fix_, is_draftjs, is_terminal);
+    pacing_engine_.recordRtt(pgroup, rtt_us);
     pacing_engine_.onTransactionSuccess(pgroup);
 
     if (op_start_us_ > 0) {
@@ -411,7 +412,7 @@ void ClakState::finishUinputDeletion(uint64_t rtt_us) {
     std::string to_commit = pending_commit_string_;
     pending_commit_string_.clear();
 
-    uint32_t compensation_ms = pacing_engine_.driftCompensation(pgroup);
+    uint32_t compensation_ms = pacing_engine_.commitCompensation(pgroup);
     if (compensation_ms > 0 && engine_ && engine_->instance()) {
         utils::clakLog("compensatory wait: delaying commit by " + std::to_string(compensation_ms) + "ms");
         commit_timer_ = engine_->instance()->eventLoop().addTimeEvent(

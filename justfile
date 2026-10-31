@@ -229,4 +229,4 @@ update args="":
 vm user="verse":
     cmake --build build
     scp -P 22220 build/libclak.so {{user}}@localhost:/tmp/
-    ssh -t -p 22220 {{user}}@localhost "sudo cp /tmp/libclak.so /usr/lib/x86_64-linux-gnu/fcitx5/ && WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/\$(id -u) fcitx5 -r -d"
+    ssh -t -p 22220 {{user}}@localhost "mkdir -p ~/.local/lib/fcitx5 && cp /tmp/libclak.so ~/.local/lib/fcitx5/libclak.so; sudo cp /tmp/libclak.so /usr/lib/x86_64-linux-gnu/fcitx5/ 2>/dev/null || true; WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/\$(id -u) fcitx5 -r -d"

@@ -191,3 +191,21 @@ TEST(AdaptivePacingTest, EventLoopTimerDriftCompensation) {
     engine.onTransactionSuccess(PacingGroup::WebDraftJs);
     EXPECT_EQ(engine.driftCompensation(PacingGroup::WebDraftJs), 14u);
 }
+
+TEST(AdaptivePacingTest, DynamicRttAutoPacing) {
+    AdaptivePacingEngine engine;
+
+    // fast rtt keeps default delay and zero commit settle window
+    engine.recordRtt(PacingGroup::WebDraftJs, 8000ULL);
+    EXPECT_EQ(engine.metrics(PacingGroup::WebDraftJs).smoothed_rtt_ms, 8u);
+    EXPECT_EQ(engine.commitCompensation(PacingGroup::WebDraftJs), 0u);
+
+    // high rtt raises post delay and sets commit settle window
+    for (int i = 0; i < 5; ++i) {
+        engine.recordRtt(PacingGroup::WebDraftJs, 34000ULL);
+    }
+    auto m = engine.metrics(PacingGroup::WebDraftJs);
+    EXPECT_GE(m.smoothed_rtt_ms, 25u);
+    EXPECT_GE(m.post_delay_ms, 25u);
+    EXPECT_GE(engine.commitCompensation(PacingGroup::WebDraftJs), 10u);
+}

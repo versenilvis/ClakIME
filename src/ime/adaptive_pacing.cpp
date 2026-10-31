@@ -148,6 +148,41 @@ void AdaptivePacingEngine::onTransactionSuccess(PacingGroup group) {
         if (g.metrics.gap_ms > g.metrics.floor_gap_ms) {
             g.metrics.gap_ms -= 1;
         }
+        if (g.metrics.commit_delay_ms > 0 && g.metrics.smoothed_rtt_ms < 20) {
+            g.metrics.commit_delay_ms -= 1;
+        }
+    }
+}
+
+void AdaptivePacingEngine::recordRtt(PacingGroup group, uint64_t rtt_us) {
+    if (!enabled_ || rtt_us == 0) {
+        return;
+    }
+
+    auto& g = getGroup(group);
+    uint32_t rtt_ms = static_cast<uint32_t>((rtt_us + 500) / 1000);
+
+    // smoothed rtt using exponential moving average
+    if (g.metrics.smoothed_rtt_ms == 0) {
+        g.metrics.smoothed_rtt_ms = rtt_ms;
+    } else {
+        g.metrics.smoothed_rtt_ms = (g.metrics.smoothed_rtt_ms * 7 + rtt_ms * 3) / 10;
+    }
+
+    // dynamic auto pacing for web rich text and heavy apps
+    if (group == PacingGroup::WebDraftJs || group == PacingGroup::HeavyApp) {
+        if (g.metrics.smoothed_rtt_ms > g.metrics.floor_post_ms) {
+            uint32_t target_post = std::min(g.metrics.ceiling_post_ms, g.metrics.smoothed_rtt_ms);
+            if (target_post > g.metrics.post_delay_ms) {
+                g.metrics.post_delay_ms = target_post;
+            }
+        }
+
+        if (g.metrics.smoothed_rtt_ms >= 20) {
+            g.metrics.commit_delay_ms = std::min(20u, std::max(10u, g.metrics.smoothed_rtt_ms / 2));
+        } else {
+            g.metrics.commit_delay_ms = 0;
+        }
     }
 }
 
@@ -163,6 +198,11 @@ apps::UinputPacing AdaptivePacingEngine::uinputPacing(PacingGroup group) const {
 
 uint32_t AdaptivePacingEngine::driftCompensation(PacingGroup group) const {
     return getGroup(group).metrics.drift_compensation_ms;
+}
+
+uint32_t AdaptivePacingEngine::commitCompensation(PacingGroup group) const {
+    const auto& m = getGroup(group).metrics;
+    return std::max(m.drift_compensation_ms, m.commit_delay_ms);
 }
 
 PacingGroup AdaptivePacingEngine::classify(const std::string& app, const std::string& site, bool is_autofill, bool is_draftjs, bool is_terminal) {
