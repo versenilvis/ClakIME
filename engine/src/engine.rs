@@ -69,6 +69,10 @@ fn crossing_roof_valid(ls: &[Letter], i: usize, upper: bool, swap: bool) -> bool
     if i + 1 >= ls.len() {
         return true;
     }
+    // delayed roof crossing over consonants requires an initial consonant before the vowel
+    if i == 0 && ls[i + 1..].iter().any(|lt| !lt.is_vowel) {
+        return false;
+    }
     let mut trial = ls.to_vec();
     trial[i].variant = 1;
     if upper {
@@ -291,15 +295,8 @@ pub fn convert_telex(input: &str, modern: bool, short_w: bool) -> String {
 /// (dd, vowel+w, double vowels): those signal intentional IME transforms
 pub fn convert_telex_auto_restore(input: &str, modern: bool, short_w: bool) -> String {
     let composed = convert_telex_impl(input, modern, short_w);
-    let all_ascii = composed.is_ascii();
-    let is_en = crate::english_dict::is_english(input);
-    let swallowed_char =
-        (!crate::has_consecutive_modifiers(input) || is_en) && input.len() > composed.len();
-    if composed != input
-        && (!all_ascii || swallowed_char || is_en)
-        && !crate::spelling::is_valid_cvc(&composed)
-        && !crate::has_vn_markers(input)
-    {
+    let known = crate::spelling::is_valid_cvc(&composed);
+    if crate::should_auto_restore(input, &composed, known) {
         input.to_string()
     } else {
         composed

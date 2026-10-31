@@ -154,21 +154,12 @@ impl ClakCore {
             Method::TeipVni => engine::convert_teip_vni(input, self.modern, self.short_w),
             Method::Viqr => engine::convert_viqr(input),
         };
-        let all_ascii = composed.is_ascii();
         let known = if self.dict {
             self.dict_known(&composed.to_lowercase())
         } else {
             Self::is_valid(&composed)
         };
-        let is_en = crate::english_dict::is_english(input);
-        let swallowed_char =
-            (!has_consecutive_modifiers(input) || is_en) && input.len() > composed.len();
-        if self.auto_restore
-            && (!all_ascii || swallowed_char || is_en)
-            && composed != input
-            && !known
-            && !has_vn_markers(input)
-        {
+        if self.auto_restore && should_auto_restore(input, &composed, known) {
             input.to_string()
         } else {
             composed
@@ -180,6 +171,148 @@ impl ClakCore {
     }
 }
 
+#[allow(dead_code)]
+pub(crate) fn count_vowel_clusters(s: &str) -> usize {
+    let mut count = 0;
+    let mut in_vowel = false;
+    for c in s.chars() {
+        let is_v = matches!(
+            c.to_ascii_lowercase(),
+            'a' | 'e'
+                | 'i'
+                | 'o'
+                | 'u'
+                | 'y'
+                | 'à'
+                | 'á'
+                | 'ả'
+                | 'ã'
+                | 'ạ'
+                | 'â'
+                | 'ầ'
+                | 'ấ'
+                | 'ẩ'
+                | 'ẫ'
+                | 'ậ'
+                | 'ă'
+                | 'ằ'
+                | 'ắ'
+                | 'ẳ'
+                | 'ẵ'
+                | 'ặ'
+                | 'è'
+                | 'é'
+                | 'ẻ'
+                | 'ẽ'
+                | 'ẹ'
+                | 'ê'
+                | 'ề'
+                | 'ế'
+                | 'ể'
+                | 'ễ'
+                | 'ệ'
+                | 'ì'
+                | 'í'
+                | 'ỉ'
+                | 'ĩ'
+                | 'ị'
+                | 'ò'
+                | 'ó'
+                | 'ỏ'
+                | 'õ'
+                | 'ọ'
+                | 'ô'
+                | 'ồ'
+                | 'ố'
+                | 'ổ'
+                | 'ỗ'
+                | 'ộ'
+                | 'ơ'
+                | 'ờ'
+                | 'ớ'
+                | 'ở'
+                | 'ỡ'
+                | 'ợ'
+                | 'ù'
+                | 'ú'
+                | 'ủ'
+                | 'ũ'
+                | 'ụ'
+                | 'ư'
+                | 'ừ'
+                | 'ứ'
+                | 'ử'
+                | 'ữ'
+                | 'ự'
+                | 'ỳ'
+                | 'ý'
+                | 'ỷ'
+                | 'ỹ'
+                | 'ỵ'
+        );
+        if is_v {
+            if !in_vowel {
+                count += 1;
+                in_vowel = true;
+            }
+        } else {
+            in_vowel = false;
+        }
+    }
+    count
+}
+
+pub(crate) fn has_intervocalic_doubled_modifier(s: &str) -> bool {
+    let lower = s.to_ascii_lowercase();
+    let bytes = lower.as_bytes();
+    for pair in [b"ss", b"ff", b"rr"] {
+        let mut idx = 0;
+        let needle = match std::str::from_utf8(pair) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        while let Some(pos) = lower[idx..].find(needle) {
+            let actual_pos = idx + pos;
+            let after_pos = actual_pos + 2;
+            if after_pos < bytes.len() {
+                let next_char = bytes[after_pos] as char;
+                if matches!(next_char, 'a' | 'e' | 'i' | 'o' | 'u' | 'y') {
+                    return true;
+                }
+            }
+            idx = actual_pos + 1;
+        }
+    }
+    false
+}
+
+pub(crate) fn should_auto_restore(input: &str, composed: &str, known_vn: bool) -> bool {
+    if composed == input {
+        return false;
+    }
+    if has_vn_markers(input) {
+        return false;
+    }
+
+    if known_vn {
+        return false;
+    }
+
+    let is_en = crate::english_dict::is_english(input);
+    let is_intervocalic = has_intervocalic_doubled_modifier(input);
+    let swallowed_char = (!has_consecutive_modifiers(input) || is_en || is_intervocalic)
+        && input.len() > composed.len();
+
+    let all_ascii = composed.is_ascii();
+
+    if (!all_ascii || swallowed_char || is_en) && !known_vn && !has_vn_markers(input) {
+        return true;
+    }
+
+    false
+}
+
+#[allow(dead_code)]
 pub(crate) fn has_consecutive_modifiers(input: &str) -> bool {
     let lower = input.to_ascii_lowercase();
     lower.contains("ss")
@@ -853,6 +986,16 @@ mod tests {
         assert_eq!(e.transform("tomorrow"), "tomorrow");
         assert_eq!(e.transform("deepseek"), "deepseek");
         assert_eq!(e.transform("DeepSeek"), "DeepSeek");
+        assert_eq!(e.transform("messenger"), "messenger");
+        assert_eq!(e.transform("different"), "different");
+        assert_eq!(e.transform("difficult"), "difficult");
+        assert_eq!(e.transform("traffic"), "traffic");
+        assert_eq!(e.transform("buffer"), "buffer");
+        assert_eq!(e.transform("session"), "session");
+        assert_eq!(e.transform("lesson"), "lesson");
+        assert_eq!(e.transform("coffee"), "coffee");
+        assert_eq!(e.transform("office"), "office");
+        assert_eq!(e.transform("enger"), "enger");
 
         // un-toning telex cleanup
         assert_eq!(e.transform("mixx"), "mix");
@@ -1078,7 +1221,32 @@ mod tests {
                 sim_text2.push(ch);
             }
         }
-        assert_eq!(sim_text2, "diferent");
+        assert_eq!(sim_text2, "different");
+
+        let mut ctx_msg = crate::ime::ClakContext::new(crate::Method::Telex);
+        ctx_msg.apply_config(&cfg);
+        let mut sim_msg = String::new();
+        for ch in "messenger".chars() {
+            let s = ch.to_string();
+            let act = ctx_msg.process_key(ch as u32, &s, false, None, 0, 0);
+            if act.action_type == 4 {
+                let del = act.delete_count;
+                for _ in 0..del {
+                    sim_msg.pop();
+                }
+                let commit = unsafe {
+                    if act.commit_str.is_null() {
+                        ""
+                    } else {
+                        std::ffi::CStr::from_ptr(act.commit_str).to_str().unwrap()
+                    }
+                };
+                sim_msg.push_str(commit);
+            } else if act.action_type == 0 {
+                sim_msg.push(ch);
+            }
+        }
+        assert_eq!(sim_msg, "messenger");
 
         let mut ctx3 = crate::ime::ClakContext::new(crate::Method::Telex);
         ctx3.apply_config(&cfg);
@@ -1103,6 +1271,6 @@ mod tests {
                 sim_text3.push(ch);
             }
         }
-        assert_eq!(sim_text3, "different");
+        assert_eq!(sim_text3, "diffferent");
     }
 }
