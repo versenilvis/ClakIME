@@ -725,8 +725,12 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                 if (cfg) {
                     pacing_engine_.configureGroup(pacing::PacingGroup::TerminalUinput,
                         clak_config_get_terminal_delay_ms(cfg), clak_config_get_terminal_gap_ms(cfg), 30, 10);
+                    uint32_t draft_delay = clak_config_get_draftjs_delay_ms(cfg);
+                    uint32_t draft_gap = clak_config_get_draftjs_gap_ms(cfg);
+                    uint32_t draft_ceiling = std::max(60u, draft_delay + 20u);
+                    uint32_t draft_gap_ceiling = std::max(20u, draft_gap + 10u);
                     pacing_engine_.configureGroup(pacing::PacingGroup::WebDraftJs,
-                        clak_config_get_draftjs_delay_ms(cfg), clak_config_get_draftjs_gap_ms(cfg), 40, 20);
+                        draft_delay, draft_gap, draft_ceiling, draft_gap_ceiling);
                     pacing_engine_.configureGroup(pacing::PacingGroup::HeavyApp,
                         clak_config_get_heavy_app_delay_ms(cfg), clak_config_get_heavy_app_gap_ms(cfg), 35, 12);
                 }
