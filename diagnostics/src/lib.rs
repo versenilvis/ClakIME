@@ -4,7 +4,8 @@ pub mod report;
 use serde::{Deserialize, Serialize};
 
 pub use checks::autostart::{
-    check_autostart, disable_autostart, enable_autostart, fix_environment_conflicts, AutostartStatus,
+    check_autostart, disable_autostart, enable_autostart, fix_environment_conflicts,
+    AutostartStatus,
 };
 pub use checks::compatibility::{
     check_jetbrains, check_kde, check_profile, check_wps, fix_fcitx5_profile,
@@ -440,10 +441,12 @@ pub fn auto_fix_all(include_permissions: bool) -> AutoFixSummary {
     }
 
     // restart fcitx5 if environment was repaired so newly started apps connect
-    if summary.env_fixed && pre_report.daemon.fcitx5_running && !summary.fcitx5_restarted {
-        if restart_fcitx5_daemon() {
-            summary.fcitx5_restarted = true;
-        }
+    if summary.env_fixed
+        && pre_report.daemon.fcitx5_running
+        && !summary.fcitx5_restarted
+        && restart_fcitx5_daemon()
+    {
+        summary.fcitx5_restarted = true;
     }
 
     // 4. Fix WPS compatibility if needed

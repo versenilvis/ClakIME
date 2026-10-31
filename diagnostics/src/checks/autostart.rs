@@ -199,7 +199,7 @@ X-GNOME-AutoRestart=true\n\
 X-GNOME-Autostart-Notify=false\n\
 X-KDE-autostart-after=panel\n";
 
-    let _ = fs::write(&desktop_file, desktop_content).map_err(|e| e.to_string())?;
+    fs::write(&desktop_file, desktop_content).map_err(|e| e.to_string())?;
 
     // ensure environment variables and fallback scripts are configured
     let _ = fix_environment_conflicts();
