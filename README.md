@@ -94,8 +94,8 @@ nix profile install github:versenilvis/ClakIME
 ## Menu cài đặt
 
 <div align="center" >
-  <img width="100%" alt="image" src="https://github.com/user-attachments/assets/d0d407f2-b8a0-479d-ad4b-86bf018d4670" />
-  
+  <img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/8b1de76d-2bb7-41dd-adea-c626ee69b2ad" />
+
   <i><b>Clak có cả menu UI độc lập</b></i>
 </div>
 
