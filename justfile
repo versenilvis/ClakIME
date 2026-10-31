@@ -223,3 +223,10 @@ vendor:
 [group("release")]
 update args="":
     bash scripts/update.sh {{args}}
+
+# sync dev build to quickemu vm and restart fcitx5
+[group("dev")]
+vm user="verse":
+    cmake --build build
+    scp -P 22220 build/libclak.so {{user}}@localhost:/tmp/
+    ssh -t -p 22220 {{user}}@localhost "sudo cp /tmp/libclak.so /usr/lib/x86_64-linux-gnu/fcitx5/ && WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/\$(id -u) fcitx5 -r -d"
