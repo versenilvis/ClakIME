@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.7.7](https://github.com/versenilvis/ClakIME/releases/tag/v0.7.7) - 2026-10-31
+
+### Bug fixes
+
+- Auto-restore intervocalic doubled modifiers and guard delayed roof ([3abf81](https://github.com/versenilvis/ClakIME/commit/3abf8179db3d208bc09922e4558def8de6ff49ff))
+- Do not auto-restore trailing doubled tone modifiers that un-toned ([5accd3](https://github.com/versenilvis/ClakIME/commit/5accd3f05619d204552e456ee249f99c6505a169))
+
+### Documentation
+
+- New ui ([62b6da](https://github.com/versenilvis/ClakIME/commit/62b6dab12d88fc41f358ce8410cf497266a0131f))
+
 ## [v0.7.6](https://github.com/versenilvis/ClakIME/releases/tag/v0.7.6) - 2026-10-31
 
 ### Bug fixes
