@@ -4,7 +4,7 @@ pub mod report;
 use serde::{Deserialize, Serialize};
 
 pub use checks::autostart::{
-    check_autostart, disable_autostart, enable_autostart, AutostartStatus,
+    check_autostart, disable_autostart, enable_autostart, fix_environment_conflicts, AutostartStatus,
 };
 pub use checks::compatibility::{
     check_jetbrains, check_kde, check_profile, check_wps, fix_fcitx5_profile,
@@ -316,6 +316,7 @@ pub struct AutoFixSummary {
     pub profile_fixed: bool,
     pub fcitx5_restarted: bool,
     pub autostart_enabled: bool,
+    pub env_fixed: bool,
     pub wps_patched: usize,
     pub jetbrains_patched: usize,
     pub kde_fixed: bool,
@@ -330,6 +331,7 @@ impl AutoFixSummary {
         self.profile_fixed
             || self.fcitx5_restarted
             || self.autostart_enabled
+            || self.env_fixed
             || self.wps_patched > 0
             || self.jetbrains_patched > 0
             || self.kde_fixed
@@ -409,8 +411,9 @@ pub fn auto_fix_all(include_permissions: bool) -> AutoFixSummary {
         summary.im_switched = true;
     }
 
-    // 3. Enable autostart and configure environment variables
-    let has_env_conflict = pre_report.environment.qt_im_module.as_deref() == Some("ibus")
+    // 3. Fix environment conflicts and configure autostart
+    let has_env_conflict = pre_report.environment.gtk_im_module.as_deref() == Some("ibus")
+        || pre_report.environment.qt_im_module.as_deref() == Some("ibus")
         || pre_report
             .environment
             .xmodifiers
@@ -418,12 +421,28 @@ pub fn auto_fix_all(include_permissions: bool) -> AutoFixSummary {
             .is_some_and(|x| x.contains("ibus"))
         || !pre_report.environment.env_file_exists;
 
-    if !pre_report.autostart.is_enabled || has_env_conflict {
+    if has_env_conflict {
+        match fix_environment_conflicts() {
+            Ok(_) => summary.env_fixed = true,
+            Err(e) => summary
+                .errors
+                .push(format!("Lỗi sửa xung đột môi trường: {}", e)),
+        }
+    }
+
+    if !pre_report.autostart.is_enabled {
         match enable_autostart() {
             Ok(_) => summary.autostart_enabled = true,
             Err(e) => summary
                 .errors
-                .push(format!("Lỗi cấu hình khởi động và môi trường: {}", e)),
+                .push(format!("Lỗi cấu hình khởi động: {}", e)),
+        }
+    }
+
+    // restart fcitx5 if environment was repaired so newly started apps connect
+    if summary.env_fixed && pre_report.daemon.fcitx5_running && !summary.fcitx5_restarted {
+        if restart_fcitx5_daemon() {
+            summary.fcitx5_restarted = true;
         }
     }
 
@@ -635,5 +654,15 @@ mod tests {
         assert_eq!(cfg.pacing.draftjs_gap_ms, 5);
         assert_eq!(cfg.pacing.terminal_delay_ms, 10);
         assert_eq!(cfg.pacing.heavy_app_delay_ms, 22);
+    }
+
+    #[test]
+    fn test_fix_environment_conflicts() {
+        std::env::set_var("GTK_IM_MODULE", "ibus");
+        let res = fix_environment_conflicts();
+        assert!(res.is_ok());
+        assert!(std::env::var("GTK_IM_MODULE").is_err());
+        assert_eq!(std::env::var("QT_IM_MODULE").unwrap(), "fcitx");
+        assert_eq!(std::env::var("XMODIFIERS").unwrap(), "@im=fcitx");
     }
 }

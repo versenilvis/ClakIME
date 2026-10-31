@@ -112,6 +112,7 @@ export component MainWindow inherits Window {
     in-out property <color> doctor_score_color: #10b981;
     in-out property <bool> profile_needs_setup: false;
     in-out property <bool> addon_needs_load: false;
+    in-out property <bool> env_needs_fix: false;
     in-out property <bool> wps_needs_fix: false;
     in-out property <bool> jetbrains_needs_fix: false;
     in-out property <bool> autostart_needs_fix: false;
@@ -126,6 +127,7 @@ export component MainWindow inherits Window {
     callback doctor_scan_requested();
     callback doctor_copy_requested();
     callback setup_profile_requested();
+    callback fix_env_requested();
     callback fix_wps_requested();
     callback fix_jetbrains_requested();
     callback auto_fix_requested();
@@ -403,6 +405,7 @@ export component MainWindow inherits Window {
                     is_reloading: root.is_reloading;
                     profile_needs_setup: root.profile_needs_setup;
                     addon_needs_load: root.addon_needs_load;
+                    env_needs_fix: root.env_needs_fix;
                     wps_needs_fix: root.wps_needs_fix;
                     jetbrains_needs_fix: root.jetbrains_needs_fix;
                     autostart_needs_fix: root.autostart_needs_fix;
@@ -417,6 +420,7 @@ export component MainWindow inherits Window {
                     copy_requested => { root.doctor_copy_requested(); }
                     restart_fcitx5_requested => { root.restart_fcitx5_requested(); }
                     setup_profile_requested => { root.setup_profile_requested(); }
+                    fix_env_requested => { root.fix_env_requested(); }
                     fix_wps_requested => { root.fix_wps_requested(); }
                     fix_jetbrains_requested => { root.fix_jetbrains_requested(); }
                     auto_fix_requested => { root.auto_fix_requested(); }

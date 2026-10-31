@@ -20,6 +20,7 @@ export component TabDoctor inherits VerticalLayout {
     in property <bool> is_reloading: false;
     in property <bool> profile_needs_setup: false;
     in property <bool> addon_needs_load: false;
+    in property <bool> env_needs_fix: false;
     in property <bool> wps_needs_fix: false;
     in property <bool> jetbrains_needs_fix: false;
     in property <bool> autostart_needs_fix: false;
@@ -37,6 +38,7 @@ export component TabDoctor inherits VerticalLayout {
     callback auto_fix_requested();
     callback restart_fcitx5_requested();
     callback setup_profile_requested();
+    callback fix_env_requested();
     callback fix_autostart_requested();
     callback fix_permissions_requested();
     callback fix_wps_requested();
@@ -351,6 +353,65 @@ export component TabDoctor inherits VerticalLayout {
                     primary: true;
                     enabled: !root.is_reloading && !root.is_scanning;
                     clicked => { root.restart_fcitx5_requested(); }
+                }
+            }
+        }
+    }
+
+    // card sua xung dot bien moi truong ibus
+    if root.has_scanned && root.env_needs_fix: Rectangle {
+        border-radius: Theme.radius-md;
+        background: #ef4444.with-alpha(0.12);
+        border-width: 0px;
+        border-color: transparent;
+
+        HorizontalLayout {
+            padding-left: 14px;
+            padding-right: 14px;
+            padding-top: 10px;
+            padding-bottom: 10px;
+            alignment: space-between;
+            spacing: 12px;
+
+            VerticalLayout {
+                alignment: center;
+                width: 24px;
+                Image {
+                    source: @image-url("../../assets/icons/frown.svg");
+                    width: 18px;
+                    height: 18px;
+                    colorize: #f87171;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                spacing: 2px;
+                horizontal-stretch: 1;
+
+                Text {
+                    text: "Xung đột biến môi trường gõ phím (IBus)";
+                    color: #f87171;
+                    font-size: 13px;
+                    font-weight: 600;
+                }
+
+                Text {
+                    text: "GTK_IM_MODULE hoặc QT_IM_MODULE đang trỏ vào IBus gây nuốt chữ. Nhấn để gỡ bỏ xung đột và chuyển sang Fcitx5.";
+                    color: Theme.text-muted;
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+
+                ActionButton {
+                    text: "Sửa xung đột ngay";
+                    primary: true;
+                    enabled: !root.is_scanning && !root.is_fixing;
+                    clicked => { root.fix_env_requested(); }
                 }
             }
         }

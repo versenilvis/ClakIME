@@ -1413,7 +1413,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         report_for_ui.pacing.gap_ms
                     );
 
-                    let has_fixable = is_deleted
+                    let env_conflict = report_for_ui.environment.gtk_im_module.as_deref() == Some("ibus")
+                        || report_for_ui.environment.qt_im_module.as_deref() == Some("ibus")
+                        || report_for_ui
+                            .environment
+                            .xmodifiers
+                            .as_deref()
+                            .is_some_and(|x| x.contains("ibus"))
+                        || !report_for_ui.environment.env_file_exists;
+
+                    let has_fixable = !report_for_ui.is_healthy()
+                        || is_deleted
                         || addon_not_loaded
                         || profile_needs
                         || autostart_needs
@@ -1421,11 +1431,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         || wps_fix
                         || jb_fix
                         || im_switch
-                        || pacing_differs;
+                        || pacing_differs
+                        || env_conflict;
 
                     w.set_reload_needed(is_deleted);
                     w.set_addon_needs_load(addon_not_loaded && !is_deleted);
                     w.set_profile_needs_setup(profile_needs);
+                    w.set_env_needs_fix(env_conflict);
                     w.set_autostart_needs_fix(autostart_needs);
                     w.set_permissions_needs_fix(permissions_needs);
                     w.set_wps_needs_fix(wps_fix);
@@ -1875,6 +1887,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     });
 
+    let win_env = main_window.as_weak();
+    main_window.on_fix_env_requested(move || {
+        let Some(window) = win_env.upgrade() else {
+            return;
+        };
+        window.set_is_fixing(true);
+        let win_async = win_env.clone();
+        std::thread::spawn(move || {
+            if let Err(e) = clak_diagnostics::fix_environment_conflicts() {
+                eprintln!("lỗi sửa xung đột môi trường: {}", e);
+            }
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(w) = win_async.upgrade() {
+                    w.set_env_needs_fix(false);
+                    w.set_is_fixing(false);
+                    w.invoke_doctor_scan_requested();
+                }
+            });
+        });
+    });
+
     let win_auto = main_window.as_weak();
     main_window.on_fix_autostart_requested(move || {
         let Some(window) = win_auto.upgrade() else {
@@ -2052,7 +2085,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             report.pacing.gap_ms
         );
 
-        let has_fixable = is_deleted
+        let env_conflict = report.environment.gtk_im_module.as_deref() == Some("ibus")
+            || report.environment.qt_im_module.as_deref() == Some("ibus")
+            || report
+                .environment
+                .xmodifiers
+                .as_deref()
+                .is_some_and(|x| x.contains("ibus"))
+            || !report.environment.env_file_exists;
+
+        let has_fixable = !report.is_healthy()
+            || is_deleted
             || addon_not_loaded
             || needs_setup
             || autostart_needs
@@ -2060,7 +2103,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             || wps_fix
             || jb_fix
             || im_switch
-            || pacing_differs;
+            || pacing_differs
+            || env_conflict;
 
         let report_for_ui = report.clone();
         let _ = slint::invoke_from_event_loop(move || {
@@ -2082,6 +2126,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 w.set_addon_needs_load(addon_not_loaded && !is_deleted);
                 w.set_profile_needs_setup(needs_setup);
+                w.set_env_needs_fix(env_conflict);
                 w.set_autostart_needs_fix(autostart_needs);
                 w.set_permissions_needs_fix(permissions_needs);
                 w.set_wps_needs_fix(wps_fix);
