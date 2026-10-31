@@ -173,6 +173,9 @@ tag version:
         exit 1
     fi
 
+    echo "Running pre-release quality checks..."
+    just check
+
     echo "Releasing ${tag} (version ${ver})..."
 
     # update versions across project files
@@ -196,8 +199,12 @@ tag version:
     git commit -m "chore: release ${tag}"
     git tag -a "${tag}" -m "release: ${tag}"
 
+    # clean up local tag if push is rejected or interrupted
+    trap 'echo "Push failed, removing tag ${tag}..."; git tag -d "${tag}" 2>/dev/null || true' ERR
+
     git push origin "${branch}"
     git push origin "${tag}"
+    trap - ERR
     echo "Successfully released and pushed ${tag}"
 
 # generate changelog with git-cliff
