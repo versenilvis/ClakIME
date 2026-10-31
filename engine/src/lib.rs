@@ -286,6 +286,15 @@ pub(crate) fn has_intervocalic_doubled_modifier(s: &str) -> bool {
     false
 }
 
+pub(crate) fn ends_with_doubled_tone_modifier(s: &str) -> bool {
+    let lower = s.to_ascii_lowercase();
+    lower.ends_with("ss")
+        || lower.ends_with("ff")
+        || lower.ends_with("rr")
+        || lower.ends_with("xx")
+        || lower.ends_with("jj")
+}
+
 pub(crate) fn should_auto_restore(input: &str, composed: &str, known_vn: bool) -> bool {
     if composed == input {
         return false;
@@ -295,6 +304,11 @@ pub(crate) fn should_auto_restore(input: &str, composed: &str, known_vn: bool) -
     }
 
     if known_vn {
+        return false;
+    }
+
+    // trailing doubled tone modifiers that swallowed a character are intentional un-toning
+    if ends_with_doubled_tone_modifier(input) && input.len() > composed.len() {
         return false;
     }
 
@@ -974,13 +988,21 @@ mod tests {
 
     #[test]
     fn test_doubled_modifier_english_words_and_un_toning() {
-        // preserve doubled modifier letters for english words
+        // trailing doubled tone modifiers are intentional un-toning actions
         let e = eng(true, false);
-        assert_eq!(e.transform("boss"), "boss");
-        assert_eq!(e.transform("pass"), "pass");
+        assert_eq!(e.transform("boss"), "bos");
+        assert_eq!(e.transform("bosss"), "boss");
+        assert_eq!(e.transform("pass"), "pas");
+        assert_eq!(e.transform("passs"), "pass");
         assert_eq!(e.transform("class"), "class");
-        assert_eq!(e.transform("less"), "less");
-        assert_eq!(e.transform("err"), "err");
+        assert_eq!(e.transform("less"), "les");
+        assert_eq!(e.transform("lesss"), "less");
+        assert_eq!(e.transform("mess"), "mes");
+        assert_eq!(e.transform("messs"), "mess");
+        assert_eq!(e.transform("err"), "er");
+        assert_eq!(e.transform("errr"), "err");
+
+        // intervocalic doubled modifiers in english words
         assert_eq!(e.transform("error"), "error");
         assert_eq!(e.transform("sorry"), "sorry");
         assert_eq!(e.transform("tomorrow"), "tomorrow");
@@ -1014,7 +1036,10 @@ mod tests {
         assert_eq!(e.transform("docker"), "docker");
 
         let e = eng(true, true);
-        assert_eq!(e.transform("boss"), "boss");
+        assert_eq!(e.transform("boss"), "bos");
+        assert_eq!(e.transform("bosss"), "boss");
+        assert_eq!(e.transform("mess"), "mes");
+        assert_eq!(e.transform("messs"), "mess");
         assert_eq!(e.transform("error"), "error");
         assert_eq!(e.transform("mixx"), "mix");
     }
