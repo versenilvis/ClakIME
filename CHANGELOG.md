@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.7.6](https://github.com/versenilvis/ClakIME/releases/tag/v0.7.6) - 2026-10-31
+
+### Bug fixes
+
+- Filter gjs desktop shell and resolve vte terminal crash ([7ccda6](https://github.com/versenilvis/ClakIME/commit/7ccda6ba88ed1318792909b931169d5d50b175af))
+- Dynamically raise draftjs pacing ceiling for vm environments ([2a6dab](https://github.com/versenilvis/ClakIME/commit/2a6dab2f295ea01727b3b8230c4a54074ea4401a))
+- Guard atspi initialization to gnome wayland sessions only ([5388a2](https://github.com/versenilvis/ClakIME/commit/5388a2c0feab5c97948bc6b84aafffcd47ef76f8))
+- Auto-fix environment conflicts and restore auto-fix action button ([b9dde3](https://github.com/versenilvis/ClakIME/commit/b9dde3716f2595486df53b10b1c95df859e26667))
+- Resolve showCustomInputMethodInformation dynamically via dlsym for older fcitx5 ([a86e3a](https://github.com/versenilvis/ClakIME/commit/a86e3a6dccb5726ab964e4f6e37f98cc41433e81))
+- Run check before bumping versions and cleanup tag on failure ([ccf497](https://github.com/versenilvis/ClakIME/commit/ccf49761524434386248ab4c1376c91f565472cc))
+
+### Features
+
+- Copy file to vm for testing ([f76bfe](https://github.com/versenilvis/ClakIME/commit/f76bfe18b36eee251347780f22a9d6c088aa9db7))
+- Implement dynamic rtt auto-pacing and settle compensation ([bdb058](https://github.com/versenilvis/ClakIME/commit/bdb0586d7278a7eae9d67b5fa492ea13f05d1618))
+
 ## [v0.7.5](https://github.com/versenilvis/ClakIME/releases/tag/v0.7.5) - 2026-10-31
 
 ### Bug fixes
