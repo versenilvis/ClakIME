@@ -2,6 +2,29 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.7.5](https://github.com/versenilvis/ClakIME/releases/tag/v0.7.5) - 2026-10-31
+
+### Bug fixes
+
+- New electron version on antigravity ([2bc921](https://github.com/versenilvis/ClakIME/commit/2bc92160d16289891224eea41425500326f9868a))
+- Detect frozen cursor at non-zero offsets and honor terminal capability in vscode ([331236](https://github.com/versenilvis/ClakIME/commit/33123654e1cd68ba9a62938c1c8880530c2015c5))
+- Buffer rapid keystrokes during in-flight surrounding replacements ([4585de](https://github.com/versenilvis/ClakIME/commit/4585de91f8bedf891cf17695dbdec38c551a1391))
+- Prevent vscode terminal from bouncing back to surrounding text across words ([599d4a](https://github.com/versenilvis/ClakIME/commit/599d4aafbe8eaf3d86f3e890ab22d0cdc383ac8c))
+- Disallow tone on foreign initial j and remove jut from dict ([3c6b9d](https://github.com/versenilvis/ClakIME/commit/3c6b9db4ab66c41cc23bfe5e1fe12c4bdc8c165c))
+- Disallow tone on invalid consonant pairs like gho and keep double s ([7120c0](https://github.com/versenilvis/ClakIME/commit/7120c039563b39bac3d51f9a7aa35364803f7c52))
+- Prevent vscode editor from falsely switching to draftjs uinput ([808a1f](https://github.com/versenilvis/ClakIME/commit/808a1fe26ae20a8f831259e810c075246f65330d))
+- Refresh index before dirty check in tag recipe ([373586](https://github.com/versenilvis/ClakIME/commit/373586b490efc2387cd123feda6f7d5dc3042df9))
+
+### Features
+
+- Filter sub-frame ipc lag for surrounding text mismatches ([25c4d3](https://github.com/versenilvis/ClakIME/commit/25c4d3f4f4fbb3b0d8ab5e6aaa7ce91e14f5ce8c))
+- Compensate for event loop timer drift on fcitx starvation ([db3a54](https://github.com/versenilvis/ClakIME/commit/db3a54238558a12502c602098a4ac339613e0fbd))
+- Add compensatory wait before post-uinput commit replay ([c268d2](https://github.com/versenilvis/ClakIME/commit/c268d25c362bccffc7ed36123656b36b3ab78494))
+- Preserve doubled modifier english words and smart telex cleanup ([b78901](https://github.com/versenilvis/ClakIME/commit/b789015e78e2240a2e42f4916725e820736bff84))
+- Preserve w as unit after digits and allow leading digits in words ([3540b0](https://github.com/versenilvis/ClakIME/commit/3540b0f6bb1fca3bb60719c2417641510a1d02b7))
+- Protect contractions, tech words, and invalid d/đ syllables ([432616](https://github.com/versenilvis/ClakIME/commit/432616cbc4fd59b9584d65b09144b6d1158c9425))
+- Guard code identifiers and file extensions following boundary characters ([8dbfef](https://github.com/versenilvis/ClakIME/commit/8dbfeff2aaa4f64f1f7d5e8da3223ce9fdc8f6b8))
+
 ## [v0.7.4](https://github.com/versenilvis/ClakIME/releases/tag/v0.7.4) - 2026-10-23
 
 ### Bug fixes
