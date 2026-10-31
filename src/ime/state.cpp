@@ -17,6 +17,23 @@
 #endif
 #include <fcitx-utils/keysym.h>
 #include <fcitx-utils/utf8.h>
+#include <dlfcn.h>
+
+namespace {
+// dynamically resolve custom im info if supported by host fcitx5 version
+void showInputMethodInfo(fcitx::Instance* instance, fcitx::InputContext* ic, const std::string& info) {
+    if (!instance || !ic) return;
+    using ShowCustomFn = void (*)(fcitx::Instance*, fcitx::InputContext*, const std::string&);
+    static auto showCustom = reinterpret_cast<ShowCustomFn>(
+        dlsym(RTLD_DEFAULT, "_ZN5fcitx8Instance32showCustomInputMethodInformationEPNS_12InputContextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE")
+    );
+    if (showCustom) {
+        showCustom(instance, ic, info);
+    } else {
+        instance->showInputMethodInformation(ic);
+    }
+}
+} // namespace
 
 namespace clak {
 namespace ime {
@@ -905,11 +922,7 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
                 reset(/*force=*/true);
                 ic_->updateUserInterface(fcitx::UserInterfaceComponent::StatusArea, true);
                 if (engine_->instance() && std::string(ic_->frontend()) != "mock") {
-#ifdef FCITX5_HAVE_SHOW_CUSTOM_IM_INFO
-                    engine_->instance()->showCustomInputMethodInformation(ic_, engine_->isAppEnabled(app) ? "VI" : "EN");
-#else
-                    engine_->instance()->showInputMethodInformation(ic_);
-#endif
+                    showInputMethodInfo(engine_->instance(), ic_, engine_->isAppEnabled(app) ? "VI" : "EN");
                 }
                 ctrl_shift_armed_ = false;
                 ctrl_pressed_first_ = false;
@@ -922,11 +935,7 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
                 reset(/*force=*/true);
                 ic_->updateUserInterface(fcitx::UserInterfaceComponent::StatusArea, true);
                 if (engine_->instance() && std::string(ic_->frontend()) != "mock") {
-#ifdef FCITX5_HAVE_SHOW_CUSTOM_IM_INFO
-                    engine_->instance()->showCustomInputMethodInformation(ic_, engine_->isAppEnabled(app) ? "VI" : "EN");
-#else
-                    engine_->instance()->showInputMethodInformation(ic_);
-#endif
+                    showInputMethodInfo(engine_->instance(), ic_, engine_->isAppEnabled(app) ? "VI" : "EN");
                 }
                 alt_shift_armed_ = false;
                 alt_pressed_first_ = false;
@@ -974,11 +983,7 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
         reset(/*force=*/true);
         ic_->updateUserInterface(fcitx::UserInterfaceComponent::StatusArea, true);
         if (engine_->instance() && std::string(ic_->frontend()) != "mock") {
-#ifdef FCITX5_HAVE_SHOW_CUSTOM_IM_INFO
-            engine_->instance()->showCustomInputMethodInformation(ic_, engine_->isAppEnabled(app) ? "VI" : "EN");
-#else
-            engine_->instance()->showInputMethodInformation(ic_);
-#endif
+            showInputMethodInfo(engine_->instance(), ic_, engine_->isAppEnabled(app) ? "VI" : "EN");
         }
         keyEvent.filterAndAccept();
         return;
