@@ -167,6 +167,7 @@ tag version:
         exit 1
     fi
 
+    git update-index -q --refresh
     if ! git diff-index --quiet HEAD --; then
         echo "error: working tree is dirty, please commit or stash changes first"
         exit 1
