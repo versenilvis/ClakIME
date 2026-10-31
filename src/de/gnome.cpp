@@ -35,9 +35,20 @@ static fn_unref p_unref = nullptr;
 static fn_free p_free = nullptr;
 static bool s_atspi_inited = false;
 
+static bool isGnomeWaylandSession() {
+    const char* session = std::getenv("XDG_SESSION_TYPE");
+    if (!session || std::string(session) != "wayland") return false;
+    const char* desktop = std::getenv("XDG_CURRENT_DESKTOP");
+    if (!desktop) return false;
+    std::string d = desktop;
+    for (char& c : d) c = tolower(static_cast<unsigned char>(c));
+    return d.find("gnome") != std::string::npos || d.find("ubuntu") != std::string::npos;
+}
+
 static bool initAtspi() {
     if (s_atspi_inited) return (s_atspi_handle != nullptr);
     s_atspi_inited = true;
+    if (!isGnomeWaylandSession()) return false;
     s_atspi_handle = dlopen("libatspi.so.0", RTLD_LAZY);
     if (!s_atspi_handle) return false;
     p_init = (fn_init)dlsym(s_atspi_handle, "atspi_init");
