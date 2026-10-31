@@ -25,6 +25,8 @@ bool isKdeSession() {
 bool isDesktopShell(const std::string& app) {
     if (app.empty()) return false;
     return app == "gnome-shell" ||
+           app == "gjs" ||
+           app.find("gjs") != std::string::npos ||
            app == "plasmashell" ||
            app == "org.kde.plasmashell" ||
            app == "plasma-desktop" ||
@@ -33,7 +35,8 @@ bool isDesktopShell(const std::string& app) {
            app == "kscreenlocker_greet" ||
            app == "org.kde.kscreenlocker" ||
            app.find("portal") != std::string::npos ||
-           app.find("polkit-kde") != std::string::npos;
+           app.find("polkit-kde") != std::string::npos ||
+           app.find("polkit-gnome") != std::string::npos;
 }
 
 // parse kcminputrc keyboard section value

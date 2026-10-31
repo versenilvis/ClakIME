@@ -1259,6 +1259,7 @@ TEST_F(RegressionCorpusTest, test_regression_tiktok_uses_uinput_with_draftjs_pac
 TEST_F(RegressionCorpusTest, test_kde_support_and_shell_filtering) {
     // desktop shells must be recognized and filtered
     EXPECT_TRUE(de::isDesktopShell("gnome-shell"));
+    EXPECT_TRUE(de::isDesktopShell("gjs"));
     EXPECT_TRUE(de::isDesktopShell("plasmashell"));
     EXPECT_TRUE(de::isDesktopShell("org.kde.plasmashell"));
     EXPECT_TRUE(de::isDesktopShell("plasma-desktop"));
@@ -1279,11 +1280,16 @@ TEST_F(RegressionCorpusTest, test_kde_support_and_shell_filtering) {
     // yakuake must be recognized as terminal app
     EXPECT_TRUE(apps::isTerminalApp("yakuake"));
     EXPECT_TRUE(apps::isTerminalApp("konsole"));
+    EXPECT_TRUE(apps::isVteTerminalApp("terminal"));
 
     // appKey filtering with plasmashell fallback
     platform::setMockActiveWindow(platform::WindowInfo{"plasmashell", "plasmashell", 1234});
     MockInputContext ic(instance_->inputContextManager(), "plasmashell");
     ime::ClakState state(engine_.get(), &ic);
+    EXPECT_EQ(state.appKey(), "default");
+
+    // appKey filtering with gjs desktop shell
+    platform::setMockActiveWindow(platform::WindowInfo{"gjs", "Desktop Icons", 5678});
     EXPECT_EQ(state.appKey(), "default");
 }
 

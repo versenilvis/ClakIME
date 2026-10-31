@@ -64,6 +64,7 @@ static std::string normalizeAppName(const std::string& raw_name) {
     if (lower.find("chrome") != std::string::npos || lower.find("chromium") != std::string::npos) return "google-chrome";
     if (lower.find("firefox") != std::string::npos) return "firefox";
     if (lower.find("zen") != std::string::npos) return "zen";
+    if (lower.find("terminal") != std::string::npos) return "gnome-terminal";
     return lower;
 }
 
@@ -97,7 +98,7 @@ bool queryAtspiActiveWindow(window::WindowInfo& info) {
             std::string win_title = wn ? wn : "";
             if (p_free && wn) p_free(wn);
 
-            if (is_active || (wc == 1 && !win_title.empty())) {
+            if (is_active) {
                 info.win_class = (app_name.empty() || app_name == "unnamed") ? normalizeAppName(win_title) : app_name;
                 info.win_title = win_title;
                 found = true;
