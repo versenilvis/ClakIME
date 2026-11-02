@@ -262,30 +262,6 @@ pub(crate) fn count_vowel_clusters(s: &str) -> usize {
     count
 }
 
-pub(crate) fn has_intervocalic_doubled_modifier(s: &str) -> bool {
-    let lower = s.to_ascii_lowercase();
-    let bytes = lower.as_bytes();
-    for pair in [b"ss", b"ff", b"rr"] {
-        let mut idx = 0;
-        let needle = match std::str::from_utf8(pair) {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
-        while let Some(pos) = lower[idx..].find(needle) {
-            let actual_pos = idx + pos;
-            let after_pos = actual_pos + 2;
-            if after_pos < bytes.len() {
-                let next_char = bytes[after_pos] as char;
-                if matches!(next_char, 'a' | 'e' | 'i' | 'o' | 'u' | 'y') {
-                    return true;
-                }
-            }
-            idx = actual_pos + 1;
-        }
-    }
-    false
-}
-
 pub(crate) fn ends_with_doubled_tone_modifier(s: &str) -> bool {
     let lower = s.to_ascii_lowercase();
     lower.ends_with("ss")
@@ -312,10 +288,14 @@ pub(crate) fn should_auto_restore(input: &str, composed: &str, known_vn: bool) -
         return false;
     }
 
+    // un-toning resolved to a valid english word while raw is not valid english
+    if crate::english_dict::is_english(composed) && !crate::english_dict::is_english(input) {
+        return false;
+    }
+
     let is_en = crate::english_dict::is_english(input);
-    let is_intervocalic = has_intervocalic_doubled_modifier(input);
-    let swallowed_char = (!has_consecutive_modifiers(input) || is_en || is_intervocalic)
-        && input.len() > composed.len();
+    let swallowed_char =
+        (!has_consecutive_modifiers(input) || is_en) && input.len() > composed.len();
 
     let all_ascii = composed.is_ascii();
 
@@ -1023,6 +1003,9 @@ mod tests {
         assert_eq!(e.transform("mixx"), "mix");
         assert_eq!(e.transform("mixxer"), "mixer");
         assert_eq!(e.transform("fixx"), "fix");
+        assert_eq!(e.transform("beffore"), "before");
+        assert_eq!(e.transform("resset"), "reset");
+        assert_eq!(e.transform("herro"), "hero");
 
         // contraction stems and tech identifiers
         assert_eq!(e.transform("doesn"), "doesn");
@@ -1296,6 +1279,31 @@ mod tests {
                 sim_text3.push(ch);
             }
         }
-        assert_eq!(sim_text3, "diffferent");
+        assert_eq!(sim_text3, "different");
+
+        let mut ctx_before = crate::ime::ClakContext::new(crate::Method::Telex);
+        ctx_before.apply_config(&cfg);
+        let mut sim_before = String::new();
+        for ch in "beffore".chars() {
+            let s = ch.to_string();
+            let act = ctx_before.process_key(ch as u32, &s, false, None, 0, 0);
+            if act.action_type == 4 {
+                let del = act.delete_count;
+                for _ in 0..del {
+                    sim_before.pop();
+                }
+                let commit = unsafe {
+                    if act.commit_str.is_null() {
+                        ""
+                    } else {
+                        std::ffi::CStr::from_ptr(act.commit_str).to_str().unwrap()
+                    }
+                };
+                sim_before.push_str(commit);
+            } else if act.action_type == 0 {
+                sim_before.push(ch);
+            }
+        }
+        assert_eq!(sim_before, "before");
     }
 }
