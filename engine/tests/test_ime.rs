@@ -873,6 +873,10 @@ fn test_typing_desktop() {
     // test typing desktop both directly and with double s tone cancellation
     assert_eq!(simulate("desktop "), "desktop ");
     assert_eq!(simulate("dessktop "), "desktop ");
+    assert_eq!(simulate("rose "), "rose ");
+    assert_eq!(simulate("roses "), "roses ");
+    assert_eq!(simulate("nose "), "nose ");
+    assert_eq!(simulate("dose "), "dose ");
     assert_eq!(simulate("desktop"), "desktop");
     assert_eq!(simulate("dessktop"), "desktop");
 

@@ -165,6 +165,10 @@ fn test_english_words_never_autocorrected() {
     assert_eq!(try_autocorrect_telex("user", true, false), None);
     assert_eq!(try_autocorrect_telex("test", true, false), None);
     assert_eq!(try_autocorrect_telex("tests", true, false), None);
+    assert_eq!(try_autocorrect_telex("rose", true, false), None);
+    assert_eq!(try_autocorrect_telex("dose", true, false), None);
+    assert_eq!(try_autocorrect_telex("nose", true, false), None);
+    assert_eq!(try_autocorrect_telex("hose", true, false), None);
     assert_eq!(try_autocorrect_telex("view", true, false), None);
     assert_eq!(try_autocorrect_telex("review", true, false), None);
     assert_eq!(try_autocorrect_telex("complex", true, false), None);

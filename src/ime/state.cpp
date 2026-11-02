@@ -1052,6 +1052,50 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
         last_selection_time_us_ = fcitx::now(CLOCK_MONOTONIC);
     }
 
+    // ctrl+z undoes recent autocorrect or autofix
+    bool is_ctrl_z = is_ctrl && !is_alt && !is_super && !key.states().test(fcitx::KeyState::Shift) &&
+                     (sym == FcitxKey_z || sym == FcitxKey_Z);
+    if (is_ctrl_z && !last_autofix_original_.empty() && last_autofix_time_us_ > 0 &&
+        (fcitx::now(CLOCK_MONOTONIC) - last_autofix_time_us_ < 5000000)) {
+        size_t converted_chars = last_autofix_converted_chars_;
+        std::string restore_text = last_autofix_original_;
+        last_autofix_original_.clear();
+        last_autofix_converted_chars_ = 0;
+        last_autofix_time_us_ = 0;
+
+        repeat_handler_.cancel();
+        reset(/*force=*/true);
+
+        bool has_surrounding = ic_->capabilityFlags().test(fcitx::CapabilityFlag::SurroundingText);
+        const auto& surr = ic_->surroundingText();
+        bool valid_surr = has_surrounding && surr.isValid() &&
+                          surr.cursor() <= surr.text().size() &&
+                          !verifier_.isCanvasEditor() &&
+                          !verifier_.isRichTextEditor();
+        bool use_surrounding = valid_surr && currentProfile()->allowsSurroundingText();
+
+        if (converted_chars > 0) {
+            if (currentProfile()->erasesWithCommittedDel()) {
+                std::string del_str(converted_chars, '\x7f');
+                del_str += restore_text;
+                doCommitString(del_str);
+            } else if (use_surrounding && surr.cursor() >= converted_chars) {
+                ic_->deleteSurroundingText(-static_cast<int>(converted_chars),
+                                           static_cast<unsigned int>(converted_chars));
+                doCommitString(restore_text);
+            } else {
+                for (size_t i = 0; i < converted_chars; ++i) {
+                    ic_->forwardKey(fcitx::Key(FcitxKey_BackSpace));
+                }
+                doCommitString(restore_text);
+            }
+            utils::clakLog("keyEvent: Ctrl+Z undo autocorrect restored '" + restore_text + "'");
+        }
+
+        keyEvent.filterAndAccept();
+        return;
+    }
+
     bool is_clean_backspace = (sym == FcitxKey_BackSpace) && !has_ctrl_alt && !is_shift;
     if (is_clean_backspace && in_flight_sentinel_count_ > 0 &&
         fcitx::now(CLOCK_MONOTONIC) <= sentinel_grace_until_us_) {

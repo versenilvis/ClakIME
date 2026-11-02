@@ -660,6 +660,34 @@ TEST_F(ClakStateTest, GivenAutocorrect_ShiftTapUndoesAndRestoresOriginalWord) {
     EXPECT_EQ(ic.commits.back(), "nheìue ");
 }
 
+TEST_F(ClakStateTest, GivenAutocorrect_CtrlZUndoesAndRestoresOriginalWord) {
+    clak_config_set_autocorrect(const_cast<ClakConfig*>(engine_->config()), true);
+    clak_config_set_shift_autofix(const_cast<ClakConfig*>(engine_->config()), true);
+    clak_config_set_auto_restore(const_cast<ClakConfig*>(engine_->config()), false);
+
+    MockInputContext ic(instance_->inputContextManager(), "test-app");
+    ic.auto_update_surrounding = true;
+    ime::ClakState state(engine_.get(), &ic);
+
+    ic.setSurrounding("", 0, 0);
+    // type scrambled word + space
+    for (char c : std::string("nheiuef ")) {
+        ic.typeChar(c, &state);
+    }
+
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "nhiều ");
+
+    // update surrounding to reflect autocorrect
+    ic.setSurrounding("nhiều ", 6, 6);
+
+    // press Ctrl+Z to undo autocorrect
+    ic.sendKey(FcitxKey_z, fcitx::KeyState::Ctrl, false, &state);
+
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "nheìue ");
+}
+
 TEST_F(ClakStateTest, GivenAutocorrect_BackspaceAfterSpaceIsNotHijacked) {
     clak_config_set_autocorrect(const_cast<ClakConfig*>(engine_->config()), true);
 
