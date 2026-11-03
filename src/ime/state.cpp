@@ -216,17 +216,19 @@ apps::AppProfile* ClakState::currentProfile() {
     std::string app = appKey();
     std::string site = activeSite();
     bool has_url_cap = ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Url);
-    bool is_autofill = has_url_cap;
+    bool is_browser = apps::isBrowserApp(app);
+    bool is_url_site = is_browser && (site == "New Tab" || site == "about:blank" || site == "address-bar");
+    bool is_address_bar = has_url_cap || is_url_site;
     bool is_draftjs = isDraftJsEditor();
     bool is_terminal = ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal);
 
     if (!profile_ || profile_app_ != app || profile_site_ != site ||
-        profile_autofill_ != is_autofill || profile_draftjs_ != is_draftjs ||
+        profile_autofill_ != is_address_bar || profile_draftjs_ != is_draftjs ||
         profile_terminal_ != is_terminal) {
-        profile_ = apps::createAppProfile(app, site, is_autofill, is_draftjs, is_terminal);
+        profile_ = apps::createAppProfile(app, site, is_address_bar, is_draftjs, is_terminal);
         profile_app_ = app;
         profile_site_ = site;
-        profile_autofill_ = is_autofill;
+        profile_autofill_ = is_address_bar;
         profile_draftjs_ = is_draftjs;
         profile_terminal_ = is_terminal;
     }
@@ -276,22 +278,6 @@ bool ClakState::isAutofillCertain(const fcitx::SurroundingText& surr) {
         if (sel_end == text.length() && sel_start > 0) {
             return true;
         }
-    } else if (cursor > 0 && cursor < text.size()) {
-        // firefox collapsed address bar autocompletion where cursor equals anchor
-        bool all_url_chars = true;
-        for (size_t i = cursor; i < text.size(); ++i) {
-            unsigned char c = static_cast<unsigned char>(text[i]);
-            bool is_url = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-                          (c >= '0' && c <= '9') ||
-                          std::strchr("-._~:/?#[]@!$&'()*+,;=%", c) != nullptr;
-            if (!is_url) {
-                all_url_chars = false;
-                break;
-            }
-        }
-        if (all_url_chars) {
-            return true;
-        }
     }
 
     return false;
@@ -303,11 +289,11 @@ void ClakState::doCommitString(const std::string& text) {
     ic_->commitString(text);
 }
 
-std::string ClakState::classifyGroup(const std::string& app, const std::string& site, bool is_autofill, bool used_uinput) {
+std::string ClakState::classifyGroup(const std::string& app, const std::string& site, bool is_address_bar, bool used_uinput) {
     (void)app;
     (void)site;
     auto* profile = currentProfile();
-    if (is_autofill) return "address-bar";
+    if (is_address_bar || (profile && profile->name() == "address-bar")) return "address-bar";
     if (used_uinput && profile->name() == "Chromium-SurroundingText") return "Chromium-Uinput";
     return profile->name();
 }
@@ -710,11 +696,10 @@ bool ClakState::handleKey(const fcitx::Key& key) {
             size_t real_bs = action.delete_count;
 
             bool is_address_bar = (currentProfile() && currentProfile()->name() == "address-bar") ||
-                                  (ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Url));
-            bool address_bar_autofill = is_address_bar && (surr.isValid() ? isAutofillCertain(surr) : !address_bar_has_space_);
-            bool is_autofill = (action.action_type == CLAK_ACTION_ADDRESS_BAR_FIX) ||
-                               address_bar_autofill ||
-                               (isBrowser() && isAutofillCertain(surr));
+                                  (ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Url)) ||
+                                  (isBrowser() && (site == "New Tab" || site == "about:blank" || site == "address-bar"));
+            bool has_autofill_selection = (action.action_type == CLAK_ACTION_ADDRESS_BAR_FIX) ||
+                                          (isAutofillCertain(surr));
             if (real_bs > 0 && surr.isValid() && surr.cursor() < real_bs) {
                 if (!config::isVSCodeApp(app) && !currentProfile()->preventsUinput()) {
                     use_surrounding = false;
@@ -738,17 +723,17 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                 return true;
             }
 
-            bool use_uinput = is_autofill || shouldUseUinput(use_surrounding, action.action_type, surr);
+            bool use_uinput = is_address_bar || has_autofill_selection || shouldUseUinput(use_surrounding, action.action_type, surr);
 
             if (use_uinput && real_bs > 0) {
-                size_t autofill_extra = is_autofill ? 1 : 0;
+                size_t autofill_extra = has_autofill_selection ? 1 : 0;
                 size_t bs_to_send = real_bs + autofill_extra + 1;
-                is_address_bar_fix_ = is_autofill;
+                is_address_bar_fix_ = is_address_bar;
                 uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
                 bool recent_selection = (last_selection_time_us_ > 0) && (now_us - last_selection_time_us_ < 1500000);
                 bool has_selection = has_surrounding && surr.isValid() && (surr.cursor() != surr.anchor());
                 is_selection_deletion_ = recent_selection || has_selection;
-                op_group_ = classifyGroup(app, site, is_autofill, true);
+                op_group_ = classifyGroup(app, site, is_address_bar, true);
 
                 apps::UinputPacing pacing = currentProfile()->uinputPacing();
                 const ClakConfig* cfg = engine_ ? engine_->config() : nullptr;
@@ -756,7 +741,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                 pacing_engine_.setEnabled(adaptive_enabled);
 
                 bool is_terminal = ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal);
-                pacing::PacingGroup pgroup = pacing::AdaptivePacingEngine::classify(app, site, is_autofill, is_draftjs, is_terminal);
+                pacing::PacingGroup pgroup = pacing::AdaptivePacingEngine::classify(app, site, is_address_bar, is_draftjs, is_terminal);
                 if (cfg) {
                     pacing_engine_.configureGroup(pacing::PacingGroup::TerminalUinput,
                         clak_config_get_terminal_delay_ms(cfg), clak_config_get_terminal_gap_ms(cfg), 30, 10);
@@ -770,7 +755,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                         clak_config_get_heavy_app_delay_ms(cfg), clak_config_get_heavy_app_gap_ms(cfg), 35, 12);
                 }
 
-                if (is_autofill) {
+                if (is_address_bar || has_autofill_selection) {
                     pacing = {config::kAddressBarPostDelayMs, 2};
                 } else if (adaptive_enabled) {
                     pacing = pacing_engine_.uinputPacing(pgroup);
@@ -794,7 +779,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                 uint32_t pre_delay = 0;
 
                 utils::clakLog("uinput waiting for sentinel: expected=" + std::to_string(bs_to_send) +
-                               " (real=" + std::to_string(real_bs) + (is_autofill ? " + 1 autofill" : "") +
+                               " (real=" + std::to_string(real_bs) + (has_autofill_selection ? " + 1 autofill" : "") +
                                " + 1 sentinel) post_delay=" + std::to_string(pacing.post_delay_ms) + "ms gap=" +
                                std::to_string(pacing.gap_ms) + "ms commit='" +
                                (action.commit_str ? action.commit_str : "") + "' app=" + app + " site='" + site + "'");
