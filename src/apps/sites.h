@@ -13,6 +13,7 @@ bool isTikTokSite(const std::string& site);
 bool isDraftJsSite(const std::string& site);
 bool isGoogleDocsSite(const std::string& site);
 bool isForceUinputSite(const std::string& site);
+bool isClaudeSite(const std::string& site);
 
 std::unique_ptr<AppProfile> createMetaSiteProfile();
 std::unique_ptr<AppProfile> createTikTokProfile();

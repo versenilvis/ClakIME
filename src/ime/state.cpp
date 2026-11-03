@@ -209,6 +209,16 @@ bool ClakState::isSteam() const {
 
 bool ClakState::isDraftJsEditor() const {
     std::string site = const_cast<ClakState*>(this)->activeSite();
+    if (apps::isClaudeSite(site)) {
+        bool is_multiline = (ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Multiline));
+        if (!is_multiline && ic_ && ic_->surroundingText().isValid() &&
+            ic_->surroundingText().text().find('\n') != std::string::npos) {
+            is_multiline = true;
+        }
+        // claude chat composer is multiline and works reliably with surrounding text
+        // only the search bar (single-line input) exhibits draftjs controlled behavior
+        return !is_multiline;
+    }
     return verifier_.isDraftJsEditor(site);
 }
 

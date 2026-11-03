@@ -23,6 +23,7 @@ using apps::isWpsOfficeApp;
 using apps::isMetaSite;
 using apps::isTikTokSite;
 using apps::isDraftJsSite;
+using apps::isClaudeSite;
 using apps::isForceUinputSite;
 using apps::extractDomain;
 

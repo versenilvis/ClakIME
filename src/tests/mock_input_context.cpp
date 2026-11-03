@@ -117,6 +117,16 @@ void MockInputContext::setUrlCapability(bool enabled) {
     setCapabilityFlags(flags);
 }
 
+void MockInputContext::setMultilineCapability(bool enabled) {
+    auto flags = capabilityFlags();
+    if (enabled) {
+        flags |= fcitx::CapabilityFlag::Multiline;
+    } else {
+        flags &= ~fcitx::CapabilityFlags(fcitx::CapabilityFlag::Multiline);
+    }
+    setCapabilityFlags(flags);
+}
+
 bool MockInputContext::sendKey(fcitx::KeySym sym, fcitx::KeyStates states, bool isRelease, ime::ClakState* state) {
     fcitx::KeyEvent event(this, fcitx::Key(sym, states), isRelease);
     if (state) {

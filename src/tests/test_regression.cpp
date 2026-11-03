@@ -1291,9 +1291,8 @@ TEST_F(RegressionCorpusTest, test_regression_tiktok_uses_uinput_with_draftjs_pac
     EXPECT_EQ(ic.commits.back(), "đ");
 }
 
-TEST_F(RegressionCorpusTest, test_regression_claude_ai_uses_uinput_with_draftjs_pacing) {
-    // claude.ai uses prosemirror / contenteditable where surrounding text deletions desync
-    // clak must classify claude.ai as a rich text site and route backspaces via uinput
+TEST_F(RegressionCorpusTest, test_regression_claude_ai_search_bar_uses_uinput_with_draftjs_pacing) {
+    // claude search bar is single-line and behaves like draftjs controlled input
     platform::setMockActiveWindow(platform::WindowInfo{"helium", "claude.ai", 1234});
     MockInputContext ic(instance_->inputContextManager(), "helium");
     auto* state = ic.propertyFor(&engine_->factory());
@@ -1332,6 +1331,35 @@ TEST_F(RegressionCorpusTest, test_regression_claude_ai_uses_uinput_with_draftjs_
     ic.sendCleanBackspace(state);
     EXPECT_FALSE(state->isDeleting());
     EXPECT_EQ(ic.commits.back(), "ộ");
+}
+
+TEST_F(RegressionCorpusTest, test_regression_claude_ai_chat_bar_uses_surrounding_text) {
+    // claude chat composer is multiline and uses standard surrounding text
+    platform::setMockActiveWindow(platform::WindowInfo{"helium", "claude.ai", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "helium");
+    ic.setMultilineCapability(true);
+    auto* state = ic.propertyFor(&engine_->factory());
+
+    size_t uinput_calls = 0;
+    uinput::UinputTool::instance().setMockHandler([&](size_t, uint32_t, uint32_t, uint32_t) {
+        uinput_calls++;
+        return true;
+    });
+
+    ic.setSurrounding("", 0, 0);
+    ic.typeChar('b', state);
+    ic.setSurrounding("b", 1, 1);
+    ic.typeChar('o', state);
+    ic.setSurrounding("bo", 2, 2);
+    ic.typeChar('o', state); // replaces 'o' with 'ô' via surrounding text
+
+    EXPECT_FALSE(state->isDeleting());
+    EXPECT_EQ(uinput_calls, 0u);
+    ASSERT_FALSE(ic.deletions.empty());
+    EXPECT_EQ(ic.deletions.back().first, -1);
+    EXPECT_EQ(ic.deletions.back().second, 1u);
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "ô");
 }
 
 TEST_F(RegressionCorpusTest, test_kde_support_and_shell_filtering) {

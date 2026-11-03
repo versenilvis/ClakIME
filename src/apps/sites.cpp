@@ -35,12 +35,13 @@ bool isTikTokSite(const std::string& site) {
     return false;
 }
 
+bool isClaudeSite(const std::string& site) {
+    return site == "claude.ai" || site.find("claude.ai") != std::string::npos;
+}
+
 bool isDraftJsSite(const std::string& site) {
     static const std::vector<std::string> draftjs_sites = {
-        "x.com", "twitter.com", "threads.net",
-        "claude.ai", "chatgpt.com", "gemini.google.com",
-        "perplexity.ai", "chat.deepseek.com", "deepseek.com",
-        "copilot.microsoft.com", "grok.com"
+        "x.com", "twitter.com", "threads.net"
     };
     static const std::vector<std::string> kde_meta_sites = {
         "facebook.com", "messenger.com", "facebook", "messenger"
