@@ -38,6 +38,7 @@ pub struct ClakContext {
     last_surr: Option<(String, usize)>,
     pub autocorrect: bool,
     pub last_committed: Option<(String, String, std::time::Instant)>,
+    pub uncommit_candidate: Option<(String, String, std::time::Instant)>,
     pub pending_retype: Option<(String, String)>,
     in_identifier: bool,
 }
@@ -75,6 +76,7 @@ impl ClakContext {
             last_surr: None,
             autocorrect: false,
             last_committed: None,
+            uncommit_candidate: None,
             pending_retype: None,
             in_identifier: false,
         }
@@ -127,6 +129,7 @@ impl ClakContext {
     ) -> ImeAction {
         if has_ctrl_alt {
             self.reset();
+            self.uncommit_candidate = None;
             self.just_deleted = false;
             self.stale_surr = None;
             self.sentence_cap_state = SentenceCapState::Normal;
@@ -134,11 +137,11 @@ impl ClakContext {
         }
 
         if key_sym == 0xff08 {
-            self.just_deleted = true;
             self.sentence_cap_state = SentenceCapState::Normal;
 
             // pass through backspace inside identifier token
             if self.in_identifier {
+                self.just_deleted = true;
                 if !self.raw_buffer.is_empty() {
                     self.raw_buffer.pop();
                     self.last_composed = self.raw_buffer.clone();
@@ -148,6 +151,35 @@ impl ClakContext {
                 }
                 return self.forward();
             }
+
+            // check if backspacing over trailing space to uncommit and resume previous word
+            if let Some((cand_raw, cand_com, cand_time)) = self.uncommit_candidate.take() {
+                if cand_time.elapsed().as_secs() <= 10 {
+                    let mut matched = false;
+                    if let Some(text) = surrounding_text {
+                        let chars: Vec<char> = text.chars().collect();
+                        let cur = std::cmp::min(chars.len(), cursor);
+                        if cur > 0 && chars[cur - 1] == ' ' {
+                            let before_sp: String = chars[..cur - 1].iter().collect();
+                            if before_sp.ends_with(&cand_com) {
+                                matched = true;
+                            }
+                        }
+                    } else {
+                        matched = true;
+                    }
+
+                    if matched {
+                        self.raw_buffer = cand_raw;
+                        self.last_composed = cand_com;
+                        self.just_deleted = false;
+                        self.stale_surr = None;
+                        return self.forward();
+                    }
+                }
+            }
+
+            self.just_deleted = true;
 
             // detect backspace after committed word for adaptive learning
             if let Some((last_raw, last_com, last_time)) = &self.last_committed {
@@ -191,6 +223,7 @@ impl ClakContext {
         }
 
         if key_sym == 0xff0d || key_sym == 0xff09 {
+            self.uncommit_candidate = None;
             self.sentence_cap_state = SentenceCapState::Normal;
             // check macro expansion on enter or tab
             if self.macros_enabled && !self.last_composed.is_empty() {
@@ -239,6 +272,7 @@ impl ClakContext {
             || (0xff50..=0xff57).contains(&key_sym)
         {
             self.reset();
+            self.uncommit_candidate = None;
             self.just_deleted = false;
             self.stale_surr = None;
             self.pending_retype = None;
@@ -298,7 +332,14 @@ impl ClakContext {
             }
 
             if !cur_raw.is_empty() {
-                self.last_committed = Some((cur_raw, cur_com, std::time::Instant::now()));
+                self.last_committed =
+                    Some((cur_raw.clone(), cur_com.clone(), std::time::Instant::now()));
+            }
+
+            if key_sym == 0x20 && !cur_raw.is_empty() && !cur_com.is_empty() {
+                self.uncommit_candidate = Some((cur_raw, cur_com, std::time::Instant::now()));
+            } else {
+                self.uncommit_candidate = None;
             }
 
             if self.auto_capitalize {
@@ -392,6 +433,8 @@ impl ClakContext {
             self.stale_surr = None;
             return self.forward();
         }
+
+        self.uncommit_candidate = None;
 
         let just_del = self.just_deleted;
         self.just_deleted = false;
@@ -943,6 +986,7 @@ pub unsafe extern "C" fn clak_is_composing(ctx: *const ClakContext) -> bool {
 pub unsafe extern "C" fn clak_context_reset(ctx: *mut ClakContext) {
     if let Some(c) = ctx.as_mut() {
         c.reset();
+        c.uncommit_candidate = None;
     }
 }
 
@@ -1069,4 +1113,97 @@ pub unsafe extern "C" fn clak_observe_retype(
         Err(_) => return false,
     };
     crate::learned_typos::observe_retype(r, w).is_some()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_uncommit_on_backspace_after_space_resumes_word() {
+        let mut ctx = ClakContext::new(Method::Telex);
+
+        // type "toan"
+        for ch in "toan".chars() {
+            ctx.process_key(ch as u32, &ch.to_string(), false, None, 0, 0);
+        }
+        assert_eq!(ctx.last_composed, "toan");
+
+        // type space
+        let act = ctx.process_key(0x20, " ", false, Some("toan"), 4, 4);
+        assert_eq!(act.action_type, ACTION_FORWARD);
+        assert_eq!(ctx.last_composed, "");
+        assert!(ctx.uncommit_candidate.is_some());
+
+        // backspace space
+        let act = ctx.process_key(0xff08, "", false, Some("toan "), 5, 5);
+        assert_eq!(act.action_type, ACTION_FORWARD);
+        assert_eq!(ctx.raw_buffer, "toan");
+        assert_eq!(ctx.last_composed, "toan");
+
+        // type 's' to add tone
+        let act = ctx.process_key('s' as u32, "s", false, Some("toan"), 4, 4);
+        assert_eq!(act.action_type, ACTION_REPLACE);
+        assert_eq!(ctx.last_composed, "toán");
+    }
+
+    #[test]
+    fn test_uncommit_invalidated_when_new_word_started() {
+        let mut ctx = ClakContext::new(Method::Telex);
+
+        // type "toan" + space
+        for ch in "toan".chars() {
+            ctx.process_key(ch as u32, &ch.to_string(), false, None, 0, 0);
+        }
+        ctx.process_key(0x20, " ", false, Some("toan"), 4, 4);
+        assert!(ctx.uncommit_candidate.is_some());
+
+        // type 'k' (starts new word)
+        ctx.process_key('k' as u32, "k", false, Some("toan "), 5, 5);
+        assert!(ctx.uncommit_candidate.is_none());
+
+        // backspace 'k'
+        ctx.process_key(0xff08, "", false, Some("toan k"), 6, 6);
+        assert!(ctx.uncommit_candidate.is_none());
+
+        // backspace space
+        ctx.process_key(0xff08, "", false, Some("toan "), 5, 5);
+        // candidate was destroyed by typing 'k', must not resume
+        assert_eq!(ctx.last_composed, "");
+    }
+
+    #[test]
+    fn test_uncommit_invalidated_on_double_space() {
+        let mut ctx = ClakContext::new(Method::Telex);
+
+        for ch in "toan".chars() {
+            ctx.process_key(ch as u32, &ch.to_string(), false, None, 0, 0);
+        }
+        // first space sets candidate
+        ctx.process_key(0x20, " ", false, Some("toan"), 4, 4);
+        assert!(ctx.uncommit_candidate.is_some());
+
+        // second space invalidates candidate
+        ctx.process_key(0x20, " ", false, Some("toan "), 5, 5);
+        assert!(ctx.uncommit_candidate.is_none());
+    }
+
+    #[test]
+    fn test_uncommit_vni_method() {
+        let mut ctx = ClakContext::new(Method::Vni);
+
+        for ch in "toan".chars() {
+            ctx.process_key(ch as u32, &ch.to_string(), false, None, 0, 0);
+        }
+        ctx.process_key(0x20, " ", false, Some("toan"), 4, 4);
+
+        // backspace space
+        ctx.process_key(0xff08, "", false, Some("toan "), 5, 5);
+        assert_eq!(ctx.last_composed, "toan");
+
+        // type '1' for sắc tone
+        let act = ctx.process_key('1' as u32, "1", false, Some("toan"), 4, 4);
+        assert_eq!(act.action_type, ACTION_REPLACE);
+        assert_eq!(ctx.last_composed, "toán");
+    }
 }

@@ -714,5 +714,29 @@ TEST_F(ClakStateTest, GivenAutocorrect_BackspaceAfterSpaceIsNotHijacked) {
     }
 }
 
+TEST_F(ClakStateTest, GivenSpaceAfterWord_WhenBackspacedAndToneKeyTyped_ResumesWord) {
+    // typing a word, then space, then backspace allows adding tone to the word
+    MockInputContext ic(instance_->inputContextManager(), "test-app");
+    ic.auto_update_surrounding = true;
+    ime::ClakState state(engine_.get(), &ic);
+    ic.setSurrounding("", 0, 0);
+
+    // type "toan" + " "
+    for (char c : std::string("toan ")) {
+        ic.typeChar(c, &state);
+    }
+    EXPECT_EQ(ic.surroundingText().text(), "toan ");
+
+    // backspace the trailing space
+    ic.sendKey(FcitxKey_BackSpace, fcitx::KeyStates(), false, &state);
+    ic.sendKey(FcitxKey_BackSpace, fcitx::KeyStates(), true, &state);
+    ic.setSurrounding("toan", 4, 4);
+    EXPECT_EQ(ic.surroundingText().text(), "toan");
+
+    // type 's' to add tone
+    ic.typeChar('s', &state);
+    EXPECT_EQ(ic.surroundingText().text(), "toán");
+}
+
 } // namespace test
 } // namespace clak
