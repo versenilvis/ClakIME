@@ -264,6 +264,7 @@ bool ClakState::isAutofillCertain(const fcitx::SurroundingText& surr) {
         return false;
     }
     const std::string& text = surr.text();
+    // multiline editors (including ai inline ghost text in code editors) contain newlines
     if (text.empty() || text.find('\n') != std::string::npos) return false;
 
     unsigned int cursor = surr.cursor();
@@ -273,6 +274,22 @@ bool ClakState::isAutofillCertain(const fcitx::SurroundingText& surr) {
         unsigned int sel_start = std::min(anchor, cursor);
         unsigned int sel_end = std::max(anchor, cursor);
         if (sel_end == text.length() && sel_start > 0) {
+            return true;
+        }
+    } else if (cursor > 0 && cursor < text.size()) {
+        // firefox collapsed address bar autocompletion where cursor equals anchor
+        bool all_url_chars = true;
+        for (size_t i = cursor; i < text.size(); ++i) {
+            unsigned char c = static_cast<unsigned char>(text[i]);
+            bool is_url = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                          (c >= '0' && c <= '9') ||
+                          std::strchr("-._~:/?#[]@!$&'()*+,;=%", c) != nullptr;
+            if (!is_url) {
+                all_url_chars = false;
+                break;
+            }
+        }
+        if (all_url_chars) {
             return true;
         }
     }
@@ -766,6 +783,13 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                 } else if (apps::isWpsOfficeApp(app) || apps::isSteamApp(app) || apps::isJetBrainsApp(app)) {
                     pacing = {cfg ? clak_config_get_heavy_app_delay_ms(cfg) : 15,
                               cfg ? clak_config_get_heavy_app_gap_ms(cfg) : 4};
+                }
+
+                if (surr.isValid() && ime::SurroundingVerifier::looksLikeMessengerComposer(surr)) {
+                    uint32_t settle_delay = ime::SurroundingVerifier::isFirstWordOfMessage(surr) ? 60u : 40u;
+                    pacing.post_delay_ms = std::max(pacing.post_delay_ms, settle_delay);
+                } else if (de::isKdeSession()) {
+                    pacing.post_delay_ms = std::max(pacing.post_delay_ms, 12u);
                 }
                 uint32_t pre_delay = 0;
 

@@ -21,6 +21,33 @@ bool SurroundingVerifier::isDraftJsEditor(const std::string& site) const {
     return is_draftjs_editor_ || config::isDraftJsSite(site);
 }
 
+bool SurroundingVerifier::looksLikeMessengerComposer(const fcitx::SurroundingText& s) {
+    if (!s.isValid()) return false;
+    const std::string& t = s.text();
+    if (t == "\n") return true;
+    if (s.cursor() <= t.size()) {
+        std::string after = t.substr(s.cursor());
+        if (after == "\n\n" || after == "\n") return true;
+    }
+    return false;
+}
+
+bool SurroundingVerifier::looksLikeFacebookComposer(const fcitx::SurroundingText& s) {
+    if (!s.isValid()) return false;
+    const std::string& t = s.text();
+    return t == "\n" || (t.size() >= 2 && t.compare(t.size() - 2, 2, "\n\n") == 0);
+}
+
+bool SurroundingVerifier::isFirstWordOfMessage(const fcitx::SurroundingText& s) {
+    if (!s.isValid() || s.cursor() == 0) return true;
+    const std::string& t = s.text();
+    size_t limit = std::min(static_cast<size_t>(s.cursor()), t.size());
+    for (size_t i = 0; i < limit; ++i) {
+        if (t[i] == ' ' || t[i] == '\n') return false;
+    }
+    return true;
+}
+
 void SurroundingVerifier::setExpectation(const std::string& wordBefore, size_t delChars, const std::string& added) {
     if (added.find(' ') != std::string::npos || added.find('\n') != std::string::npos || added.find('\t') != std::string::npos) {
         verify_.pending = false;

@@ -1293,6 +1293,60 @@ TEST_F(RegressionCorpusTest, test_kde_support_and_shell_filtering) {
     EXPECT_EQ(state.appKey(), "default");
 }
 
+TEST_F(RegressionCorpusTest, test_regression_firefox_collapsed_address_bar_autocompletion) {
+    // firefox address bar autocomplete where cursor equals anchor without selection
+    MockInputContext ic(instance_->inputContextManager(), "firefox");
+    ic.setUrlCapability(true);
+    ime::ClakState state(engine_.get(), &ic);
+
+    // user typed "yout", firefox appended "ube.com" with cursor at 4 and anchor at 4
+    ic.setSurrounding("youtube.com", 4, 4);
+    EXPECT_TRUE(state.isAutofillCertain(ic.surroundingText()));
+
+    // user typed "wiki", firefox appended "pedia.org/wiki/Main_Page"
+    ic.setSurrounding("wikipedia.org/wiki/Main_Page", 4, 4);
+    EXPECT_TRUE(state.isAutofillCertain(ic.surroundingText()));
+}
+
+TEST_F(RegressionCorpusTest, test_regression_multiline_ai_ghost_text_never_detected_as_autofill) {
+    // multiline code with inline ghost text or selection across lines must not be detected as autofill
+    MockInputContext ic(instance_->inputContextManager(), "code");
+    ic.setUrlCapability(true);
+    ime::ClakState state(engine_.get(), &ic);
+
+    // multiline editor containing newlines
+    ic.setSurrounding("function calculateTotal() {\n    return sum * tax;\n}", 26, 48);
+    EXPECT_FALSE(state.isAutofillCertain(ic.surroundingText()));
+
+    // multiline cursor at 0
+    ic.setSurrounding("const a = 1;\nconst b = 2;", 12, 12);
+    EXPECT_FALSE(state.isAutofillCertain(ic.surroundingText()));
+}
+
+TEST_F(RegressionCorpusTest, test_regression_messenger_composer_shape_and_settle_pacing) {
+    // messenger composer shape detection by \n\n or \n placeholder
+    MockInputContext ic(instance_->inputContextManager(), "google-chrome");
+
+    // empty placeholder with \n
+    ic.setSurrounding("\n", 0, 0);
+    EXPECT_TRUE(ime::SurroundingVerifier::looksLikeMessengerComposer(ic.surroundingText()));
+    EXPECT_TRUE(ime::SurroundingVerifier::isFirstWordOfMessage(ic.surroundingText()));
+
+    // first word of message with \n\n after cursor
+    ic.setSurrounding("xin\n\n", 3, 3);
+    EXPECT_TRUE(ime::SurroundingVerifier::looksLikeMessengerComposer(ic.surroundingText()));
+    EXPECT_TRUE(ime::SurroundingVerifier::isFirstWordOfMessage(ic.surroundingText()));
+
+    // subsequent words of message
+    ic.setSurrounding("xin chao cac ban\n\n", 16, 16);
+    EXPECT_TRUE(ime::SurroundingVerifier::looksLikeMessengerComposer(ic.surroundingText()));
+    EXPECT_FALSE(ime::SurroundingVerifier::isFirstWordOfMessage(ic.surroundingText()));
+
+    // facebook post box ending with \n\n
+    ic.setSurrounding("hom nay troi dep qua\n\n", 20, 20);
+    EXPECT_TRUE(ime::SurroundingVerifier::looksLikeFacebookComposer(ic.surroundingText()));
+}
+
 } // namespace test
 } // namespace clak
 

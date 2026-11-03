@@ -41,6 +41,10 @@ public:
   bool isDraftJsEditorDirect() const { return is_draftjs_editor_; }
   void setDraftJsEditor(bool val) { is_draftjs_editor_ = val; }
 
+  static bool looksLikeMessengerComposer(const fcitx::SurroundingText& surr);
+  static bool looksLikeFacebookComposer(const fcitx::SurroundingText& surr);
+  static bool isFirstWordOfMessage(const fcitx::SurroundingText& surr);
+
 private:
   PendingVerify verify_;
   int mismatch_count_{0};
