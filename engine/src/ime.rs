@@ -435,8 +435,6 @@ impl ClakContext {
         }
 
         self.uncommit_candidate = None;
-
-        let just_del = self.just_deleted;
         self.just_deleted = false;
 
         let mut has_autocomplete = false;
@@ -552,8 +550,7 @@ impl ClakContext {
                 key_ch.to_ascii_lowercase(),
                 'a' | 'e' | 'o' | 'd' | 'w' | 's' | 'f' | 'r' | 'x' | 'j'
             );
-            if !just_del
-                && !is_stale
+            if !is_stale
                 && !has_autocomplete
                 && cursor == anchor
                 && self.last_composed.is_empty()

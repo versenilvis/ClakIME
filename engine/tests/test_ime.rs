@@ -31,6 +31,25 @@ fn test_normal_english_key_forwards() {
 }
 
 #[test]
+fn test_backspace_word_and_space_then_tone() {
+    let mut ctx = ClakContext::new(Method::Telex);
+
+    // Document: "tim ra"
+    // User deletes 'a', 'r', ' '
+    ctx.process_key(0xff08, "", false, Some("tim ra"), 6, 6);
+    ctx.process_key(0xff08, "", false, Some("tim r"), 5, 5);
+    ctx.process_key(0xff08, "", false, Some("tim "), 4, 4);
+
+    // Now cursor is at 3 after "tim"
+    // User types 'f' (huyền) to make "tìm"
+    let act = ctx.process_key(b'f' as u32, "f", false, Some("tim"), 3, 3);
+    assert_eq!(act.action_type, ACTION_REPLACE);
+    assert_eq!(act.delete_count, 2);
+    let commit = unsafe { CStr::from_ptr(act.commit_str).to_str().unwrap() };
+    assert_eq!(commit, "ìm");
+}
+
+#[test]
 fn test_address_bar_stale_surrounding() {
     let mut ctx = ClakContext::new(Method::Telex);
     let act1 = ctx.process_key(b'd' as u32, "d", false, Some("\n"), 0, 0);
