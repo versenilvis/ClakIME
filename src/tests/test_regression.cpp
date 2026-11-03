@@ -1291,6 +1291,49 @@ TEST_F(RegressionCorpusTest, test_regression_tiktok_uses_uinput_with_draftjs_pac
     EXPECT_EQ(ic.commits.back(), "đ");
 }
 
+TEST_F(RegressionCorpusTest, test_regression_claude_ai_uses_uinput_with_draftjs_pacing) {
+    // claude.ai uses prosemirror / contenteditable where surrounding text deletions desync
+    // clak must classify claude.ai as a rich text site and route backspaces via uinput
+    platform::setMockActiveWindow(platform::WindowInfo{"helium", "claude.ai", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "helium");
+    auto* state = ic.propertyFor(&engine_->factory());
+
+    size_t uinput_calls = 0;
+    uint32_t last_post_delay = 0;
+    uinput::UinputTool::instance().setMockHandler([&](size_t, uint32_t post_delay, uint32_t, uint32_t) {
+        uinput_calls++;
+        last_post_delay = post_delay;
+        return true;
+    });
+
+    // typing 'booj' -> 'bộ'
+    ic.setSurrounding("", 0, 0);
+    ic.typeChar('b', state);
+    ic.setSurrounding("b", 1, 1);
+    ic.typeChar('o', state);
+    ic.setSurrounding("bo", 2, 2);
+    ic.typeChar('o', state); // replaces 'o' with 'ô'
+
+    EXPECT_TRUE(state->isDeleting());
+    EXPECT_EQ(uinput_calls, 1u);
+    EXPECT_GE(last_post_delay, config::kDraftJsPostDelayMs);
+
+    ic.sendCleanBackspace(state);
+    ic.sendCleanBackspace(state);
+    EXPECT_FALSE(state->isDeleting());
+    EXPECT_EQ(ic.commits.back(), "ô");
+
+    ic.setSurrounding("bô", 2, 2);
+    ic.typeChar('j', state); // replaces 'ô' with 'ộ'
+    EXPECT_TRUE(state->isDeleting());
+    EXPECT_EQ(uinput_calls, 2u);
+
+    ic.sendCleanBackspace(state);
+    ic.sendCleanBackspace(state);
+    EXPECT_FALSE(state->isDeleting());
+    EXPECT_EQ(ic.commits.back(), "ộ");
+}
+
 TEST_F(RegressionCorpusTest, test_kde_support_and_shell_filtering) {
     // desktop shells must be recognized and filtered
     EXPECT_TRUE(de::isDesktopShell("gnome-shell"));
