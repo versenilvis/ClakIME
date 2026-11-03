@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.7.8](https://github.com/versenilvis/ClakIME/releases/tag/v0.7.8) - 2026-11-03
+
+### Bug fixes
+
+- Preserve un-toned English words over doubled raw modifiers ([f18b51](https://github.com/versenilvis/ClakIME/commit/f18b51a58eb03c898086bda84ad2e8499889ede7))
+
+### Features
+
+- Add Ctrl+Z undo for autocorrect and guard English words like rose ([97665a](https://github.com/versenilvis/ClakIME/commit/97665a3adbc50dfb235a37303532a61d9276f6b0))
+
 ## [v0.7.7](https://github.com/versenilvis/ClakIME/releases/tag/v0.7.7) - 2026-10-31
 
 ### Bug fixes
