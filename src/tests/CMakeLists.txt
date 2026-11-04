@@ -30,6 +30,7 @@ target_link_libraries(clak_cpp_tests PRIVATE
     pthread
     dl
     m
+    xcb
 )
 
 add_test(NAME clak_cpp_tests COMMAND clak_cpp_tests)

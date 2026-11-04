@@ -214,6 +214,14 @@ TEST_F(ClakStateTest, GivenGnomeFallbackApp_PopulatesTerminalClass) {
     EXPECT_EQ(win.win_class, "gnome-terminal-server");
 }
 
+TEST_F(ClakStateTest, GivenX11TemporaryContextFallback_DoesNotAcceptTemporaryName) {
+    // temporary context names like ctx_... on x11 must not be treated as real app class
+    platform::clearWindowCache();
+    platform::clearMockActiveWindow();
+    platform::WindowInfo win = platform::getActiveWindow("ctx_12345");
+    EXPECT_NE(win.win_class, "ctx_12345");
+}
+
 TEST_F(ClakStateTest, GivenXTerminalEmul_RecognizedAsTerminalAndEditorWhenTitleMatches) {
     EXPECT_TRUE(config::isTerminalApp("x-terminal-emul"));
     EXPECT_TRUE(config::isTerminalApp("x-terminal-emulator"));

@@ -147,6 +147,7 @@ set(CLAK_SOURCES
     src/apps/sites.cpp
     src/apps/modal_editor.cpp
     src/window/window_tracker.cpp
+    src/window/x11_tracker.cpp
     src/mouse/mouse_tracker.cpp
     src/uinput/uinput.cpp
     src/utils/log.cpp
@@ -199,6 +200,7 @@ target_link_libraries(clak_core PUBLIC
     pthread
     dl
     m
+    xcb
 )
 if(TARGET PkgConfig::Fcitx5Module)
     target_link_libraries(clak_core PUBLIC PkgConfig::Fcitx5Module)
@@ -225,6 +227,7 @@ target_link_libraries(clak PRIVATE
     pthread
     dl
     m
+    xcb
 )
 
 configure_file(

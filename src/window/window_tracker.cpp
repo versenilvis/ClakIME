@@ -1,4 +1,5 @@
 #include "window/window_info.h"
+#include "window/x11_tracker.h"
 #include "de/hyprland.h"
 #include "de/gnome.h"
 #include "de/kde.h"
@@ -52,11 +53,15 @@ WindowInfo getActiveWindow(const std::string& fallback_app) {
     // 1. first try hyprland if available
     bool hypr_ok = de::queryHyprlandActiveWindow(info);
 
-    // 2. if not on hyprland (e.g. gnome wayland), query at-spi
-    if (!hypr_ok || info.win_class.empty()) {
-        if (de::queryAtspiActiveWindow(info)) {
+    bool is_temp_ctx = fallback_app.rfind("ctx_", 0) == 0;
+
+    // 2. if not on hyprland, query at-spi or x11 hierarchy
+    if (!hypr_ok || info.win_class.empty() || is_temp_ctx) {
+        if (de::queryAtspiActiveWindow(info) && !info.win_class.empty() && info.win_class.rfind("ctx_", 0) != 0) {
             // found active window via at-spi
-        } else if (!fallback_app.empty() && !de::isDesktopShell(fallback_app)) {
+        } else if (queryX11ActiveWindow(info) && !info.win_class.empty()) {
+            // resolved window class via x11 tree traversal
+        } else if (!fallback_app.empty() && !de::isDesktopShell(fallback_app) && !is_temp_ctx) {
             info.win_class = fallback_app;
             info.win_title = fallback_app;
         } else {
