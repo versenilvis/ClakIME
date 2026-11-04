@@ -222,6 +222,21 @@ TEST_F(ClakStateTest, GivenX11TemporaryContextFallback_DoesNotAcceptTemporaryNam
     EXPECT_NE(win.win_class, "ctx_12345");
 }
 
+TEST_F(ClakStateTest, GivenAppModeRules_AppliesCorrectProfile) {
+    // app mode 1 (uinput) must force uinput
+    auto p1 = apps::createAppProfile("myapp", "", false, false, false, 1);
+    EXPECT_TRUE(p1->forcesUinput());
+
+    // app mode 2 (surrounding) must allow surrounding and prevent uinput
+    auto p2 = apps::createAppProfile("myapp", "", false, false, false, 2);
+    EXPECT_TRUE(p2->allowsSurroundingText());
+    EXPECT_TRUE(p2->preventsUinput());
+
+    // app mode 0 (auto) uses standard default profile
+    auto p0 = apps::createAppProfile("myapp", "", false, false, false, 0);
+    EXPECT_FALSE(p0->forcesUinput());
+}
+
 TEST_F(ClakStateTest, GivenXTerminalEmul_RecognizedAsTerminalAndEditorWhenTitleMatches) {
     EXPECT_TRUE(config::isTerminalApp("x-terminal-emul"));
     EXPECT_TRUE(config::isTerminalApp("x-terminal-emulator"));

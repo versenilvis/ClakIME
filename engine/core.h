@@ -69,10 +69,16 @@ bool         clak_is_composing(const ClakContext *ctx);
 
 typedef void ClakConfig;
 
+#define CLAK_APP_MODE_AUTO        0
+#define CLAK_APP_MODE_UINPUT      1
+#define CLAK_APP_MODE_SURROUNDING 2
+#define CLAK_APP_MODE_OFF         3
+
 char       *clak_config_path(void);
 ClakConfig *clak_config_load(void);
 ClakConfig *clak_config_default(void);
 void        clak_config_free(ClakConfig *cfg);
+int32_t     clak_config_get_app_mode(const ClakConfig *cfg, const char *app_name);
 bool        clak_config_is_app_excluded(const ClakConfig *cfg, const char *app_name);
 bool        clak_config_get_remember_state(const ClakConfig *cfg);
 bool        clak_config_get_uinput_ack(const ClakConfig *cfg);

@@ -14,8 +14,15 @@ std::unique_ptr<AppProfile> createAppProfile(
     const std::string& site,
     bool is_autofill,
     bool is_draftjs,
-    bool is_terminal
+    bool is_terminal,
+    int app_mode
 ) {
+    if (app_mode == 1) {
+        return createDraftJsProfile();
+    }
+    if (app_mode == 2) {
+        return createMetaSiteProfile();
+    }
     if (is_terminal) {
         if (isVteTerminalApp(app)) {
             return createVteTerminalProfile();

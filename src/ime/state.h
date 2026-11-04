@@ -130,6 +130,7 @@ private:
   bool profile_autofill_{false};
   bool profile_draftjs_{false};
   bool profile_terminal_{false};
+  int profile_app_mode_{0};
 };
 
 } // namespace ime

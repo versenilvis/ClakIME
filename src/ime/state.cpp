@@ -231,16 +231,21 @@ apps::AppProfile* ClakState::currentProfile() {
     bool is_address_bar = has_url_cap || is_url_site;
     bool is_draftjs = isDraftJsEditor();
     bool is_terminal = ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal);
+    int app_mode = 0;
+    if (engine_ && engine_->config()) {
+        app_mode = clak_config_get_app_mode(engine_->config(), app.c_str());
+    }
 
     if (!profile_ || profile_app_ != app || profile_site_ != site ||
         profile_autofill_ != is_address_bar || profile_draftjs_ != is_draftjs ||
-        profile_terminal_ != is_terminal) {
-        profile_ = apps::createAppProfile(app, site, is_address_bar, is_draftjs, is_terminal);
+        profile_terminal_ != is_terminal || profile_app_mode_ != app_mode) {
+        profile_ = apps::createAppProfile(app, site, is_address_bar, is_draftjs, is_terminal, app_mode);
         profile_app_ = app;
         profile_site_ = site;
         profile_autofill_ = is_address_bar;
         profile_draftjs_ = is_draftjs;
         profile_terminal_ = is_terminal;
+        profile_app_mode_ = app_mode;
     }
     return profile_.get();
 }

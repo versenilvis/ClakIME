@@ -82,8 +82,33 @@ pub struct ShortcutConfig {
 pub struct PerAppConfig {
     #[serde(default)]
     pub remember_state: bool,
+    #[serde(default)]
+    pub rules: std::collections::HashMap<String, String>,
     #[serde(default = "default_excluded_apps")]
     pub excluded_apps: Vec<String>,
+}
+
+impl PerAppConfig {
+    pub fn get_mode(&self, app_name: &str) -> i32 {
+        let app_lower = app_name.to_lowercase();
+        for (k, v) in &self.rules {
+            let k_lower = k.to_lowercase();
+            if k_lower == app_lower || app_lower.contains(&k_lower) {
+                return match v.to_lowercase().as_str() {
+                    "uinput" => 1,
+                    "surrounding" | "surr" => 2,
+                    "off" | "disabled" | "exclude" => 3,
+                    _ => 0,
+                };
+            }
+        }
+        for a in &self.excluded_apps {
+            if app_lower.contains(&a.to_lowercase()) {
+                return 3;
+            }
+        }
+        0
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -262,6 +287,7 @@ impl Default for PerAppConfig {
     fn default() -> Self {
         Self {
             remember_state: false,
+            rules: std::collections::HashMap::new(),
             excluded_apps: default_excluded_apps(),
         }
     }
@@ -453,5 +479,24 @@ excluded_apps = ["myterminal", "code"]
         assert!(!parsed.per_app.remember_state);
         assert_eq!(parsed.per_app.excluded_apps, vec!["myterminal", "code"]);
         assert_eq!(parsed.shortcuts.toggle_vietnamese, "ctrl_shift");
+        assert_eq!(parsed.per_app.get_mode("myterminal"), 3);
+    }
+
+    #[test]
+    fn test_per_app_rules() {
+        let raw = r#"
+[per_app]
+remember_state = true
+
+[per_app.rules]
+zen = "uinput"
+code = "surrounding"
+games = "off"
+"#;
+        let parsed: ClakConfig = toml::from_str(raw).expect("deserialize");
+        assert_eq!(parsed.per_app.get_mode("zen"), 1);
+        assert_eq!(parsed.per_app.get_mode("code"), 2);
+        assert_eq!(parsed.per_app.get_mode("games"), 3);
+        assert_eq!(parsed.per_app.get_mode("unknown"), 0);
     }
 }

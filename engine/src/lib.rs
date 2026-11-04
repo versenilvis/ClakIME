@@ -657,22 +657,26 @@ pub unsafe extern "C" fn clak_config_free(cfg: *mut config::ClakConfig) {
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_config_get_app_mode(
+    cfg: *const config::ClakConfig,
+    app_name: *const c_char,
+) -> i32 {
+    if cfg.is_null() || app_name.is_null() {
+        return 0;
+    }
+    let app = match CStr::from_ptr(app_name).to_str() {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+    (*cfg).per_app.get_mode(app)
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn clak_config_is_app_excluded(
     cfg: *const config::ClakConfig,
     app_name: *const c_char,
 ) -> bool {
-    if cfg.is_null() || app_name.is_null() {
-        return false;
-    }
-    let app = match CStr::from_ptr(app_name).to_str() {
-        Ok(s) => s.to_lowercase(),
-        Err(_) => return false,
-    };
-    let c = &*cfg;
-    c.per_app
-        .excluded_apps
-        .iter()
-        .any(|ex| app.contains(&ex.to_lowercase()))
+    clak_config_get_app_mode(cfg, app_name) == 3
 }
 
 #[unsafe(no_mangle)]
