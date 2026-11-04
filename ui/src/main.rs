@@ -1063,7 +1063,7 @@ fn format_recorded_shortcut(
 // extract and save configuration from ui state
 fn save_config(
     window: &MainWindow,
-    apps_model: &Rc<VecModel<SharedString>>,
+    app_rules_model: &Rc<VecModel<AppRuleData>>,
     macros_model: &Rc<VecModel<MacroItemData>>,
 ) {
     let method_str = match window.get_method_index() {
@@ -1087,10 +1087,14 @@ fn save_config(
         _ => "ctrl_space",
     };
 
-    let mut saved_apps = Vec::new();
-    for i in 0..apps_model.row_count() {
-        if let Some(app) = apps_model.row_data(i) {
-            saved_apps.push(app.to_string());
+    let mut saved_rules = std::collections::HashMap::new();
+    for i in 0..app_rules_model.row_count() {
+        if let Some(rule) = app_rules_model.row_data(i) {
+            let n = rule.name.trim().to_string();
+            let m = rule.mode.trim().to_string();
+            if !n.is_empty() {
+                saved_rules.insert(n, m);
+            }
         }
     }
 
@@ -1126,7 +1130,7 @@ fn save_config(
     cfg_to_save.shortcuts.switch_method = switch_sc_str.to_string();
 
     cfg_to_save.per_app.remember_state = window.get_remember_app_state();
-    cfg_to_save.per_app.excluded_apps = saved_apps;
+    cfg_to_save.per_app.rules = saved_rules;
 
     cfg_to_save.advanced.autostart = window.get_autostart_system();
     cfg_to_save.advanced.uinput_ack = window.get_uinput_ack();
@@ -1235,14 +1239,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     main_window.set_heavy_app_gap_ms(cfg.pacing.heavy_app_gap_ms as i32);
 
     // populate models
-    let apps_vec: Vec<SharedString> = cfg
-        .per_app
-        .excluded_apps
-        .into_iter()
-        .map(SharedString::from)
-        .collect();
-    let apps_model = Rc::new(VecModel::from(apps_vec));
-    main_window.set_excluded_apps(apps_model.clone().into());
+    let mut rules_vec: Vec<AppRuleData> = Vec::new();
+    for (k, v) in &cfg.per_app.rules {
+        rules_vec.push(AppRuleData {
+            name: SharedString::from(k),
+            mode: SharedString::from(v),
+        });
+    }
+    for a in &cfg.per_app.excluded_apps {
+        if !cfg.per_app.rules.contains_key(a) {
+            rules_vec.push(AppRuleData {
+                name: SharedString::from(a),
+                mode: SharedString::from("off"),
+            });
+        }
+    }
+    rules_vec.sort_by(|a, b| a.name.cmp(&b.name));
+    let apps_model = Rc::new(VecModel::from(rules_vec));
+    main_window.set_app_rules(apps_model.clone().into());
 
     let macros_vec: Vec<MacroItemData> = cfg
         .macros
@@ -1256,13 +1270,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let macros_model = Rc::new(VecModel::from(macros_vec));
     main_window.set_macro_items(macros_model.clone().into());
 
-    // app exclusion callbacks
+    // app rule callbacks
     let apps_model_add = apps_model.clone();
     let win_weak_add_app = main_window.as_weak();
-    main_window.on_add_excluded_app(move |app_name| {
+    main_window.on_add_app_rule(move |app_name, mode_str| {
         let trimmed = app_name.trim();
         if !trimmed.is_empty() {
-            apps_model_add.push(SharedString::from(trimmed));
+            let mut found = false;
+            for i in 0..apps_model_add.row_count() {
+                if let Some(mut item) = apps_model_add.row_data(i) {
+                    if item.name.to_lowercase() == trimmed.to_lowercase() {
+                        item.mode = mode_str.clone();
+                        apps_model_add.set_row_data(i, item);
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            if !found {
+                apps_model_add.push(AppRuleData {
+                    name: SharedString::from(trimmed),
+                    mode: mode_str,
+                });
+            }
             if let Some(w) = win_weak_add_app.upgrade() {
                 w.set_has_changes(true);
             }
@@ -1271,7 +1301,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let apps_model_rm = apps_model.clone();
     let win_weak_rm_app = main_window.as_weak();
-    main_window.on_remove_excluded_app(move |idx| {
+    main_window.on_remove_app_rule(move |idx| {
         if idx >= 0 && (idx as usize) < apps_model_rm.row_count() {
             apps_model_rm.remove(idx as usize);
             if let Some(w) = win_weak_rm_app.upgrade() {
@@ -1614,9 +1644,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         while apps_reset.row_count() > 0 {
             apps_reset.remove(0);
-        }
-        for a in default_cfg.per_app.excluded_apps {
-            apps_reset.push(a.into());
         }
 
         window.set_has_changes(true);

@@ -1,20 +1,21 @@
 import { ScrollView, LineEdit } from "std-widgets.slint";
-import { Theme } from "../theme.slint";
-import { Divider, SettingItem, SectionHeader } from "../components/controls.slint";
+import { Theme, AppRuleData } from "../theme.slint";
+import { Divider, SettingItem, SectionHeader, Dropdown } from "../components/controls.slint";
 import { GhostButton } from "../components/buttons.slint";
 
-// tab 2: he thong va danh sach ung dung loai tru
+// tab 2: he thong va quy tac ung dung
 export component TabAdvanced inherits VerticalLayout {
     in-out property <bool> autostart_system: true;
     in-out property <bool> remember_app_state: true;
-    in-out property <[string]> excluded_apps: [];
+    in-out property <[AppRuleData]> app_rules: [];
     in-out property <string> new_app_name: "";
+    in-out property <int> new_app_mode_index: 0;
     in-out property <bool> uinput_ack: false;
     in-out property <bool> debug_log: false;
     in property <bool> is-wide: false;
     callback changed();
-    callback add_excluded_app(string);
-    callback remove_excluded_app(int);
+    callback add_app_rule(string, string);
+    callback remove_app_rule(int);
 
     spacing: root.is-wide ? 8px : 0px;
 
@@ -57,7 +58,7 @@ export component TabAdvanced inherits VerticalLayout {
     }
 
     SectionHeader {
-        title: "LOẠI TRỪ";
+        title: "CHẾ ĐỘ THEO ỨNG DỤNG";
         show-divider: true;
         is-wide: root.is-wide;
     }
@@ -70,9 +71,15 @@ export component TabAdvanced inherits VerticalLayout {
         spacing: 10px;
 
         LineEdit {
-            placeholder-text: "Nhập WM_CLASS app (vd: steam, code, alacritty)...";
+            placeholder-text: "Nhập WM_CLASS app (vd: zen, libreoffice, steam)...";
             text <=> root.new_app_name;
             horizontal-stretch: 1;
+        }
+
+        Dropdown {
+            width: 150px;
+            model: ["Uinput", "Surrounding", "Tắt tiếng Việt"];
+            current-index <=> root.new_app_mode_index;
         }
 
         GhostButton {
@@ -80,7 +87,10 @@ export component TabAdvanced inherits VerticalLayout {
             text: "Thêm";
             clicked => {
                 if root.new_app_name != "" {
-                    root.add_excluded_app(root.new_app_name);
+                    root.add_app_rule(
+                        root.new_app_name,
+                        root.new_app_mode_index == 0 ? "uinput" : (root.new_app_mode_index == 1 ? "surrounding" : "off")
+                    );
                     root.new_app_name = "";
                     root.changed();
                 }
@@ -105,23 +115,23 @@ export component TabAdvanced inherits VerticalLayout {
             border-radius: Theme.radius-sm;
             clip: true;
 
-            if root.excluded_apps.length == 0: VerticalLayout {
+            if root.app_rules.length == 0: VerticalLayout {
                 alignment: center;
                 Text {
-                    text: "Chưa có ứng dụng nào trong danh sách loại trừ";
+                    text: "Chưa có quy tắc ứng dụng nào (tất cả đều chạy Tự động)";
                     color: Theme.text-faint;
                     font-size: 13px;
                     horizontal-alignment: center;
                 }
             }
 
-            if root.excluded_apps.length > 0: ScrollView {
+            if root.app_rules.length > 0: ScrollView {
                 VerticalLayout {
                     padding: 6px;
                     spacing: 2px;
                     alignment: start;
 
-                    for app[idx] in root.excluded_apps: Rectangle {
+                    for rule[idx] in root.app_rules: Rectangle {
                         height: root.is-wide ? 44px : 38px;
                         background: app_row_ta.has-hover ? #ffffff0a : transparent;
                         border-radius: 6px;
@@ -133,14 +143,39 @@ export component TabAdvanced inherits VerticalLayout {
                             padding-right: 12px;
                             alignment: space-between;
 
-                            VerticalLayout {
-                                alignment: center;
-                                Text {
-                                    text: app;
-                                    color: Theme.text-primary;
-                                    font-size: root.is-wide ? 15px : 13px;
-                                    font-weight: Theme.text-weight;
-                                    vertical-alignment: center;
+                            HorizontalLayout {
+                                spacing: 12px;
+                                alignment: start;
+
+                                VerticalLayout {
+                                    alignment: center;
+                                    Text {
+                                        text: rule.name;
+                                        color: Theme.text-primary;
+                                        font-size: root.is-wide ? 15px : 13px;
+                                        font-weight: Theme.text-weight;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                VerticalLayout {
+                                    alignment: center;
+                                    Rectangle {
+                                        background: rule.mode == "uinput" ? #3b82f620 : (rule.mode == "surrounding" ? #10b98120 : #ef444420);
+                                        border-radius: 4px;
+                                        height: 22px;
+                                        HorizontalLayout {
+                                            padding-left: 6px;
+                                            padding-right: 6px;
+                                            alignment: center;
+                                            Text {
+                                                text: rule.mode == "uinput" ? "Uinput" : (rule.mode == "surrounding" ? "Surrounding" : "Tắt tiếng Việt");
+                                                color: rule.mode == "uinput" ? #60a5fa : (rule.mode == "surrounding" ? #34d399 : #f87171);
+                                                font-size: 11px;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+                                    }
                                 }
                             }
 
@@ -151,7 +186,7 @@ export component TabAdvanced inherits VerticalLayout {
                                     text: "Xoá";
                                     destructive: true;
                                     clicked => {
-                                        root.remove_excluded_app(idx);
+                                        root.remove_app_rule(idx);
                                         root.changed();
                                     }
                                 }

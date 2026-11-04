@@ -3,7 +3,7 @@ import "../assets/fonts/SF-Pro-Text-Medium.otf";
 import "../assets/fonts/SF-Pro-Text-Semibold.otf";
 import "../assets/fonts/SF-Pro-Text-Bold.otf";
 import { ScrollView } from "std-widgets.slint";
-import { Theme, MacroItemData, DoctorLineData } from "theme.slint";
+import { Theme, MacroItemData, DoctorLineData, AppRuleData } from "theme.slint";
 import { Card, Divider, StatusIndicator } from "components/controls.slint";
 import { ActionButton } from "components/buttons.slint";
 import { Sidebar } from "components/sidebar.slint";
@@ -14,7 +14,7 @@ import { TabPacing } from "tabs/tab_pacing.slint";
 import { TabDoctor } from "tabs/tab_doctor.slint";
 import { TabAbout } from "tabs/tab_about.slint";
 
-export { MacroItemData, DoctorLineData }
+export { MacroItemData, DoctorLineData, AppRuleData }
 
 // cua so chinh cua ung dung cai dat clak
 export component MainWindow inherits Window {
@@ -66,7 +66,7 @@ export component MainWindow inherits Window {
     // theo ung dung
     in-out property <bool> autostart_system: true;
     in-out property <bool> remember_app_state: false;
-    in-out property <[string]> excluded_apps: [];
+    in-out property <[AppRuleData]> app_rules: [];
     in-out property <string> new_app_name: "";
 
     // nang cao
@@ -142,8 +142,8 @@ export component MainWindow inherits Window {
     callback cancel_requested();
     callback escape_requested();
     callback open_url(string);
-    callback add_excluded_app(string);
-    callback remove_excluded_app(int);
+    callback add_app_rule(string, string);
+    callback remove_app_rule(int);
     callback add_macro(string, string);
     callback remove_macro(int);
     callback reset_defaults_requested();
@@ -364,13 +364,13 @@ export component MainWindow inherits Window {
                     is-wide: root.is-wide;
                     autostart_system <=> root.autostart_system;
                     remember_app_state <=> root.remember_app_state;
-                    excluded_apps <=> root.excluded_apps;
+                    app_rules <=> root.app_rules;
                     new_app_name <=> root.new_app_name;
                     uinput_ack <=> root.uinput_ack;
                     debug_log <=> root.debug_log;
                     changed => { root.has_changes = true; }
-                    add_excluded_app(name) => { root.add_excluded_app(name); }
-                    remove_excluded_app(idx) => { root.remove_excluded_app(idx); }
+                    add_app_rule(name, mode) => { root.add_app_rule(name, mode); }
+                    remove_app_rule(idx) => { root.remove_app_rule(idx); }
                 }
 
                 if root.selected_tab == 3: TabPacing {
