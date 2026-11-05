@@ -38,8 +38,16 @@ jobs:
 
       - name: Verify panic strategy is unwind
         run: |
-          if grep -E 'panic\s*=\s*"abort"' Cargo.toml; then
-            echo "ERROR: panic = 'abort' found in Cargo.toml! This breaks catch_unwind in C ABI and crashes fcitx5 daemon on panic."
+          if grep -rE 'panic\s*=\s*"abort"' Cargo.toml engine/ cli/ diagnostics/ ui/ 2>/dev/null; then
+            echo "ERROR: panic = 'abort' found in Cargo.toml files! This breaks catch_unwind in C ABI and crashes fcitx5 daemon on panic."
+            exit 1
+          fi
+          if [ -d .cargo ] && grep -rE 'panic\s*=\s*"abort"|-C\s*panic=abort' .cargo/ 2>/dev/null; then
+            echo "ERROR: panic=abort found in .cargo config! This breaks catch_unwind in C ABI."
+            exit 1
+          fi
+          if echo "${RUSTFLAGS:-}" | grep -E 'panic=abort'; then
+            echo "ERROR: panic=abort found in RUSTFLAGS environment variable!"
             exit 1
           fi
 
