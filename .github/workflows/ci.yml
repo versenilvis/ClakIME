@@ -30,20 +30,8 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y mold clang
 
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            engine/target/
-            cli/target/
-            diagnostics/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Check code formatting
         run: cargo fmt --all -- --check
