@@ -320,6 +320,25 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
     ));
     out.push('\n');
 
+    out.push_str("## 11. Thống Kê Pacing & Bộ Đếm Sự Kiện (Zero-Keystroke Telemetry)\n");
+    out.push_str(&format!(
+        "- Thao tác gõ: {} REPLACE, {} FORWARD\n",
+        report.telemetry.replace_count, report.telemetry.forward_count
+    ));
+    if report.telemetry.replace_count > 0 {
+        out.push_str("- Phân phối độ trễ REPLACE:\n");
+        out.push_str(&format!("  * p50: {:.2} ms\n", report.telemetry.p50_latency_ms));
+        out.push_str(&format!("  * p95: {:.2} ms\n", report.telemetry.p95_latency_ms));
+        out.push_str(&format!("  * p99: {:.2} ms\n", report.telemetry.p99_latency_ms));
+        out.push_str(&format!("  * Cực đại: {:.2} ms\n", report.telemetry.max_latency_ms));
+    }
+    out.push_str("- Bộ đếm sự kiện bất thường (Incidents):\n");
+    out.push_str(&format!("  * Lệch đồng hồ (Event loop drift): {}\n", report.telemetry.drift_detected_count));
+    out.push_str(&format!("  * Sentinel Timeouts: {}\n", report.telemetry.sentinel_timeout_count));
+    out.push_str(&format!("  * Tràn hàng đợi (Buffer overflows): {}\n", report.telemetry.overflow_count));
+    out.push_str(&format!("  * Lệch Surrounding Text: {}\n", report.telemetry.surrounding_mismatch_count));
+    out.push_str("- Bảo mật quyền riêng tư: 100% không ghi ký tự hoặc nội dung văn bản.\n\n");
+
     out.push_str("## Kết Luận & Hướng Xử Lý\n");
     if report.issues.is_empty() && report.warnings.is_empty() {
         out.push_str("Tất cả kiểm tra đều hoàn hảo. Clak sẵn sàng hoạt động tối ưu.\n");

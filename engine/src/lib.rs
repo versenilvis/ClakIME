@@ -10,6 +10,8 @@ pub mod spelling;
 pub mod tables;
 pub mod vseq;
 
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub use config::*;
 pub use ime::*;
 

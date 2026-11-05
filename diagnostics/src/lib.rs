@@ -18,7 +18,7 @@ pub use checks::daemon::{check_daemon, DaemonStatus};
 pub use checks::display::{check_display, DisplayEnvironment, MonitorInfo};
 pub use checks::environment::{check_environment, EnvironmentStatus};
 pub use checks::frontends::{check_frontends, FrontendStatus};
-pub use checks::latency::{check_latency, LatencyBenchmark};
+pub use checks::latency::{check_latency, check_telemetry, LatencyBenchmark, PacingTelemetry};
 pub use checks::memory::{check_memory, MemoryInspection};
 pub use checks::pacing_calc::{calculate_pacing, PacingRecommendation};
 pub use checks::permissions::{check_permissions, fix_input_permissions, PermissionChecks};
@@ -55,6 +55,7 @@ pub struct DiagnosticReport {
     pub display: DisplayEnvironment,
     pub latency: LatencyBenchmark,
     pub pacing: PacingRecommendation,
+    pub telemetry: PacingTelemetry,
     pub conflicts: Vec<AppConflict>,
     pub issues: Vec<DiagnosticIssue>,
     pub warnings: Vec<DiagnosticWarning>,
@@ -316,6 +317,7 @@ pub fn run_diagnostics() -> DiagnosticReport {
         display,
         latency,
         pacing,
+        telemetry: checks::latency::check_telemetry(),
         conflicts,
         issues,
         warnings,

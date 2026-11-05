@@ -241,3 +241,89 @@ pub fn check_latency() -> LatencyBenchmark {
         system_load: sys_load,
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PacingTelemetry {
+    pub replace_count: u32,
+    pub forward_count: u32,
+    pub p50_latency_ms: f64,
+    pub p95_latency_ms: f64,
+    pub p99_latency_ms: f64,
+    pub max_latency_ms: f64,
+    pub drift_detected_count: u32,
+    pub sentinel_timeout_count: u32,
+    pub overflow_count: u32,
+    pub surrounding_mismatch_count: u32,
+}
+
+pub fn check_telemetry() -> PacingTelemetry {
+    let mut replaces: Vec<f64> = Vec::new();
+    let mut forwards = 0;
+    let mut drifts = 0;
+    let mut timeouts = 0;
+    let mut overflows = 0;
+    let mut mismatches = 0;
+
+    if let Ok(content) = fs::read_to_string("/tmp/clak.log") {
+        for line in content.lines() {
+            if line.contains("[LATENCY]") {
+                if line.contains("action=REPLACE") {
+                    if let Some(idx) = line.find("delta_ms=") {
+                        let sub = &line[idx + 9..];
+                        let num_str: String = sub
+                            .chars()
+                            .take_while(|c| c.is_ascii_digit() || *c == '.')
+                            .collect();
+                        if let Ok(ms) = num_str.parse::<f64>() {
+                            if ms > 0.0 && ms < 2000.0 {
+                                replaces.push(ms);
+                            }
+                        }
+                    }
+                } else if line.contains("action=FORWARD") {
+                    forwards += 1;
+                }
+            } else {
+                let lower = line.to_lowercase();
+                if lower.contains("event loop drift") {
+                    drifts += 1;
+                }
+                if lower.contains("sentinel timeout") || lower.contains("action=timeout") {
+                    timeouts += 1;
+                }
+                if lower.contains("buffer overflow") || lower.contains("dropped old key") {
+                    overflows += 1;
+                }
+                if lower.contains("surrounding mismatch") {
+                    mismatches += 1;
+                }
+            }
+        }
+    }
+
+    let replace_count = replaces.len() as u32;
+    let (p50, p95, p99, max_lat) = if !replaces.is_empty() {
+        replaces.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        let n = replaces.len();
+        let p50 = replaces[n / 2];
+        let p95 = replaces[((n as f64 * 0.95).floor() as usize).min(n - 1)];
+        let p99 = replaces[((n as f64 * 0.99).floor() as usize).min(n - 1)];
+        let max_lat = replaces[n - 1];
+        (p50, p95, p99, max_lat)
+    } else {
+        (0.0, 0.0, 0.0, 0.0)
+    };
+
+    PacingTelemetry {
+        replace_count,
+        forward_count: forwards,
+        p50_latency_ms: p50,
+        p95_latency_ms: p95,
+        p99_latency_ms: p99,
+        max_latency_ms: max_lat,
+        drift_detected_count: drifts,
+        sentinel_timeout_count: timeouts,
+        overflow_count: overflows,
+        surrounding_mismatch_count: mismatches,
+    }
+}
