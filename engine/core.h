@@ -55,6 +55,10 @@ typedef void ClakContext;
 // They are valid synchronously until the next call to clak_process_key, clak_context_reset,
 // or clak_context_free on the same context. Callers must copy them immediately if needed
 // across asynchronous event loop dispatches.
+//
+// Thread safety contract:
+// ClakContext is not thread-safe. Concurrent calls on the same context without external
+// synchronization are undefined behavior. In Fcitx5, all calls must occur on the main event thread.
 typedef struct {
     int32_t     action_type;
     size_t      delete_count;

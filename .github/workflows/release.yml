@@ -69,7 +69,7 @@ jobs:
       - name: Create release bundle
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          DESTDIR=/tmp/clak-dist cmake --install build
+          DESTDIR=/tmp/clak-dist cmake --install build --strip
           if [ -f /tmp/clak-dist/usr/lib/x86_64-linux-gnu/fcitx5/libclak.so ] && [ ! -f /tmp/clak-dist/usr/lib/fcitx5/libclak.so ]; then
             mkdir -p /tmp/clak-dist/usr/lib/fcitx5
             cp -a /tmp/clak-dist/usr/lib/x86_64-linux-gnu/fcitx5/libclak.so /tmp/clak-dist/usr/lib/fcitx5/libclak.so
