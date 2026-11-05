@@ -41,23 +41,13 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Check code formatting
-        run: |
-          cargo fmt --manifest-path engine/Cargo.toml -- --check
-          cargo fmt --manifest-path diagnostics/Cargo.toml -- --check
-          cargo fmt --manifest-path cli/Cargo.toml -- --check
-          cargo fmt --manifest-path ui/Cargo.toml -- --check
+        run: cargo fmt --all -- --check
 
       - name: Run clippy linter
-        run: |
-          cargo clippy --manifest-path engine/Cargo.toml -- -D warnings
-          cargo clippy --manifest-path diagnostics/Cargo.toml -- -D warnings
-          cargo clippy --manifest-path cli/Cargo.toml -- -D warnings
+        run: cargo clippy --workspace -- -D warnings
 
       - name: Run tests
-        run: |
-          cargo test --manifest-path engine/Cargo.toml --verbose
-          cargo test --manifest-path diagnostics/Cargo.toml --verbose
-          cargo test --manifest-path cli/Cargo.toml --verbose
+        run: cargo test --workspace --verbose
 
   check-msrv:
     name: Check MSRV (1.85 & 1.92)
@@ -78,13 +68,13 @@ jobs:
 
       - name: Check MSRV for engine, cli, diagnostics (1.85.0)
         run: |
-          for c in engine diagnostics cli; do
-            cargo +1.85.0 test --no-run --locked --all-targets --manifest-path $c/Cargo.toml
+          for c in clak-engine clak-diagnostics clak; do
+            cargo +1.85.0 test --no-run --locked --all-targets -p $c
           done
 
       - name: Check MSRV for ui (1.92.0)
         run: |
-          cargo +1.92.0 test --no-run --locked --all-targets --manifest-path ui/Cargo.toml
+          cargo +1.92.0 test --no-run --locked --all-targets -p clak-gui
 
   build-distros:
     name: Build & Test (${{ matrix.distro }})

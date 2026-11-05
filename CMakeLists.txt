@@ -57,7 +57,9 @@ if(FCITX5_HAVE_SHOW_CUSTOM_IM_INFO)
     add_compile_definitions(FCITX5_HAVE_SHOW_CUSTOM_IM_INFO=1)
 endif()
 
-set(CARGO_TARGET_DIR "${CMAKE_CURRENT_BINARY_DIR}/cargo-target")
+if(NOT DEFINED CARGO_TARGET_DIR)
+    set(CARGO_TARGET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/target")
+endif()
 set(CLAK_ENGINE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/engine")
 set(CLAK_ENGINE_LIB "${CARGO_TARGET_DIR}/release/libclak_engine.a")
 
@@ -65,14 +67,16 @@ file(GLOB_RECURSE CLAK_ENGINE_SOURCES CONFIGURE_DEPENDS
     "${CLAK_ENGINE_DIR}/src/*.rs"
     "${CLAK_ENGINE_DIR}/data/*"
     "${CLAK_ENGINE_DIR}/Cargo.toml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml"
 )
 
 add_custom_command(
     OUTPUT ${CLAK_ENGINE_LIB}
     COMMAND cargo build --release
-        --manifest-path "${CLAK_ENGINE_DIR}/Cargo.toml"
+        --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml"
+        --package clak-engine
         --target-dir "${CARGO_TARGET_DIR}"
-    WORKING_DIRECTORY ${CLAK_ENGINE_DIR}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     DEPENDS ${CLAK_ENGINE_SOURCES}
     VERBATIM
 )
@@ -93,9 +97,10 @@ if(ENABLE_GUI AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ui/Cargo.toml")
     add_custom_command(
         OUTPUT ${CLAK_UI_BIN}
         COMMAND cargo build --release
-            --manifest-path "${CLAK_UI_DIR}/Cargo.toml"
+            --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml"
+            --package clak-gui
             --target-dir "${CARGO_TARGET_DIR}"
-        WORKING_DIRECTORY ${CLAK_UI_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         DEPENDS ${CLAK_UI_SOURCES} ${CLAK_ENGINE_SOURCES}
         VERBATIM
     )
@@ -121,9 +126,10 @@ if(ENABLE_CLI AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cli/Cargo.toml")
     add_custom_command(
         OUTPUT ${CLAK_CLI_BIN}
         COMMAND cargo build --release
-            --manifest-path "${CLAK_CLI_DIR}/Cargo.toml"
+            --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml"
+            --package clak
             --target-dir "${CARGO_TARGET_DIR}"
-        WORKING_DIRECTORY ${CLAK_CLI_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         DEPENDS ${CLAK_CLI_SOURCES} ${CLAK_DIAG_SOURCES}
         VERBATIM
     )

@@ -42,22 +42,19 @@ clean:
 # prune stale cargo cache and incremental artifacts
 [group("dev")]
 prune:
-    cargo clean --manifest-path engine/Cargo.toml
-    cargo clean --manifest-path diagnostics/Cargo.toml
-    cargo clean --manifest-path cli/Cargo.toml
-    cargo clean --manifest-path ui/Cargo.toml
-    rm -rf .scratch
+    cargo clean
+    rm -rf .scratch build/cargo-target engine/target ui/target cli/target diagnostics/target
 
 
 # run clak settings gui
 [group("gui")]
 gui:
-    cargo run --manifest-path ui/Cargo.toml --release
+    cargo run -p clak-gui --release
 
 # build clak settings gui binary
 [group("gui")]
 build-gui:
-    cargo build --manifest-path ui/Cargo.toml --release
+    cargo build -p clak-gui --release
 
 # run all automated tests
 [group("test")]
@@ -66,7 +63,7 @@ test: test-unit test-cpp test-scenario
 # run all cargo tests
 [group("test")]
 test-unit:
-    cargo test --manifest-path engine/Cargo.toml
+    cargo test -p clak-engine
 
 # run c++ state machine and regression test suites
 [group("test")]
@@ -107,17 +104,9 @@ test-update args="":
 # run all fmt, clippy, unit tests and build check before pushing
 [group("quality")]
 check:
-    cargo fmt --manifest-path engine/Cargo.toml -- --check
-    cargo fmt --manifest-path diagnostics/Cargo.toml -- --check
-    cargo fmt --manifest-path cli/Cargo.toml -- --check
-    cargo fmt --manifest-path ui/Cargo.toml -- --check
-    cargo clippy --manifest-path engine/Cargo.toml -- -D warnings
-    cargo clippy --manifest-path diagnostics/Cargo.toml -- -D warnings
-    cargo clippy --manifest-path cli/Cargo.toml -- -D warnings
-    cargo test --manifest-path engine/Cargo.toml
-    cargo test --manifest-path diagnostics/Cargo.toml
-    cargo test --manifest-path cli/Cargo.toml
-    cargo test --manifest-path ui/Cargo.toml
+    cargo fmt --all -- --check
+    cargo clippy --workspace -- -D warnings
+    cargo test --workspace
     @if [ ! -f build/build.ninja ] && [ ! -f build/Makefile ]; then cmake -B build; fi
     cmake --build build --target clak_cpp_tests
     ./build/src/tests/clak_cpp_tests
@@ -135,12 +124,12 @@ install-hooks:
 # run latency benchmark analysis and regression assertion
 [group("quality")]
 bench *args:
-    cargo run --manifest-path cli/Cargo.toml --release -- bench {{args}}
+    cargo run -p clak --release -- bench {{args}}
 
 # run environment diagnostics
 [group("quality")]
 doctor *args:
-    cargo run --manifest-path cli/Cargo.toml --release -- doctor {{args}}
+    cargo run -p clak --release -- doctor {{args}}
 
 # tail debug log
 [group("debug")]
@@ -188,14 +177,11 @@ tag version:
     sed -i "s/^pkgver=[0-9.]\+/pkgver=${ver}/" packaging/aur-bin/PKGBUILD
     sed -i "s/^pkgrel=[0-9]\+/pkgrel=1/" packaging/aur-bin/PKGBUILD
 
-    cargo check --manifest-path engine/Cargo.toml --quiet
-    cargo check --manifest-path diagnostics/Cargo.toml --quiet
-    cargo check --manifest-path cli/Cargo.toml --quiet
-    cargo check --manifest-path ui/Cargo.toml --quiet
+    cargo check --workspace --quiet
     (cd packaging/aur && makepkg --printsrcinfo > .SRCINFO)
     (cd packaging/aur-bin && makepkg --printsrcinfo > .SRCINFO)
 
-    git add CMakeLists.txt data/clak-addon.conf.in engine/Cargo.toml engine/Cargo.lock diagnostics/Cargo.lock cli/Cargo.lock ui/Cargo.toml ui/Cargo.lock packaging/aur/PKGBUILD packaging/aur/.SRCINFO packaging/aur-bin/PKGBUILD packaging/aur-bin/.SRCINFO
+    git add CMakeLists.txt data/clak-addon.conf.in engine/Cargo.toml ui/Cargo.toml Cargo.lock packaging/aur/PKGBUILD packaging/aur/.SRCINFO packaging/aur-bin/PKGBUILD packaging/aur-bin/.SRCINFO
     git commit -m "chore: release ${tag}"
     git tag -a "${tag}" -m "release: ${tag}"
 
@@ -221,7 +207,7 @@ pkg-aur:
 # create cargo vendor archive for offline packaging
 [group("release")]
 vendor:
-    cargo vendor vendor/ --manifest-path engine/Cargo.toml
+    cargo vendor vendor/
     tar -czf clak-vendor.tar.gz vendor/
     sha256sum clak-vendor.tar.gz > clak-vendor.tar.gz.sha256
     rm -rf vendor/

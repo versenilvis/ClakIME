@@ -49,13 +49,13 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            build/cargo-target/
-          key: ${{ runner.os }}-build-ubuntu-${{ hashFiles('engine/Cargo.lock', 'ui/Cargo.lock') }}
+            target/
+          key: ${{ runner.os }}-build-ubuntu-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-build-ubuntu-
 
       - name: Run engine tests
-        run: cargo test --manifest-path engine/Cargo.toml --verbose
+        run: cargo test -p clak-engine --verbose
 
       - name: Build Clak
         run: |
@@ -93,7 +93,7 @@ jobs:
       - name: Create vendor tarball
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          cargo vendor vendor/ --manifest-path engine/Cargo.toml
+          cargo vendor vendor/
           tar -czf dist/clak-${VERSION}-vendor.tar.gz vendor/
           rm -rf vendor/
 
