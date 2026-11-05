@@ -270,7 +270,7 @@ bool ClakState::shouldUseUinput(bool use_surrounding, uint32_t action_type, cons
     if (action_type == CLAK_ACTION_ADDRESS_BAR_FIX) {
         return true;
     }
-    if (verifier_.isCanvasEditor() || verifier_.isRichTextEditor()) {
+    if (isBrowser() && (verifier_.isCanvasEditor() || verifier_.isRichTextEditor())) {
         return true;
     }
     return !use_surrounding;
