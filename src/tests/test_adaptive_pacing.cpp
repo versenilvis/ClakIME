@@ -121,6 +121,7 @@ TEST(AdaptivePacingTest, Classification) {
     EXPECT_EQ(AdaptivePacingEngine::classify("idea.sh", "", false), PacingGroup::HeavyApp);
 
     EXPECT_EQ(AdaptivePacingEngine::classify("gedit", "", false), PacingGroup::Default);
+    EXPECT_EQ(AdaptivePacingEngine::classify("electron-xterm", "clak_electron_xterm", false), PacingGroup::TerminalUinput);
 }
 
 TEST(AdaptivePacingTest, SubFrameMismatchIgnored) {
@@ -188,6 +189,10 @@ TEST(AdaptivePacingTest, CalculatePreDelayWithinPostCommitWindow) {
     EXPECT_EQ(engine.calculatePreDelay(PacingGroup::WebDraftJs, t_commit, t_commit), 16u);
     EXPECT_EQ(engine.calculatePreDelay(PacingGroup::WebDraftJs, t_commit, t_commit + 15000ULL), 16u);
     EXPECT_EQ(engine.calculatePreDelay(PacingGroup::WebDraftJs, t_commit, t_commit + 40000ULL), 0u);
+
+    // elevated rtt expands pre-delay buffer up to ceiling
+    engine.recordRtt(PacingGroup::WebDraftJs, 60000ULL);
+    EXPECT_EQ(engine.calculatePreDelay(PacingGroup::WebDraftJs, t_commit, t_commit), 30u);
 
     // terminal uinput always skips pre-delay to avoid scheduler jitter
     EXPECT_EQ(engine.calculatePreDelay(PacingGroup::TerminalUinput, t_commit, t_commit), 0u);
@@ -271,6 +276,32 @@ TEST(AdaptivePacingTest, FastOutlierDoesNotPolluteP10Baseline) {
 
     // min_rtt_ms (p10) should still be 10ms, not 0ms
     EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).min_rtt_ms, 10u);
+}
+
+TEST(AdaptivePacingTest, ProlongedHighRttDoesNotInflateBaselineOrTriggerPrematureDecay) {
+    AdaptivePacingEngine engine;
+    uint64_t t0 = 1000000ULL;
+    // initial idle baseline of 2ms
+    for (int i = 0; i < 20; ++i) {
+        engine.recordRtt(PacingGroup::TerminalUinput, 2000ULL);
+    }
+    EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).min_rtt_ms, 2u);
+
+    // simulate a heavy load spike that triggers starvation
+    engine.onIncident(PacingGroup::TerminalUinput, IncidentType::PacingStarvation, t0);
+    EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).post_delay_ms, 16u);
+
+    // simulate 100 transactions under prolonged high RTT (30ms) during a 5-minute build
+    for (int i = 0; i < 100; ++i) {
+        engine.recordRtt(PacingGroup::TerminalUinput, 30000ULL);
+        engine.onTransactionSuccess(PacingGroup::TerminalUinput);
+    }
+
+    // asymmetric filter ensures baseline does NOT jump to 30ms
+    EXPECT_LE(engine.metrics(PacingGroup::TerminalUinput).min_rtt_ms, 4u);
+
+    // while under high RTT load, fast decay must NOT have triggered, preserving safe delay
+    EXPECT_GT(engine.metrics(PacingGroup::TerminalUinput).post_delay_ms, engine.metrics(PacingGroup::TerminalUinput).floor_post_ms);
 }
 
 TEST(AdaptivePacingTest, SsthreshPreventsPrematureDecayAtHighDelay) {

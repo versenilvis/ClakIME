@@ -153,28 +153,43 @@ bool UinputTool::send_backspace_direct(size_t count, uint32_t post_delay_ms, uin
     }
 
     // paced uinput worker thread prevents blocking fcitx event loop
-    std::thread([this, count, post_delay_ms, pre_delay_ms, gap_ms]() {
+    std::thread([this, count, post_delay_ms, pre_delay_ms, gap_ms, hold_us]() {
         if (pre_delay_ms > 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(pre_delay_ms));
         }
 
-        auto emit_bs = [this]() {
+        auto emit_bs = [this, hold_us]() {
             std::lock_guard<std::mutex> lock(uinput_mutex_);
             if (direct_fd_ < 0) return;
-            struct input_event evs[4]{};
-            evs[0] = { {}, EV_KEY, KEY_BACKSPACE, 1 };
-            evs[1] = { {}, EV_SYN, SYN_REPORT, 0 };
-            evs[2] = { {}, EV_KEY, KEY_BACKSPACE, 0 };
-            evs[3] = { {}, EV_SYN, SYN_REPORT, 0 };
-            ssize_t written = write(direct_fd_, evs, sizeof(evs));
-            if (written < 0) {
-                int err = errno;
-                utils::clakLog("ERROR: uinput write failed: errno=" + std::to_string(err) + " (" + strerror(err) + ")");
+            if (hold_us > 0) {
+                struct input_event down[2]{};
+                down[0] = { {}, EV_KEY, KEY_BACKSPACE, 1 };
+                down[1] = { {}, EV_SYN, SYN_REPORT, 0 };
+                (void)write(direct_fd_, down, sizeof(down));
+
+                struct timespec ts = {0, static_cast<long>(hold_us * 1000)};
+                nanosleep(&ts, nullptr);
+
+                struct input_event up[2]{};
+                up[0] = { {}, EV_KEY, KEY_BACKSPACE, 0 };
+                up[1] = { {}, EV_SYN, SYN_REPORT, 0 };
+                (void)write(direct_fd_, up, sizeof(up));
+            } else {
+                struct input_event evs[4]{};
+                evs[0] = { {}, EV_KEY, KEY_BACKSPACE, 1 };
+                evs[1] = { {}, EV_SYN, SYN_REPORT, 0 };
+                evs[2] = { {}, EV_KEY, KEY_BACKSPACE, 0 };
+                evs[3] = { {}, EV_SYN, SYN_REPORT, 0 };
+                ssize_t written = write(direct_fd_, evs, sizeof(evs));
+                if (written < 0) {
+                    int err = errno;
+                    utils::clakLog("ERROR: uinput write failed: errno=" + std::to_string(err) + " (" + strerror(err) + ")");
+                }
             }
         };
 
         // send deletion backspaces before the sentinel
-        if (gap_ms == 0 && count > 1) {
+        if (gap_ms == 0 && hold_us == 0 && count > 1) {
             std::lock_guard<std::mutex> lock(uinput_mutex_);
             if (direct_fd_ >= 0) {
                 std::vector<struct input_event> evs;

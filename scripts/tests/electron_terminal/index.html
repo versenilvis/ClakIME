@@ -25,6 +25,7 @@
 
         const urlParams = new URLSearchParams(window.location.search);
         const outputFile = urlParams.get('out') || '/tmp/electron_term.txt';
+        const lagMs = parseInt(urlParams.get('lag') || '0', 10);
         try { fs.writeFileSync(outputFile, ''); } catch (e) {}
 
         function flushBufferLines() {
@@ -44,6 +45,10 @@
         }
 
         term.onData(data => {
+            if (lagMs > 0) {
+                const end = performance.now() + lagMs;
+                while (performance.now() < end) {}
+            }
             try {
                 fs.appendFileSync(outputFile, data);
             } catch (e) {}

@@ -7,9 +7,11 @@ const args = process.argv.slice(2);
 let outputFile = '/tmp/electron_term.txt';
 let readyFile = '/tmp/electron_term.ready';
 
+let lagMs = 0;
 for (const a of args) {
     if (a.endsWith('.txt') || a.endsWith('.bin')) outputFile = a;
     if (a.endsWith('.ready')) readyFile = a;
+    if (a.startsWith('--lag=')) lagMs = parseInt(a.split('=')[1], 10) || 0;
 }
 
 app.whenReady().then(() => {
@@ -24,7 +26,7 @@ app.whenReady().then(() => {
     });
 
     win.loadFile(path.join(__dirname, 'index.html'), {
-        query: { out: outputFile }
+        query: { out: outputFile, lag: lagMs }
     });
 
     ipcMain.on('ready', () => {

@@ -233,7 +233,7 @@ void AdaptivePacingEngine::recordRtt(PacingGroup group, uint64_t rtt_us) {
     auto& g = getGroup(group);
     uint32_t rtt_ms = static_cast<uint32_t>((rtt_us + 500) / 1000);
 
-    // track baseline rtt using p10 in a sliding window to resist fast outliers
+    // track baseline rtt using asymmetric filter with p10 buffer to resist outliers
     if (rtt_ms > 0) {
         g.rtt_samples.push_back(rtt_ms);
         if (g.rtt_samples.size() > 50) {
@@ -242,7 +242,19 @@ void AdaptivePacingEngine::recordRtt(PacingGroup group, uint64_t rtt_us) {
         std::vector<uint32_t> sorted(g.rtt_samples.begin(), g.rtt_samples.end());
         std::sort(sorted.begin(), sorted.end());
         size_t p10_idx = sorted.size() / 10;
-        g.metrics.min_rtt_ms = sorted[p10_idx];
+        uint32_t current_p10 = sorted[p10_idx];
+
+        if (g.metrics.min_rtt_ms == 0) {
+            g.metrics.min_rtt_ms = current_p10;
+        } else if (current_p10 < g.metrics.min_rtt_ms) {
+            // fast drop when system returns to idle or a lower baseline is confirmed
+            g.metrics.min_rtt_ms = current_p10;
+        } else if (current_p10 > g.metrics.min_rtt_ms) {
+            // asymmetric: baseline can only creep up during prolonged clean periods with zero incidents
+            if (g.incident_timestamps_us.empty() && g.metrics.consecutive_clean_words >= 50) {
+                g.metrics.min_rtt_ms += 1;
+            }
+        }
     }
 
     // smoothed rtt using exponential moving average
@@ -298,7 +310,12 @@ uint32_t AdaptivePacingEngine::calculatePreDelay(PacingGroup group, uint64_t las
     const auto& m = getGroup(group).metrics;
     uint64_t window_us = static_cast<uint64_t>(m.post_commit_window_ms) * 1000ULL;
     if (now_us <= last_commit_time_us || (now_us - last_commit_time_us) < window_us) {
-        return std::max(m.post_delay_ms, m.pre_delay_ms);
+        uint32_t eff_pre = std::max(m.post_delay_ms, m.pre_delay_ms);
+        // adapt pre-delay to target application latency under load
+        if (m.smoothed_rtt_ms > eff_pre) {
+            eff_pre = std::min(m.ceiling_post_ms, std::max(eff_pre, m.smoothed_rtt_ms / 2));
+        }
+        return eff_pre;
     }
     return 0;
 }
