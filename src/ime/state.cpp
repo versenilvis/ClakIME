@@ -55,7 +55,9 @@ void ClakState::syncConfig() {
 }
 
 ClakState::~ClakState() {
-    pacing_engine_.saveStateToFile();
+    if (!std::getenv("CLAK_FIXED_DELAY_MS") && !std::getenv("CLAK_FIXED_GAP_MS")) {
+        pacing_engine_.saveStateToFile();
+    }
     if (rust_ctx_) {
         clak_context_free(rust_ctx_);
         rust_ctx_ = nullptr;

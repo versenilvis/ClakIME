@@ -11,9 +11,10 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
         report.system.kernel_release, report.system.architecture
     ));
     out.push_str(&format!(
-        "- Session: {} (Desktop: {})\n\n",
+        "- Session: {} (Desktop: {})\n",
         report.system.session_type, report.system.desktop_environment
     ));
+    out.push_str(&format!("- Pacing env_key: `{}`\n\n", report.system.env_key));
 
     out.push_str("## 2. Quyền Hạn & Thiết Bị\n");
     out.push_str(&format!(

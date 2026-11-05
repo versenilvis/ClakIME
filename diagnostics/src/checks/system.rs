@@ -10,6 +10,46 @@ pub struct SystemInfo {
     pub architecture: String,
     pub session_type: String,
     pub desktop_environment: String,
+    pub env_key: String,
+}
+
+fn detect_env_key() -> String {
+    let mut comp = "unknown".to_string();
+    let mut comp_ver = "unknown".to_string();
+
+    let hypr_sig = env::var("HYPRLAND_INSTANCE_SIGNATURE").ok();
+    let sway_sock = env::var("SWAYSOCK").ok();
+    let env_comp = env::var("XDG_CURRENT_DESKTOP").ok();
+    let kde_ver = env::var("KDE_SESSION_VERSION").ok();
+
+    if let Some(sig) = hypr_sig {
+        if !sig.is_empty() {
+            comp = "hyprland".to_string();
+            if let Some((commit, _)) = sig.split_once('_') {
+                comp_ver = commit.chars().take(12).collect();
+            }
+        }
+    } else if let Some(sock) = sway_sock {
+        if !sock.is_empty() {
+            comp = "sway".to_string();
+            comp_ver = "1.x".to_string();
+        }
+    } else if let Some(c) = env_comp {
+        if !c.is_empty() {
+            comp = c.to_lowercase();
+            if let Some(kv) = kde_ver {
+                if !kv.is_empty() {
+                    comp_ver = kv;
+                }
+            }
+        }
+    } else if env::var("WAYLAND_DISPLAY").is_ok() {
+        comp = "wayland".to_string();
+    } else if env::var("DISPLAY").is_ok() {
+        comp = "x11".to_string();
+    }
+
+    format!("{}:{}:0.7.8:fcitx5", comp, comp_ver)
 }
 
 pub fn check_system() -> SystemInfo {
@@ -47,6 +87,7 @@ pub fn check_system() -> SystemInfo {
     let session_type = env::var("XDG_SESSION_TYPE").unwrap_or_else(|_| "unknown".to_string());
     let desktop_environment =
         env::var("XDG_CURRENT_DESKTOP").unwrap_or_else(|_| "unknown".to_string());
+    let env_key = detect_env_key();
 
     SystemInfo {
         os_name,
@@ -54,5 +95,6 @@ pub fn check_system() -> SystemInfo {
         architecture,
         session_type,
         desktop_environment,
+        env_key,
     }
 }

@@ -19,19 +19,37 @@ namespace pacing {
 
 std::string AdaptivePacingEngine::currentEnvKey() {
     std::string comp = "unknown";
-    if (std::getenv("HYPRLAND_INSTANCE_SIGNATURE")) {
+    std::string comp_ver = "unknown";
+
+    const char* env_comp = std::getenv("XDG_CURRENT_DESKTOP");
+    const char* hypr_sig = std::getenv("HYPRLAND_INSTANCE_SIGNATURE");
+    const char* sway_sock = std::getenv("SWAYSOCK");
+    const char* kde_ver = std::getenv("KDE_SESSION_VERSION");
+
+    if (hypr_sig && *hypr_sig) {
         comp = "hyprland";
-    } else if (std::getenv("SWAYSOCK")) {
+        // hyprland instance signature format is commit_time_rand
+        // extract git commit prefix to avoid invalidating cache across login sessions
+        std::string sig(hypr_sig);
+        size_t under = sig.find('_');
+        if (under != std::string::npos && under > 0) {
+            comp_ver = sig.substr(0, std::min(under, size_t(12)));
+        }
+    } else if (sway_sock && *sway_sock) {
         comp = "sway";
-    } else if (const char* d = std::getenv("XDG_CURRENT_DESKTOP")) {
-        comp = d;
+        comp_ver = "1.x";
+    } else if (env_comp && *env_comp) {
+        comp = env_comp;
         std::transform(comp.begin(), comp.end(), comp.begin(), ::tolower);
+        if (kde_ver && *kde_ver) {
+            comp_ver = kde_ver;
+        }
     } else if (std::getenv("WAYLAND_DISPLAY")) {
         comp = "wayland";
     } else if (std::getenv("DISPLAY")) {
         comp = "x11";
     }
-    return comp + ":0.7.8:fcitx5";
+    return comp + ":" + comp_ver + ":0.7.8:fcitx5";
 }
 
 AdaptivePacingEngine::AdaptivePacingEngine(bool enabled)
@@ -427,6 +445,9 @@ void AdaptivePacingEngine::loadStateFromFile(const std::string& path) {
 }
 
 void AdaptivePacingEngine::saveStateToFile(const std::string& path) const {
+    if (std::getenv("CLAK_FIXED_DELAY_MS") || std::getenv("CLAK_FIXED_GAP_MS") || !enabled_) {
+        return;
+    }
     std::string file_path = path.empty() ? defaultStateFilePath() : path;
     if (file_path.empty()) return;
 
