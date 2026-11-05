@@ -21,6 +21,7 @@ build() {
     cd "$_pkgname-$pkgver" 2>/dev/null || cd "$pkgname-$pkgver" 2>/dev/null || cd *-"$pkgver"
     cmake -B build -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
+        -DRELEASE_DIST=ON \
         -DCMAKE_INSTALL_PREFIX=/usr
     cmake --build build -j"$(nproc)"
 }

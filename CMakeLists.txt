@@ -57,11 +57,19 @@ if(FCITX5_HAVE_SHOW_CUSTOM_IM_INFO)
     add_compile_definitions(FCITX5_HAVE_SHOW_CUSTOM_IM_INFO=1)
 endif()
 
+option(RELEASE_DIST "Build with full fat LTO for release distribution" OFF)
+
+if(RELEASE_DIST)
+    set(CARGO_PROFILE "release-dist")
+else()
+    set(CARGO_PROFILE "release")
+endif()
+
 if(NOT DEFINED CARGO_TARGET_DIR)
     set(CARGO_TARGET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/target")
 endif()
 set(CLAK_ENGINE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/engine")
-set(CLAK_ENGINE_LIB "${CARGO_TARGET_DIR}/release/libclak_engine.a")
+set(CLAK_ENGINE_LIB "${CARGO_TARGET_DIR}/${CARGO_PROFILE}/libclak_engine.a")
 
 file(GLOB_RECURSE CLAK_ENGINE_SOURCES CONFIGURE_DEPENDS
     "${CLAK_ENGINE_DIR}/src/*.rs"
@@ -72,7 +80,7 @@ file(GLOB_RECURSE CLAK_ENGINE_SOURCES CONFIGURE_DEPENDS
 
 add_custom_command(
     OUTPUT ${CLAK_ENGINE_LIB}
-    COMMAND cargo build --release
+    COMMAND cargo build --profile ${CARGO_PROFILE}
         --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml"
         --package clak-engine
         --target-dir "${CARGO_TARGET_DIR}"
@@ -86,7 +94,7 @@ option(ENABLE_GUI "Build GUI configuration app" ON)
 
 if(ENABLE_GUI AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ui/Cargo.toml")
     set(CLAK_UI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    set(CLAK_UI_BIN "${CARGO_TARGET_DIR}/release/clak-gui")
+    set(CLAK_UI_BIN "${CARGO_TARGET_DIR}/${CARGO_PROFILE}/clak-gui")
 
     file(GLOB_RECURSE CLAK_UI_SOURCES CONFIGURE_DEPENDS
         "${CLAK_UI_DIR}/src/*"
@@ -96,7 +104,7 @@ if(ENABLE_GUI AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ui/Cargo.toml")
 
     add_custom_command(
         OUTPUT ${CLAK_UI_BIN}
-        COMMAND cargo build --release
+        COMMAND cargo build --profile ${CARGO_PROFILE}
             --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml"
             --package clak-gui
             --target-dir "${CARGO_TARGET_DIR}"
@@ -111,7 +119,7 @@ option(ENABLE_CLI "Build CLI utility app" ON)
 
 if(ENABLE_CLI AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cli/Cargo.toml")
     set(CLAK_CLI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cli")
-    set(CLAK_CLI_BIN "${CARGO_TARGET_DIR}/release/clak")
+    set(CLAK_CLI_BIN "${CARGO_TARGET_DIR}/${CARGO_PROFILE}/clak")
 
     file(GLOB_RECURSE CLAK_CLI_SOURCES CONFIGURE_DEPENDS
         "${CLAK_CLI_DIR}/src/*"
@@ -125,7 +133,7 @@ if(ENABLE_CLI AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cli/Cargo.toml")
 
     add_custom_command(
         OUTPUT ${CLAK_CLI_BIN}
-        COMMAND cargo build --release
+        COMMAND cargo build --profile ${CARGO_PROFILE}
             --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml"
             --package clak
             --target-dir "${CARGO_TARGET_DIR}"
