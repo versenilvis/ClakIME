@@ -68,6 +68,7 @@ private:
   void replayBufferedKeys(const std::string& initial_batch = "");
   std::string activeSite();
   void doCommitString(const std::string& text);
+  void doCommitDirect(const std::string& text);
   std::string classifyGroup(const std::string& app, const std::string& site, bool is_autofill, bool used_uinput);
   void logLatency(const std::string& group, uint64_t start_us, const std::string& action_type);
   void logCsv(uint64_t rtt_us, const std::string& action);
@@ -95,7 +96,8 @@ private:
   std::string op_group_;
 
   std::string pending_commit_string_;
-  std::function<void()> flush_replay_batch_;
+  std::string batch_commit_;
+  bool is_replaying_{false};
   std::unique_ptr<fcitx::EventSourceTime> safety_timer_;
   std::unique_ptr<fcitx::EventSourceTime> commit_timer_;
   std::unique_ptr<fcitx::EventSourceTime> surr_lag_timer_;

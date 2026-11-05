@@ -25,10 +25,20 @@ public:
   size_t size() const { return keys_.size(); }
   bool empty() const { return keys_.empty(); }
   void clear() { keys_.clear(); }
+  size_t peak_depth() const { return peak_depth_; }
+  size_t overflow_count() const { return overflow_count_; }
+  void reset_metrics() { peak_depth_ = keys_.size(); overflow_count_ = 0; }
   const std::vector<fcitx::Key>& keys() const { return keys_; }
+  std::vector<fcitx::Key> take_keys() {
+    auto ret = std::move(keys_);
+    keys_.clear();
+    return ret;
+  }
 
 private:
   std::vector<fcitx::Key> keys_;
+  size_t peak_depth_{0};
+  size_t overflow_count_{0};
 };
 
 } // namespace ime

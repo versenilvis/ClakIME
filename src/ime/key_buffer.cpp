@@ -9,8 +9,13 @@ namespace ime {
 bool KeyBuffer::push(const fcitx::Key& key) {
     if (keys_.size() < config::kMaxBufferedKeys) {
         keys_.push_back(key);
+        if (keys_.size() > peak_depth_) {
+            peak_depth_ = keys_.size();
+        }
         return true;
     }
+    ++overflow_count_;
+    utils::clakLog("key_buffer overflow: reached capacity " + std::to_string(config::kMaxBufferedKeys) + ", dropped key");
     return false;
 }
 

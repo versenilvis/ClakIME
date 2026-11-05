@@ -9,6 +9,8 @@
 #include "window/window_info.h"
 #include "apps/modal_editor.h"
 #include "config/sites.h"
+#include "config/config.h"
+#include "utils/text_utils.h"
 
 namespace clak {
 namespace test {
@@ -130,10 +132,10 @@ TEST_F(ClakStateTest, GivenSentinelNeverArrives_SafetyTimerFires_RecoversAndComm
     EXPECT_TRUE(state.isDeleting());
     EXPECT_EQ(state.pendingCommitString(), "đ");
 
-    // run event loop on the same thread with an exit timer at 400ms (safety timer is 50ms)
+    // run event loop on the same thread with an exit timer after safety timer
     auto exit_timer = instance_->eventLoop().addTimeEvent(
         CLOCK_MONOTONIC,
-        fcitx::now(CLOCK_MONOTONIC) + 400000,
+        fcitx::now(CLOCK_MONOTONIC) + config::kSafetyTimeoutUs + 100000,
         0,
         [this](fcitx::EventSourceTime*, uint64_t) {
             instance_->eventLoop().exit();
@@ -214,10 +216,10 @@ TEST_F(ClakStateTest, GivenTieengs_WhenKeysArriveDuringUinputDeletion) {
     ic.sendCleanBackspace(&state);
     ic.sendCleanBackspace(&state);
 
-    // flush batch commit before sending new backspaces to prevent racing
-    ASSERT_GE(event_order.size(), 3u);
-    EXPECT_EQ(event_order[1], "commit_êng");
-    EXPECT_EQ(event_order[2], "uinput_bs_4");
+    // in-memory absorption: deletions absorbed without sending new backspaces over uinput
+    ASSERT_EQ(event_order.size(), 2u);
+    EXPECT_EQ(event_order[1], "commit_ếng");
+    EXPECT_FALSE(state.isDeleting());
 }
 
 TEST_F(ClakStateTest, GivenStaleSurroundingTextAfterReplacement_DoesNotResetOnToneKey) {
@@ -524,8 +526,11 @@ TEST_F(ClakStateTest, GivenSteamApp_WhenTypingFast_ProcessesBufferedKeysInStrict
 
     EXPECT_FALSE(state.isDeleting());
     EXPECT_EQ(state.bufferedKeysCount(), 0);
-    // commits must reflect: initial 'd', replacement 'đ', then 'o', 'n', 'g'
-    ASSERT_GE(ic.commits.size(), 4);
+    // commits must reflect: initial 'd', replacement 'đ', then batched or sequential 'o', 'n', 'g'
+    std::string full_commit;
+    for (const auto& c : ic.commits) full_commit += c;
+    EXPECT_TRUE(full_commit.find("đ") != std::string::npos);
+    EXPECT_TRUE(full_commit.find("ong") != std::string::npos);
 }
 
 TEST_F(ClakStateTest, GivenSteamApp_StaggersMultipleBackspacesWithTimers) {
@@ -845,6 +850,102 @@ TEST_F(ClakStateTest, GivenSpaceAfterWord_WhenBackspacedAndToneKeyTyped_ResumesW
     // type 's' to add tone
     ic.typeChar('s', &state);
     EXPECT_EQ(ic.surroundingText().text(), "toán");
+}
+
+TEST_F(ClakStateTest, PropertyTest_BatchReplayMatchesSequentialReference) {
+    platform::setMockActiveWindow(platform::WindowInfo{"kitty", "kitty", 1234});
+
+    std::vector<std::string> test_words = {
+        "tieengs", "dduowcj", "nguwowfi", "khoong", "thanh", "tharn",
+        "tuyeetj", "vowfi", "nhuwxng", "nawngs", "roojng", "lowsn",
+        "chieeus", "roji", "xuoongs", "khawps", "thung", "lungx",
+        "mown", "mowrn", "suoosi", "luowjn", "uoosn", "chawm", "chir",
+        "kieen", "trif", "gawsn", "bos", "ruoojng", "ddoofng", "vawn",
+        "hoas", "ddaamj", "ddaf", "barn", "sawsc", "booj", "gox",
+        "vieetj", "hoatj", "ddoojng", "muowjt", "maf", "chongs", "chinhs"
+    };
+
+    size_t total_uinput_sequential = 0;
+    size_t total_uinput_batched = 0;
+
+    for (const auto& word : test_words) {
+        // sequential reference path: each key processed after sentinel returns
+        std::string ref_screen;
+        size_t uinput_ref = 0;
+        {
+            MockInputContext ic(instance_->inputContextManager(), "kitty");
+            ime::ClakState state(engine_.get(), &ic);
+            uinput::UinputTool::instance().setMockHandler([&](size_t count, uint32_t, uint32_t, uint32_t, uint32_t) {
+                // real backspaces sent to app are count - 1 (last is sentinel)
+                if (count > 1) {
+                    utils::popUtf8Chars(ref_screen, count - 1);
+                    uinput_ref += (count - 1);
+                }
+                return true;
+            });
+            ic.on_commit = [&](const std::string& text) { ref_screen += text; };
+            ic.on_forward_key = [&](const fcitx::ForwardKeyEvent& fk) {
+                std::string s = fcitx::Key::keySymToUTF8(fk.key().sym());
+                if (!s.empty()) ref_screen += s;
+            };
+
+            for (char c : word) {
+                if (!ic.typeChar(c, &state)) {
+                    ref_screen += c;
+                }
+                if (state.isDeleting()) {
+                    state.finishUinputDeletion(100);
+                }
+            }
+        }
+
+        // batched replay path: keys buffered during deletion and replayed in memory
+        std::string batched_screen;
+        size_t uinput_batched = 0;
+        {
+            MockInputContext ic(instance_->inputContextManager(), "kitty");
+            ime::ClakState state(engine_.get(), &ic);
+            uinput::UinputTool::instance().setMockHandler([&](size_t count, uint32_t, uint32_t, uint32_t, uint32_t) {
+                if (count > 1) {
+                    utils::popUtf8Chars(batched_screen, count - 1);
+                    uinput_batched += (count - 1);
+                }
+                return true;
+            });
+            ic.on_commit = [&](const std::string& text) { batched_screen += text; };
+            ic.on_forward_key = [&](const fcitx::ForwardKeyEvent& fk) {
+                std::string s = fcitx::Key::keySymToUTF8(fk.key().sym());
+                if (!s.empty()) batched_screen += s;
+            };
+
+            size_t i = 0;
+            while (i < word.size()) {
+                if (!ic.typeChar(word[i++], &state)) {
+                    batched_screen += word[i - 1];
+                }
+                if (state.isDeleting()) break;
+            }
+            while (i < word.size()) {
+                if (!ic.typeChar(word[i++], &state)) {
+                    batched_screen += word[i - 1];
+                }
+            }
+            if (state.isDeleting()) {
+                state.finishUinputDeletion(100);
+            }
+        }
+
+        EXPECT_EQ(batched_screen, ref_screen) << "mismatch on word: " << word;
+        total_uinput_sequential += uinput_ref;
+        total_uinput_batched += uinput_batched;
+    }
+
+    EXPECT_GT(total_uinput_sequential, 0u);
+    double reduction_pct = 100.0 * (1.0 - static_cast<double>(total_uinput_batched) / static_cast<double>(total_uinput_sequential));
+    std::cout << "[BATCH ABSORPTION] sequential uinput BS=" << total_uinput_sequential
+              << ", batched uinput BS=" << total_uinput_batched
+              << ", reduction=" << reduction_pct << "%" << std::endl;
+    EXPECT_GE(reduction_pct, 40.0);
 }
 
 } // namespace test
