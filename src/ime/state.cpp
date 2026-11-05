@@ -42,7 +42,6 @@ ClakState::ClakState(ClakEngine* engine, fcitx::InputContext* ic)
     : engine_(engine), ic_(ic) {
     rust_ctx_ = clak_context_new(CLAK_METHOD_TELEX);
     syncConfig();
-    pacing_engine_.loadStateFromFile();
 }
 
 void ClakState::syncConfig() {
@@ -55,9 +54,6 @@ void ClakState::syncConfig() {
 }
 
 ClakState::~ClakState() {
-    if (!std::getenv("CLAK_FIXED_DELAY_MS") && !std::getenv("CLAK_FIXED_GAP_MS")) {
-        pacing_engine_.saveStateToFile();
-    }
     if (rust_ctx_) {
         clak_context_free(rust_ctx_);
         rust_ctx_ = nullptr;

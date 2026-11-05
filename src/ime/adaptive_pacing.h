@@ -69,28 +69,16 @@ public:
     // classify app and site into pacing group
     static PacingGroup classify(const std::string& app, const std::string& site, bool is_autofill, bool is_draftjs = false, bool is_terminal = false);
 
-    // persistence: serialization to/from simple json string or state file
-    std::string serializeState() const;
-    bool deserializeState(const std::string& json);
-
-    void loadStateFromFile(const std::string& path = "");
-    void saveStateToFile(const std::string& path = "") const;
-
     // constants
     static constexpr uint64_t kSlidingWindowUs = 10000000ULL; // 10 seconds
     static constexpr uint32_t kDecayWordThreshold = 40;       // words before 1ms decay
     static constexpr uint32_t kAdditiveDelayStepMs = 4;       // additive increase
     static constexpr uint32_t kAdditiveGapStepMs = 2;
-    static constexpr uint64_t kStateTtlSeconds = 7 * 86400;   // 7 days
-
-    static std::string currentEnvKey();
 
 private:
     struct GroupState {
         PacingMetrics metrics;
         std::deque<uint64_t> incident_timestamps_us;
-        uint32_t clean_floor_post_ms{16};
-        uint32_t clean_floor_gap_ms{8};
     };
 
     GroupState& getGroup(PacingGroup group);
