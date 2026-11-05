@@ -1297,7 +1297,32 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
     }
 
     if (is_deleting_ || (surr_lag_timer_ && !is_surr_lag_replaying_)) {
-        key_buffer_.push(key);
+        repeat_handler_.cancel();
+        if (!key_buffer_.push(key)) {
+            // flush queued keys first to preserve strict order on buffer overflow
+            auto pending = key_buffer_.take_keys();
+            if (ic_) {
+                for (const auto& k : pending) {
+                    ic_->forwardKey(k);
+                }
+                ic_->forwardKey(key);
+            }
+            if (expected_backspaces_ > current_backspace_count_) {
+                in_flight_sentinel_count_ = expected_backspaces_ - current_backspace_count_;
+                sentinel_grace_until_us_ = fcitx::now(CLOCK_MONOTONIC) + 500000;
+            }
+            is_deleting_ = false;
+            is_address_bar_fix_ = false;
+            is_selection_deletion_ = false;
+            expected_backspaces_ = 0;
+            pending_commit_string_.clear();
+            if (surr_lag_timer_) {
+                surr_lag_timer_.reset();
+            }
+            if (rust_ctx_) {
+                clak_context_reset(rust_ctx_);
+            }
+        }
         keyEvent.filterAndAccept();
         return;
     }

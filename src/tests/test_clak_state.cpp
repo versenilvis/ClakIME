@@ -948,5 +948,36 @@ TEST_F(ClakStateTest, PropertyTest_BatchReplayMatchesSequentialReference) {
     EXPECT_GE(reduction_pct, 40.0);
 }
 
+TEST_F(ClakStateTest, GivenQueueFull_WhenOverflowOccurs_ForwardsKeysDirectly) {
+    platform::setMockActiveWindow(platform::WindowInfo{"kitty", "kitty", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "kitty");
+    ime::ClakState state(engine_.get(), &ic);
+
+    uinput::UinputTool::instance().setMockHandler([](size_t, uint32_t, uint32_t, uint32_t, uint32_t) {
+        return true;
+    });
+
+    // trigger deletion to enter isDeleting state
+    ic.typeChar('d', &state);
+    ic.typeChar('d', &state);
+    EXPECT_TRUE(state.isDeleting());
+
+    // fill buffer to capacity
+    for (size_t i = 0; i < config::kMaxBufferedKeys; ++i) {
+        ic.typeChar('a', &state);
+    }
+    EXPECT_EQ(state.bufferedKeysCount(), config::kMaxBufferedKeys);
+
+    // subsequent key must trigger flush of buffered keys first, then forward new key
+    size_t prev_forwarded = ic.forwarded_keys.size();
+    ic.typeChar('z', &state);
+    EXPECT_GT(ic.forwarded_keys.size(), prev_forwarded);
+    EXPECT_EQ(ic.forwarded_keys.size(), config::kMaxBufferedKeys + 1);
+    EXPECT_EQ(ic.forwarded_keys[0].sym(), 'a');
+    EXPECT_EQ(ic.forwarded_keys.back().sym(), 'z');
+    EXPECT_EQ(state.bufferedKeysCount(), 0);
+    EXPECT_FALSE(state.isDeleting());
+}
+
 } // namespace test
 } // namespace clak
