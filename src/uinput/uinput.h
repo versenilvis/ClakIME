@@ -7,6 +7,7 @@
 #include <atomic>
 #include <ctime>
 #include <functional>
+#include "config/config.h"
 
 namespace clak {
 namespace uinput {
@@ -19,19 +20,25 @@ inline uint64_t monotonic_now_us() {
 }
 
 using BackspaceHook = std::function<bool(size_t count, uint32_t post_delay_ms, uint32_t pre_delay_ms, uint32_t gap_ms)>;
+using BackspaceHookWithHold = std::function<bool(size_t count, uint32_t post_delay_ms, uint32_t pre_delay_ms, uint32_t gap_ms, uint32_t hold_us)>;
 
 class UinputTool {
 public:
     static UinputTool& instance();
 
-    bool send_backspace(size_t count, uint32_t post_delay_ms = 0, uint32_t pre_delay_ms = 0, uint32_t gap_ms = 0);
+    bool send_backspace(size_t count, uint32_t post_delay_ms = 0, uint32_t pre_delay_ms = 0, uint32_t gap_ms = 0, uint32_t hold_us = config::kDefaultUinputHoldUs);
     bool send_select(size_t count);
 
     uint64_t consume_sentinel_emit_time_us() noexcept {
         return sentinel_emit_time_us_.exchange(0, std::memory_order_acq_rel);
     }
 
-    void setMockHandler(BackspaceHook handler) { mock_handler_ = std::move(handler); }
+    void setMockHandler(BackspaceHook handler) {
+        mock_handler_ = [h = std::move(handler)](size_t c, uint32_t p, uint32_t pr, uint32_t g, uint32_t) {
+            return h ? h(c, p, pr, g) : true;
+        };
+    }
+    void setMockHandler(BackspaceHookWithHold handler) { mock_handler_ = std::move(handler); }
     void clearMockHandler() { mock_handler_ = nullptr; }
 
 private:
@@ -39,7 +46,7 @@ private:
     ~UinputTool();
 
     bool init_direct_uinput();
-    bool send_backspace_direct(size_t count, uint32_t post_delay_ms, uint32_t pre_delay_ms, uint32_t gap_ms);
+    bool send_backspace_direct(size_t count, uint32_t post_delay_ms, uint32_t pre_delay_ms, uint32_t gap_ms, uint32_t hold_us);
     bool send_select_direct(size_t count);
 
     bool init_xtest();
@@ -53,7 +60,7 @@ private:
     void* xtest_lib_{nullptr};
     void* xcb_conn_{nullptr};
     std::mutex xtest_mutex_;
-    BackspaceHook mock_handler_;
+    BackspaceHookWithHold mock_handler_{nullptr};
 };
 
 } // namespace uinput

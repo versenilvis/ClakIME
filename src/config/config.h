@@ -7,13 +7,14 @@
 namespace clak {
 namespace config {
 
-constexpr size_t kMaxBufferedKeys = 256;
+constexpr size_t kMaxBufferedKeys = 1024;
 constexpr int kMismatchThreshold = 3;
-constexpr uint64_t kSafetyTimeoutUs = 200000;
+constexpr uint64_t kSafetyTimeoutUs = 1000000;
 constexpr uint64_t kSelectionDeletionTimeoutUs = 250000;
 constexpr uint32_t kAddressBarPostDelayMs = 20;
 constexpr uint32_t kTerminalPostDelayMs = 12;
 constexpr uint32_t kTerminalGapMs = 3;
+constexpr uint32_t kDefaultUinputHoldUs = 1000;
 constexpr uint32_t kDraftJsPostDelayMs = 16;
 constexpr uint32_t kDraftJsGapMs = 8;
 constexpr uint64_t kCacheCheckIntervalUs = 500000;

@@ -14,6 +14,7 @@ namespace apps {
 struct UinputPacing {
     uint32_t post_delay_ms{6};
     uint32_t gap_ms{2};
+    uint32_t hold_us{1000};
 };
 
 class AppProfile {

@@ -168,7 +168,7 @@ TEST_F(RegressionCorpusTest, test_regression_laf_sentinel_timeout) {
 
     auto exit_timer = instance_->eventLoop().addTimeEvent(
         CLOCK_MONOTONIC,
-        fcitx::now(CLOCK_MONOTONIC) + 300000,
+        fcitx::now(CLOCK_MONOTONIC) + config::kSafetyTimeoutUs + 100000,
         0,
         [this](fcitx::EventSourceTime*, uint64_t) {
             instance_->eventLoop().exit();
@@ -240,11 +240,11 @@ TEST_F(RegressionCorpusTest, test_regression_safety_timer_self_reset_crash) {
 
     EXPECT_TRUE(state.isDeleting());
 
-    // run event loop past the 50ms safety timer timeout without throwing EventLoopException
+    // run event loop past the safety timer timeout without throwing EventLoopException
     EXPECT_NO_THROW({
         auto exit_timer = instance_->eventLoop().addTimeEvent(
             CLOCK_MONOTONIC,
-            fcitx::now(CLOCK_MONOTONIC) + 300000,
+            fcitx::now(CLOCK_MONOTONIC) + config::kSafetyTimeoutUs + 100000,
             0,
             [this](fcitx::EventSourceTime*, uint64_t) {
                 instance_->eventLoop().exit();

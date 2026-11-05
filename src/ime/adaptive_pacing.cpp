@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <sstream>
 
 namespace clak {
@@ -16,10 +17,21 @@ namespace pacing {
 
 AdaptivePacingEngine::AdaptivePacingEngine(bool enabled)
     : enabled_(enabled) {
-    web_draftjs_.metrics = {16, 8, 10, 40, 4, 20, 0};
-    terminal_uinput_.metrics = {12, 3, 6, 30, 2, 10, 0};
-    heavy_app_.metrics = {15, 4, 8, 35, 3, 12, 0};
-    default_group_.metrics = {8, 2, 4, 30, 2, 10, 0};
+    web_draftjs_.metrics = {16, 8, 10, 40, 4, 20, 0, 0, 0, 0, 8, 30, config::kDefaultUinputHoldUs};
+    terminal_uinput_.metrics = {12, 3, 0, 30, 0, 10, 0, 0, 0, 0, 0, 0, config::kDefaultUinputHoldUs};
+    heavy_app_.metrics = {15, 4, 8, 35, 3, 12, 0, 0, 0, 0, 8, 30, config::kDefaultUinputHoldUs};
+    default_group_.metrics = {8, 2, 4, 30, 2, 10, 0, 0, 0, 0, 8, 30, config::kDefaultUinputHoldUs};
+
+    const char* env_hold = std::getenv("CLAK_UINPUT_HOLD_US");
+    if (env_hold) {
+        try {
+            uint32_t h = static_cast<uint32_t>(std::stoul(env_hold));
+            terminal_uinput_.metrics.hold_us = h;
+            default_group_.metrics.hold_us = h;
+            heavy_app_.metrics.hold_us = h;
+            web_draftjs_.metrics.hold_us = h;
+        } catch (...) {}
+    }
 }
 
 void AdaptivePacingEngine::setEnabled(bool enabled) {
@@ -66,16 +78,21 @@ void AdaptivePacingEngine::configureGroup(PacingGroup group, uint32_t floor_dela
     g.metrics.ceiling_post_ms = ceiling_delay_ms;
     g.metrics.ceiling_gap_ms = ceiling_gap_ms;
 
-    if (g.metrics.post_delay_ms < floor_delay_ms) {
+    if (g.incident_timestamps_us.empty()) {
         g.metrics.post_delay_ms = floor_delay_ms;
-    } else if (g.metrics.post_delay_ms > ceiling_delay_ms) {
-        g.metrics.post_delay_ms = ceiling_delay_ms;
-    }
-
-    if (g.metrics.gap_ms < floor_gap_ms) {
         g.metrics.gap_ms = floor_gap_ms;
-    } else if (g.metrics.gap_ms > ceiling_gap_ms) {
-        g.metrics.gap_ms = ceiling_gap_ms;
+    } else {
+        if (g.metrics.post_delay_ms < floor_delay_ms) {
+            g.metrics.post_delay_ms = floor_delay_ms;
+        } else if (g.metrics.post_delay_ms > ceiling_delay_ms) {
+            g.metrics.post_delay_ms = ceiling_delay_ms;
+        }
+
+        if (g.metrics.gap_ms < floor_gap_ms) {
+            g.metrics.gap_ms = floor_gap_ms;
+        } else if (g.metrics.gap_ms > ceiling_gap_ms) {
+            g.metrics.gap_ms = ceiling_gap_ms;
+        }
     }
 }
 
@@ -193,7 +210,11 @@ PacingMetrics AdaptivePacingEngine::metrics(PacingGroup group) const {
 apps::UinputPacing AdaptivePacingEngine::uinputPacing(PacingGroup group) const {
     const auto& m = getGroup(group).metrics;
     uint32_t eff_post = std::min(m.ceiling_post_ms, m.post_delay_ms + m.drift_compensation_ms);
-    return {eff_post, m.gap_ms};
+    return {eff_post, m.gap_ms, m.hold_us};
+}
+
+void AdaptivePacingEngine::setHoldUs(PacingGroup group, uint32_t hold_us) {
+    getGroup(group).metrics.hold_us = hold_us;
 }
 
 uint32_t AdaptivePacingEngine::driftCompensation(PacingGroup group) const {
@@ -203,6 +224,18 @@ uint32_t AdaptivePacingEngine::driftCompensation(PacingGroup group) const {
 uint32_t AdaptivePacingEngine::commitCompensation(PacingGroup group) const {
     const auto& m = getGroup(group).metrics;
     return std::max(m.drift_compensation_ms, m.commit_delay_ms);
+}
+
+uint32_t AdaptivePacingEngine::calculatePreDelay(PacingGroup group, uint64_t last_commit_time_us, uint64_t now_us) const {
+    if (group == PacingGroup::TerminalUinput || last_commit_time_us == 0) {
+        return 0;
+    }
+    const auto& m = getGroup(group).metrics;
+    uint64_t window_us = static_cast<uint64_t>(m.post_commit_window_ms) * 1000ULL;
+    if (now_us <= last_commit_time_us || (now_us - last_commit_time_us) < window_us) {
+        return std::max(m.post_delay_ms, m.pre_delay_ms);
+    }
+    return 0;
 }
 
 PacingGroup AdaptivePacingEngine::classify(const std::string& app, const std::string& site, bool is_autofill, bool is_draftjs, bool is_terminal) {
@@ -239,19 +272,19 @@ std::string AdaptivePacingEngine::serializeState() const {
     return ss.str();
 }
 
-static uint32_t parseUintAfterKey(const std::string& text, size_t pos, const std::string& key) {
+static std::optional<uint32_t> parseUintAfterKey(const std::string& text, size_t pos, const std::string& key) {
     size_t kpos = text.find(key, pos);
-    if (kpos == std::string::npos) return 0;
+    if (kpos == std::string::npos) return std::nullopt;
     size_t colon = text.find(':', kpos);
-    if (colon == std::string::npos) return 0;
+    if (colon == std::string::npos) return std::nullopt;
     size_t start = text.find_first_of("0123456789", colon);
-    if (start == std::string::npos) return 0;
+    if (start == std::string::npos) return std::nullopt;
     size_t end = text.find_first_not_of("0123456789", start);
     std::string num_str = (end == std::string::npos) ? text.substr(start) : text.substr(start, end - start);
     try {
         return static_cast<uint32_t>(std::stoul(num_str));
     } catch (...) {
-        return 0;
+        return std::nullopt;
     }
 }
 
@@ -261,13 +294,13 @@ bool AdaptivePacingEngine::deserializeState(const std::string& json) {
     auto parseBlock = [&](const std::string& section, GroupState& g) {
         size_t sec_pos = json.find("\"" + section + "\"");
         if (sec_pos != std::string::npos) {
-            uint32_t delay = parseUintAfterKey(json, sec_pos, "\"delay\"");
-            uint32_t gap = parseUintAfterKey(json, sec_pos, "\"gap\"");
-            if (delay > 0 && delay >= g.metrics.floor_post_ms && delay <= g.metrics.ceiling_post_ms) {
-                g.metrics.post_delay_ms = delay;
+            auto delay = parseUintAfterKey(json, sec_pos, "\"delay\"");
+            auto gap = parseUintAfterKey(json, sec_pos, "\"gap\"");
+            if (delay.has_value() && *delay >= g.metrics.floor_post_ms && *delay <= g.metrics.ceiling_post_ms) {
+                g.metrics.post_delay_ms = *delay;
             }
-            if (gap > 0 && gap >= g.metrics.floor_gap_ms && gap <= g.metrics.ceiling_gap_ms) {
-                g.metrics.gap_ms = gap;
+            if (gap.has_value() && *gap >= g.metrics.floor_gap_ms && *gap <= g.metrics.ceiling_gap_ms) {
+                g.metrics.gap_ms = *gap;
             }
         }
     };

@@ -77,7 +77,7 @@ UinputTool::~UinputTool() {
 
 bool UinputTool::init_direct_uinput() {
     if (direct_fd_ >= 0) return true;
-    int fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK | O_CLOEXEC);
+    int fd = open("/dev/uinput", O_WRONLY | O_CLOEXEC);
     int open_err = (fd < 0) ? errno : 0;
     utils::clakLog("uinput direct open(/dev/uinput): ret=" + std::to_string(fd) +
                    (fd < 0 ? (" errno=" + std::to_string(open_err) + " (" + strerror(open_err) + ")") : " (ok)"));
@@ -112,7 +112,7 @@ bool UinputTool::init_direct_uinput() {
     return true;
 }
 
-bool UinputTool::send_backspace_direct(size_t count, uint32_t post_delay_ms, uint32_t pre_delay_ms, uint32_t gap_ms) {
+bool UinputTool::send_backspace_direct(size_t count, uint32_t post_delay_ms, uint32_t pre_delay_ms, uint32_t gap_ms, uint32_t hold_us) {
     if (direct_fd_ < 0 || count == 0) {
         return false;
     }
@@ -122,16 +122,34 @@ bool UinputTool::send_backspace_direct(size_t count, uint32_t post_delay_ms, uin
         std::lock_guard<std::mutex> lock(uinput_mutex_);
         if (direct_fd_ < 0) return false;
 
-        std::vector<struct input_event> evs;
-        evs.reserve(count * 4);
-        for (size_t i = 0; i < count; ++i) {
-            evs.push_back({ {}, EV_KEY, KEY_BACKSPACE, 1 });
-            evs.push_back({ {}, EV_SYN, SYN_REPORT, 0 });
-            evs.push_back({ {}, EV_KEY, KEY_BACKSPACE, 0 });
-            evs.push_back({ {}, EV_SYN, SYN_REPORT, 0 });
+        auto emit_one_bs = [this, hold_us]() {
+            struct input_event down[2]{};
+            down[0] = { {}, EV_KEY, KEY_BACKSPACE, 1 };
+            down[1] = { {}, EV_SYN, SYN_REPORT, 0 };
+            (void)write(direct_fd_, down, sizeof(down));
+
+            if (hold_us > 0) {
+                struct timespec ts = {0, static_cast<long>(hold_us * 1000)};
+                nanosleep(&ts, nullptr);
+            }
+
+            struct input_event up[2]{};
+            up[0] = { {}, EV_KEY, KEY_BACKSPACE, 0 };
+            up[1] = { {}, EV_SYN, SYN_REPORT, 0 };
+            (void)write(direct_fd_, up, sizeof(up));
+        };
+
+        for (size_t i = 0; i < count - 1; ++i) {
+            emit_one_bs();
+            if (hold_us > 0) {
+                struct timespec ts = {0, static_cast<long>(hold_us * 1000)};
+                nanosleep(&ts, nullptr);
+            }
         }
-        ssize_t written = write(direct_fd_, evs.data(), evs.size() * sizeof(struct input_event));
-        return written > 0;
+
+        sentinel_emit_time_us_.store(monotonic_now_us(), std::memory_order_release);
+        emit_one_bs();
+        return true;
     }
 
     // paced uinput worker thread prevents blocking fcitx event loop
@@ -149,14 +167,32 @@ bool UinputTool::send_backspace_direct(size_t count, uint32_t post_delay_ms, uin
             evs[2] = { {}, EV_KEY, KEY_BACKSPACE, 0 };
             evs[3] = { {}, EV_SYN, SYN_REPORT, 0 };
             ssize_t written = write(direct_fd_, evs, sizeof(evs));
-            (void)written;
+            if (written < 0) {
+                int err = errno;
+                utils::clakLog("ERROR: uinput write failed: errno=" + std::to_string(err) + " (" + strerror(err) + ")");
+            }
         };
 
         // send deletion backspaces before the sentinel
-        for (size_t i = 0; i < count - 1; ++i) {
-            emit_bs();
-            if (gap_ms > 0 && i + 1 < count - 1) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(gap_ms));
+        if (gap_ms == 0 && count > 1) {
+            std::lock_guard<std::mutex> lock(uinput_mutex_);
+            if (direct_fd_ >= 0) {
+                std::vector<struct input_event> evs;
+                evs.reserve((count - 1) * 4);
+                for (size_t i = 0; i < count - 1; ++i) {
+                    evs.push_back({ {}, EV_KEY, KEY_BACKSPACE, 1 });
+                    evs.push_back({ {}, EV_SYN, SYN_REPORT, 0 });
+                    evs.push_back({ {}, EV_KEY, KEY_BACKSPACE, 0 });
+                    evs.push_back({ {}, EV_SYN, SYN_REPORT, 0 });
+                }
+                (void)write(direct_fd_, evs.data(), evs.size() * sizeof(struct input_event));
+            }
+        } else {
+            for (size_t i = 0; i < count - 1; ++i) {
+                emit_bs();
+                if (gap_ms > 0 && i + 1 < count - 1) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(gap_ms));
+                }
             }
         }
 
@@ -400,16 +436,16 @@ bool UinputTool::send_select(size_t count) {
     return send_select_xtest(count);
 }
 
-bool UinputTool::send_backspace(size_t count, uint32_t post_delay_ms, uint32_t pre_delay_ms, uint32_t gap_ms) {
+bool UinputTool::send_backspace(size_t count, uint32_t post_delay_ms, uint32_t pre_delay_ms, uint32_t gap_ms, uint32_t hold_us) {
     sentinel_emit_time_us_.store(0, std::memory_order_relaxed);
     if (mock_handler_) {
-        return mock_handler_(count, post_delay_ms, pre_delay_ms, gap_ms);
+        return mock_handler_(count, post_delay_ms, pre_delay_ms, gap_ms, hold_us);
     }
     if (direct_fd_ < 0) {
         init_direct_uinput();
     }
     if (direct_fd_ >= 0) {
-        return send_backspace_direct(count, post_delay_ms, pre_delay_ms, gap_ms);
+        return send_backspace_direct(count, post_delay_ms, pre_delay_ms, gap_ms, hold_us);
     }
     // fallback to xtest when direct uinput is unavailable
     return send_backspace_xtest(count, post_delay_ms, pre_delay_ms, gap_ms);

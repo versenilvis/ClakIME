@@ -2,6 +2,7 @@
 #define CLAK_IME_ADAPTIVE_PACING_H
 
 #include "apps/app_profile.h"
+#include "config/config.h"
 #include <string>
 #include <deque>
 #include <cstdint>
@@ -35,6 +36,9 @@ struct PacingMetrics {
     uint32_t drift_compensation_ms{0};
     uint32_t smoothed_rtt_ms{0};
     uint32_t commit_delay_ms{0};
+    uint32_t pre_delay_ms{8};
+    uint32_t post_commit_window_ms{30};
+    uint32_t hold_us{config::kDefaultUinputHoldUs};
 };
 
 class AdaptivePacingEngine {
@@ -47,6 +51,7 @@ public:
     // configure base floor from preset or user settings
     void configureGroup(PacingGroup group, uint32_t floor_delay_ms, uint32_t floor_gap_ms,
                         uint32_t ceiling_delay_ms, uint32_t ceiling_gap_ms);
+    void setHoldUs(PacingGroup group, uint32_t hold_us);
 
     // pure event handlers
     void onIncident(PacingGroup group, IncidentType incident, uint64_t now_us, uint64_t key_interval_us = 0);
@@ -59,6 +64,7 @@ public:
     apps::UinputPacing uinputPacing(PacingGroup group) const;
     uint32_t driftCompensation(PacingGroup group) const;
     uint32_t commitCompensation(PacingGroup group) const;
+    uint32_t calculatePreDelay(PacingGroup group, uint64_t last_commit_time_us, uint64_t now_us) const;
 
     // classify app and site into pacing group
     static PacingGroup classify(const std::string& app, const std::string& site, bool is_autofill, bool is_draftjs = false, bool is_terminal = false);

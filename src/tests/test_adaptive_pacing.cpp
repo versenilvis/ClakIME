@@ -83,13 +83,13 @@ TEST(AdaptivePacingTest, SlowDecayTowardsFloor) {
     EXPECT_EQ(m.post_delay_ms, 15u);
     EXPECT_EQ(m.gap_ms, 4u);
 
-    // decay repeatedly towards floor, never drops below floor (6ms, gap 2ms)
+    // decay repeatedly towards floor, never drops below floor
     for (int i = 0; i < 40 * 20; ++i) {
         engine.onTransactionSuccess(PacingGroup::TerminalUinput);
     }
     m = engine.metrics(PacingGroup::TerminalUinput);
-    EXPECT_EQ(m.post_delay_ms, 6u); // reached floor
-    EXPECT_EQ(m.gap_ms, 2u);        // reached floor
+    EXPECT_EQ(m.post_delay_ms, 0u);
+    EXPECT_EQ(m.gap_ms, 0u);
 }
 
 TEST(AdaptivePacingTest, CeilingClamp) {
@@ -208,4 +208,30 @@ TEST(AdaptivePacingTest, DynamicRttAutoPacing) {
     EXPECT_GE(m.smoothed_rtt_ms, 25u);
     EXPECT_GE(m.post_delay_ms, 25u);
     EXPECT_GE(engine.commitCompensation(PacingGroup::WebDraftJs), 10u);
+}
+
+TEST(AdaptivePacingTest, CalculatePreDelayWithinPostCommitWindow) {
+    AdaptivePacingEngine engine;
+    uint64_t t_commit = 5000000ULL;
+
+    EXPECT_EQ(engine.calculatePreDelay(PacingGroup::WebDraftJs, 0, t_commit), 0u);
+    EXPECT_EQ(engine.calculatePreDelay(PacingGroup::WebDraftJs, t_commit, t_commit), 16u);
+    EXPECT_EQ(engine.calculatePreDelay(PacingGroup::WebDraftJs, t_commit, t_commit + 15000ULL), 16u);
+    EXPECT_EQ(engine.calculatePreDelay(PacingGroup::WebDraftJs, t_commit, t_commit + 40000ULL), 0u);
+
+    // terminal uinput always skips pre-delay to avoid scheduler jitter
+    EXPECT_EQ(engine.calculatePreDelay(PacingGroup::TerminalUinput, t_commit, t_commit), 0u);
+    EXPECT_EQ(engine.calculatePreDelay(PacingGroup::TerminalUinput, t_commit, t_commit + 15000ULL), 0u);
+}
+
+TEST(AdaptivePacingTest, ConfigureGroupZeroFloorAppliesImmediately) {
+    AdaptivePacingEngine engine;
+    EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).post_delay_ms, 12u);
+    EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).gap_ms, 3u);
+
+    engine.configureGroup(PacingGroup::TerminalUinput, 0, 0, 30, 10);
+    EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).post_delay_ms, 0u);
+    EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).gap_ms, 0u);
+    EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).floor_post_ms, 0u);
+    EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).floor_gap_ms, 0u);
 }
