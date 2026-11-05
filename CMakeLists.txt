@@ -53,6 +53,12 @@ if(CCACHE_PROGRAM)
     set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
 endif()
 
+find_program(MOLD_LINKER mold)
+if(MOLD_LINKER)
+    message(STATUS "Found mold linker: ${MOLD_LINKER}")
+    add_link_options("-fuse-ld=mold")
+endif()
+
 if(FCITX5_HAVE_SHOW_CUSTOM_IM_INFO)
     add_compile_definitions(FCITX5_HAVE_SHOW_CUSTOM_IM_INFO=1)
 endif()
