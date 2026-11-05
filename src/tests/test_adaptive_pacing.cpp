@@ -121,34 +121,63 @@ TEST(AdaptivePacingTest, Classification) {
     EXPECT_EQ(AdaptivePacingEngine::classify("gedit", "", false), PacingGroup::Default);
 }
 
-TEST(AdaptivePacingTest, SerializationRoundtrip) {
+TEST(AdaptivePacingTest, NeverSavesTransientIncidentPeak) {
     AdaptivePacingEngine engine1;
+    // transient spike after starvation
     engine1.onIncident(PacingGroup::WebDraftJs, IncidentType::PacingStarvation, 1000ULL);
-    engine1.onIncident(PacingGroup::TerminalUinput, IncidentType::PacingStarvation, 2000ULL);
+    EXPECT_EQ(engine1.metrics(PacingGroup::WebDraftJs).post_delay_ms, 20u);
 
+    // must persist floor, never peak
     std::string json = engine1.serializeState();
-    EXPECT_FALSE(json.empty());
-
     AdaptivePacingEngine engine2;
     EXPECT_TRUE(engine2.deserializeState(json));
-
-    EXPECT_EQ(engine2.metrics(PacingGroup::WebDraftJs).post_delay_ms, 20u);
-    EXPECT_EQ(engine2.metrics(PacingGroup::TerminalUinput).post_delay_ms, 16u);
+    EXPECT_EQ(engine2.metrics(PacingGroup::WebDraftJs).post_delay_ms, 16u);
 }
 
-TEST(AdaptivePacingTest, FilePersistence) {
+TEST(AdaptivePacingTest, SavesCleanAdaptedFloor) {
+    AdaptivePacingEngine engine1;
+    // sustained clean typing with zero incidents
+    for (int i = 0; i < 10; ++i) {
+        engine1.onTransactionSuccess(PacingGroup::WebDraftJs);
+    }
+    std::string json = engine1.serializeState();
+    AdaptivePacingEngine engine2;
+    EXPECT_TRUE(engine2.deserializeState(json));
+    // safe clean floor is clamped to floor_post_ms + 4 (10 + 4 = 14)
+    EXPECT_EQ(engine2.metrics(PacingGroup::WebDraftJs).post_delay_ms, 14u);
+}
+
+TEST(AdaptivePacingTest, EnvironmentKeyMismatchRejectsState) {
+    AdaptivePacingEngine engine;
+    std::string fake_json = "{\n  \"env_key\": \"foreign_compositor:0.1:fcitx5\",\n  \"timestamp\": " +
+        std::to_string(std::time(nullptr)) + ",\n  \"web\": {\"delay\": 28, \"gap\": 9}\n}";
+    EXPECT_FALSE(engine.deserializeState(fake_json));
+    // verify state unaffected
+    EXPECT_EQ(engine.metrics(PacingGroup::WebDraftJs).post_delay_ms, 16u);
+}
+
+TEST(AdaptivePacingTest, TtlExpirationRejectsState) {
+    AdaptivePacingEngine engine;
+    uint64_t old_ts = static_cast<uint64_t>(std::time(nullptr)) - (8 * 86400); // 8 days ago
+    std::string expired_json = "{\n  \"env_key\": \"" + AdaptivePacingEngine::currentEnvKey() +
+        "\",\n  \"timestamp\": " + std::to_string(old_ts) +
+        ",\n  \"web\": {\"delay\": 28, \"gap\": 9}\n}";
+    EXPECT_FALSE(engine.deserializeState(expired_json));
+    EXPECT_EQ(engine.metrics(PacingGroup::WebDraftJs).post_delay_ms, 16u);
+}
+
+TEST(AdaptivePacingTest, FilePersistenceAtomicWrite) {
     std::string test_path = "/tmp/test_clak_pacing_state.json";
     std::filesystem::remove(test_path);
 
     AdaptivePacingEngine engine1;
-    engine1.onIncident(PacingGroup::HeavyApp, IncidentType::PacingStarvation, 1000ULL);
     engine1.saveStateToFile(test_path);
 
     EXPECT_TRUE(std::filesystem::exists(test_path));
 
     AdaptivePacingEngine engine2;
     engine2.loadStateFromFile(test_path);
-    EXPECT_EQ(engine2.metrics(PacingGroup::HeavyApp).post_delay_ms, 19u); // 15 + 4
+    EXPECT_EQ(engine2.metrics(PacingGroup::HeavyApp).post_delay_ms, 15u);
 
     std::filesystem::remove(test_path);
 }

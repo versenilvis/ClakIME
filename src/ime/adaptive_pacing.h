@@ -81,11 +81,16 @@ public:
     static constexpr uint32_t kDecayWordThreshold = 40;       // words before 1ms decay
     static constexpr uint32_t kAdditiveDelayStepMs = 4;       // additive increase
     static constexpr uint32_t kAdditiveGapStepMs = 2;
+    static constexpr uint64_t kStateTtlSeconds = 7 * 86400;   // 7 days
+
+    static std::string currentEnvKey();
 
 private:
     struct GroupState {
         PacingMetrics metrics;
         std::deque<uint64_t> incident_timestamps_us;
+        uint32_t clean_floor_post_ms{16};
+        uint32_t clean_floor_gap_ms{8};
     };
 
     GroupState& getGroup(PacingGroup group);
