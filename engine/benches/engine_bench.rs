@@ -164,9 +164,7 @@ fn bench_surrounding_text(c: &mut Criterion) {
     let mut group = c.benchmark_group("surrounding_text");
     group.bench_function("keystroke_no_surrounding", |b| {
         let mut ctx = clak_engine::ClakContext::new(clak_engine::Method::Telex);
-        b.iter(|| {
-            ctx.process_key(black_box(0x61), black_box("a"), false, None, 0, 0)
-        })
+        b.iter(|| ctx.process_key(black_box(0x61), black_box("a"), false, None, 0, 0))
     });
 
     group.bench_function("keystroke_surrounding_1k", |b| {

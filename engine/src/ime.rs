@@ -41,6 +41,9 @@ pub struct ClakContext {
     pub uncommit_candidate: Option<(String, String, std::time::Instant)>,
     pub pending_retype: Option<(String, String)>,
     in_identifier: bool,
+    current_cursor: usize,
+    pub last_replace_time: Option<std::time::Instant>,
+    pub last_replace_cursor: Option<usize>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -79,6 +82,9 @@ impl ClakContext {
             uncommit_candidate: None,
             pending_retype: None,
             in_identifier: false,
+            current_cursor: 0,
+            last_replace_time: None,
+            last_replace_cursor: None,
         }
     }
 
@@ -116,6 +122,8 @@ impl ClakContext {
         self.delete_buf = CString::default();
         self.last_surr = None;
         self.in_identifier = false;
+        self.last_replace_time = None;
+        self.last_replace_cursor = None;
     }
 
     pub fn process_key(
@@ -127,6 +135,7 @@ impl ClakContext {
         cursor: usize,
         anchor: usize,
     ) -> ImeAction {
+        self.current_cursor = cursor;
         if has_ctrl_alt {
             self.reset();
             self.uncommit_candidate = None;
@@ -534,18 +543,43 @@ impl ClakContext {
             }
 
             if !matches_last && !self.raw_buffer.is_empty() && cur_byte > 0 {
-                let word = if let Some(last_break_pos) = before_cur.rfind(|c: char| is_word_break(c as u32)) {
-                    let ch_len = before_cur[last_break_pos..].chars().next().map(|c| c.len_utf8()).unwrap_or(1);
+                let word = if let Some(last_break_pos) =
+                    before_cur.rfind(|c: char| is_word_break(c as u32))
+                {
+                    let ch_len = before_cur[last_break_pos..]
+                        .chars()
+                        .next()
+                        .map(|c| c.len_utf8())
+                        .unwrap_or(1);
                     &before_cur[last_break_pos + ch_len..]
                 } else {
                     before_cur
                 };
                 if !word.is_empty() {
                     let word_telex = decompose_to_telex(word);
-                    if self.raw_buffer.starts_with(&word_telex)
-                        || self.raw_buffer.starts_with(word)
+                    if self.raw_buffer.starts_with(&word_telex) || self.raw_buffer.starts_with(word)
                     {
                         matches_last = true;
+                    } else {
+                        // match unaccented base only when replacement occurred recently in same word
+                        let is_stale_lag = match (self.last_replace_time, self.last_replace_cursor)
+                        {
+                            (Some(t), Some(c)) => {
+                                t.elapsed().as_millis() <= 200 && cursor >= c && (cursor - c) <= 5
+                            }
+                            _ => false,
+                        };
+                        if is_stale_lag {
+                            let word_base = to_base_ascii(word);
+                            let composed_base = to_base_ascii(&self.last_composed);
+                            if !word_base.is_empty()
+                                && (composed_base == word_base
+                                    || composed_base.starts_with(&word_base)
+                                    || word_base.starts_with(&composed_base))
+                            {
+                                matches_last = true;
+                            }
+                        }
                     }
                 }
             }
@@ -565,7 +599,11 @@ impl ClakContext {
 
             // word seeding from surrounding text only when cursor is at word end
             let is_at_word_end = cur_byte == text.len()
-                || text[cur_byte..].chars().next().map(|c| is_word_break(c as u32)).unwrap_or(true);
+                || text[cur_byte..]
+                    .chars()
+                    .next()
+                    .map(|c| is_word_break(c as u32))
+                    .unwrap_or(true);
             let is_telex_mod = matches!(
                 key_ch.to_ascii_lowercase(),
                 'a' | 'e' | 'o' | 'd' | 'w' | 's' | 'f' | 'r' | 'x' | 'j'
@@ -578,8 +616,14 @@ impl ClakContext {
                 && is_telex_mod
                 && is_at_word_end
             {
-                let old_word = if let Some(last_break_pos) = before_cur.rfind(|c: char| is_word_break(c as u32)) {
-                    let ch_len = before_cur[last_break_pos..].chars().next().map(|c| c.len_utf8()).unwrap_or(1);
+                let old_word = if let Some(last_break_pos) =
+                    before_cur.rfind(|c: char| is_word_break(c as u32))
+                {
+                    let ch_len = before_cur[last_break_pos..]
+                        .chars()
+                        .next()
+                        .map(|c| c.len_utf8())
+                        .unwrap_or(1);
                     &before_cur[last_break_pos + ch_len..]
                 } else {
                     before_cur
@@ -631,8 +675,14 @@ impl ClakContext {
                 if let Some(prev_ch) = prev_chars.next() {
                     let is_ident_boundary = match prev_ch {
                         '_' | '/' => true,
-                        '.' => prev_chars.next().map(|c| !c.is_whitespace()).unwrap_or(false),
-                        '-' => prev_chars.next().map(|c| c.is_alphabetic()).unwrap_or(false),
+                        '.' => prev_chars
+                            .next()
+                            .map(|c| !c.is_whitespace())
+                            .unwrap_or(false),
+                        '-' => prev_chars
+                            .next()
+                            .map(|c| c.is_alphabetic())
+                            .unwrap_or(false),
                         _ => false,
                     };
                     if is_ident_boundary {
@@ -716,6 +766,8 @@ impl ClakContext {
     }
 
     fn replace(&mut self, delete_count: usize, deleted_str: &str, text: &str) -> ImeAction {
+        self.last_replace_time = Some(std::time::Instant::now());
+        self.last_replace_cursor = Some(self.current_cursor);
         self.commit_buf = CString::new(text).unwrap_or_default();
         self.delete_buf = CString::new(deleted_str).unwrap_or_default();
         ImeAction {
@@ -946,6 +998,40 @@ pub fn decompose_to_telex(word: &str) -> String {
     }
 
     result
+}
+
+pub fn to_base_ascii(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            'a' | 'á' | 'à' | 'ả' | 'ã' | 'ạ' | 'ă' | 'ắ' | 'ằ' | 'ẳ' | 'ẵ' | 'ặ' | 'â' | 'ấ'
+            | 'ầ' | 'ẩ' | 'ẫ' | 'ậ' => 'a',
+            'A' | 'Á' | 'À' | 'Ả' | 'Ã' | 'Ạ' | 'Ă' | 'Ắ' | 'Ằ' | 'Ẳ' | 'Ẵ' | 'Ặ' | 'Â' | 'Ấ'
+            | 'Ầ' | 'Ẩ' | 'Ẫ' | 'Ậ' => 'A',
+            'e' | 'é' | 'è' | 'ẻ' | 'ẽ' | 'ẹ' | 'ê' | 'ế' | 'ề' | 'ể' | 'ễ' | 'ệ' => {
+                'e'
+            }
+            'E' | 'É' | 'È' | 'Ẻ' | 'Ẽ' | 'Ẹ' | 'Ê' | 'Ế' | 'Ề' | 'Ể' | 'Ễ' | 'Ệ' => {
+                'E'
+            }
+            'i' | 'í' | 'ì' | 'ỉ' | 'ĩ' | 'ị' => 'i',
+            'I' | 'Í' | 'Ì' | 'Ỉ' | 'Ĩ' | 'Ị' => 'I',
+            'o' | 'ó' | 'ò' | 'ỏ' | 'õ' | 'ọ' | 'ô' | 'ố' | 'ồ' | 'ổ' | 'ỗ' | 'ộ' | 'ơ' | 'ớ'
+            | 'ờ' | 'ở' | 'ỡ' | 'ợ' => 'o',
+            'O' | 'Ó' | 'Ò' | 'Ỏ' | 'Õ' | 'Ọ' | 'Ô' | 'Ố' | 'Ồ' | 'Ổ' | 'Ỗ' | 'Ộ' | 'Ơ' | 'Ớ'
+            | 'Ờ' | 'Ở' | 'Ỡ' | 'Ợ' => 'O',
+            'u' | 'ú' | 'ù' | 'ủ' | 'ũ' | 'ụ' | 'ư' | 'ứ' | 'ừ' | 'ử' | 'ữ' | 'ự' => {
+                'u'
+            }
+            'U' | 'Ú' | 'Ù' | 'Ủ' | 'Ũ' | 'Ụ' | 'Ư' | 'Ứ' | 'Ừ' | 'Ử' | 'Ữ' | 'Ự' => {
+                'U'
+            }
+            'y' | 'ý' | 'ỳ' | 'ỷ' | 'ỹ' | 'ỵ' => 'y',
+            'Y' | 'Ý' | 'Ỳ' | 'Ỷ' | 'Ỹ' | 'Ỵ' => 'Y',
+            'đ' => 'd',
+            'Đ' => 'D',
+            other => other,
+        })
+        .collect()
 }
 
 pub fn compare_and_split(a: &str, b: &str) -> (String, String) {

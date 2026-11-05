@@ -2,6 +2,164 @@ use clak_engine::*;
 use std::ffi::CStr;
 
 #[test]
+fn test_hypothesis_user_stale_surrounding_tie_to_tie_then_s() {
+    let mut ctx = ClakContext::new(Method::Telex);
+
+    // commit tie -> tiê
+    ctx.process_key(b't' as u32, "t", false, Some(""), 0, 0);
+    ctx.process_key(b'i' as u32, "i", false, Some("t"), 1, 1);
+    ctx.process_key(b'e' as u32, "e", false, Some("ti"), 2, 2);
+    let a4 = ctx.process_key(b'e' as u32, "e", false, Some("tie"), 3, 3);
+    assert_eq!(a4.action_type, ACTION_REPLACE);
+    assert_eq!(ctx.last_composed, "tiê");
+
+    // phím s tới, surrounding vẫn là text cũ ("tie", cursor 3)
+    let a5 = ctx.process_key(b's' as u32, "s", false, Some("tie"), 3, 3);
+    assert_ne!(
+        a5.action_type, ACTION_FORWARD,
+        "s should not be forwarded as raw character"
+    );
+    assert_eq!(ctx.last_composed, "tiế");
+}
+
+#[test]
+fn test_hypothesis_tieengs_with_various_stale_surroundings() {
+    // case 1: lagging at "tie"
+    {
+        let mut ctx = ClakContext::new(Method::Telex);
+        ctx.process_key(b't' as u32, "t", false, Some(""), 0, 0);
+        ctx.process_key(b'i' as u32, "i", false, Some("t"), 1, 1);
+        ctx.process_key(b'e' as u32, "e", false, Some("ti"), 2, 2);
+        ctx.process_key(b'e' as u32, "e", false, Some("tie"), 3, 3);
+        ctx.process_key(b'n' as u32, "n", false, Some("tie"), 3, 3);
+        ctx.process_key(b'g' as u32, "g", false, Some("tie"), 3, 3);
+        let a_s = ctx.process_key(b's' as u32, "s", false, Some("tie"), 3, 3);
+        assert_ne!(
+            a_s.action_type, ACTION_FORWARD,
+            "s should not forward on stale 'tie'"
+        );
+        assert_eq!(ctx.last_composed, "tiếng");
+    }
+
+    // case 2: lagging at "tiê"
+    {
+        let mut ctx = ClakContext::new(Method::Telex);
+        ctx.process_key(b't' as u32, "t", false, Some(""), 0, 0);
+        ctx.process_key(b'i' as u32, "i", false, Some("t"), 1, 1);
+        ctx.process_key(b'e' as u32, "e", false, Some("ti"), 2, 2);
+        ctx.process_key(b'e' as u32, "e", false, Some("tie"), 3, 3);
+        ctx.process_key(b'n' as u32, "n", false, Some("tiê"), 3, 3);
+        ctx.process_key(b'g' as u32, "g", false, Some("tiê"), 3, 3);
+        let a_s = ctx.process_key(b's' as u32, "s", false, Some("tiê"), 3, 3);
+        assert_ne!(
+            a_s.action_type, ACTION_FORWARD,
+            "s should not forward on stale 'tiê'"
+        );
+        assert_eq!(ctx.last_composed, "tiếng");
+    }
+
+    // case 3: in a sentence "hom nay tie", app lags at "hom nay tie"
+    {
+        let mut ctx = ClakContext::new(Method::Telex);
+        ctx.process_key(b't' as u32, "t", false, Some("hom nay "), 8, 8);
+        ctx.process_key(b'i' as u32, "i", false, Some("hom nay t"), 9, 9);
+        ctx.process_key(b'e' as u32, "e", false, Some("hom nay ti"), 10, 10);
+        ctx.process_key(b'e' as u32, "e", false, Some("hom nay tie"), 11, 11);
+        ctx.process_key(b'n' as u32, "n", false, Some("hom nay tie"), 11, 11);
+        ctx.process_key(b'g' as u32, "g", false, Some("hom nay tie"), 11, 11);
+        let a_s = ctx.process_key(b's' as u32, "s", false, Some("hom nay tie"), 11, 11);
+        assert_ne!(
+            a_s.action_type, ACTION_FORWARD,
+            "s should not forward in sentence"
+        );
+        assert_eq!(ctx.last_composed, "tiếng");
+    }
+}
+
+#[test]
+fn test_to_base_ascii_rejects_when_cursor_jumps() {
+    let mut ctx = ClakContext::new(Method::Telex);
+
+    // user types "tieeng" -> "tiêng" with replacement at cursor 3
+    ctx.process_key(b't' as u32, "t", false, Some(""), 0, 0);
+    ctx.process_key(b'i' as u32, "i", false, Some("t"), 1, 1);
+    ctx.process_key(b'e' as u32, "e", false, Some("ti"), 2, 2);
+    let a4 = ctx.process_key(b'e' as u32, "e", false, Some("tie"), 3, 3);
+    assert_eq!(a4.action_type, ACTION_REPLACE);
+    assert_eq!(ctx.last_composed, "tiê");
+
+    // cursor jumps far away to cursor 30 after a different word "tieng"
+    let a_s = ctx.process_key(
+        b's' as u32,
+        "s",
+        false,
+        Some("hom nay toi di hoc tieng"),
+        25,
+        25,
+    );
+    // must not hijack old composition or delete at cursor 25
+    assert_ne!(a_s.action_type, ACTION_REPLACE);
+}
+
+#[test]
+fn test_to_base_ascii_rejects_after_timeout() {
+    let mut ctx = ClakContext::new(Method::Telex);
+
+    // user types "tieeng" -> "tiêng"
+    ctx.process_key(b't' as u32, "t", false, Some(""), 0, 0);
+    ctx.process_key(b'i' as u32, "i", false, Some("t"), 1, 1);
+    ctx.process_key(b'e' as u32, "e", false, Some("ti"), 2, 2);
+    let a4 = ctx.process_key(b'e' as u32, "e", false, Some("tie"), 3, 3);
+    assert_eq!(a4.action_type, ACTION_REPLACE);
+
+    // wait longer than 200ms lag window
+    std::thread::sleep(std::time::Duration::from_millis(250));
+
+    // when lag window expires, stale lag matching rejects and engine resets
+    let a_s = ctx.process_key(b's' as u32, "s", false, Some("tieng"), 5, 5);
+    assert_eq!(a_s.action_type, ACTION_FORWARD);
+}
+
+#[test]
+fn test_tiengs_reset_bug() {
+    let mut ctx = ClakContext::new(Method::Telex);
+
+    // user types "tieeng" -> "tiêng"
+    let _a1 = ctx.process_key(b't' as u32, "t", false, Some(""), 0, 0);
+    let _a2 = ctx.process_key(b'i' as u32, "i", false, Some("t"), 1, 1);
+    let _a3 = ctx.process_key(b'e' as u32, "e", false, Some("ti"), 2, 2);
+    let _a4 = ctx.process_key(b'e' as u32, "e", false, Some("tie"), 3, 3);
+    let _a5 = ctx.process_key(b'n' as u32, "n", false, Some("tiê"), 4, 4);
+    let _a6 = ctx.process_key(b'g' as u32, "g", false, Some("tiên"), 5, 5);
+    assert_eq!(ctx.last_composed, "tiêng");
+
+    // wayland async lag: app surrounding text has unaccented "tieng"
+    let a_s = ctx.process_key(b's' as u32, "s", false, Some("tieng"), 5, 5);
+    assert_ne!(a_s.action_type, ACTION_FORWARD, "s was forwarded raw!");
+    assert_eq!(ctx.last_composed, "tiếng");
+}
+
+#[test]
+fn test_nguoif_reset_bug() {
+    let mut ctx = ClakContext::new(Method::Telex);
+
+    // user types "nguwowi" -> "ngươi"
+    ctx.process_key(b'n' as u32, "n", false, Some(""), 0, 0);
+    ctx.process_key(b'g' as u32, "g", false, Some("n"), 1, 1);
+    ctx.process_key(b'u' as u32, "u", false, Some("ng"), 2, 2);
+    ctx.process_key(b'w' as u32, "w", false, Some("ngu"), 3, 3);
+    ctx.process_key(b'o' as u32, "o", false, Some("ngư"), 3, 3);
+    ctx.process_key(b'w' as u32, "w", false, Some("ngưo"), 4, 4);
+    ctx.process_key(b'i' as u32, "i", false, Some("ngươ"), 4, 4);
+    assert_eq!(ctx.last_composed, "ngươi");
+
+    // wayland async lag: app surrounding text has unaccented "nguoi"
+    let a_f = ctx.process_key(b'f' as u32, "f", false, Some("nguoi"), 5, 5);
+    assert_ne!(a_f.action_type, ACTION_FORWARD, "f was forwarded raw!");
+    assert_eq!(ctx.last_composed, "người");
+}
+
+#[test]
 fn test_surrounding_dd_to_d_stroke() {
     let mut ctx = ClakContext::new(Method::Telex);
     let action = ctx.process_key(b'd' as u32, "d", false, Some("d"), 1, 1);
