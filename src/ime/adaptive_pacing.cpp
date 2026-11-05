@@ -13,10 +13,10 @@ namespace pacing {
 
 AdaptivePacingEngine::AdaptivePacingEngine(bool enabled)
     : enabled_(enabled) {
-    web_draftjs_.metrics = {16, 8, 10, 40, 4, 20, 0, 0, 0, 0, 8, 30, config::kDefaultUinputHoldUs};
-    terminal_uinput_.metrics = {12, 3, 0, 30, 0, 10, 0, 0, 0, 0, 0, 0, config::kDefaultUinputHoldUs};
-    heavy_app_.metrics = {15, 4, 8, 35, 3, 12, 0, 0, 0, 0, 8, 30, config::kDefaultUinputHoldUs};
-    default_group_.metrics = {8, 2, 4, 30, 2, 10, 0, 0, 0, 0, 8, 30, config::kDefaultUinputHoldUs};
+    web_draftjs_.metrics = {16, 8, 10, 40, 4, 20, 0, 0, 0, 0, 8, 30, config::kDefaultUinputHoldUs, 10, 0};
+    terminal_uinput_.metrics = {12, 3, 0, 30, 0, 10, 0, 0, 0, 0, 0, 0, config::kDefaultUinputHoldUs, 0, 0};
+    heavy_app_.metrics = {15, 4, 8, 35, 3, 12, 0, 0, 0, 0, 8, 30, config::kDefaultUinputHoldUs, 8, 0};
+    default_group_.metrics = {8, 2, 4, 30, 2, 10, 0, 0, 0, 0, 8, 30, config::kDefaultUinputHoldUs, 4, 0};
 
     const char* env_hold = std::getenv("CLAK_UINPUT_HOLD_US");
     if (env_hold) {
@@ -77,6 +77,7 @@ void AdaptivePacingEngine::configureGroup(PacingGroup group, uint32_t floor_dela
     if (g.incident_timestamps_us.empty()) {
         g.metrics.post_delay_ms = floor_delay_ms;
         g.metrics.gap_ms = floor_gap_ms;
+        g.metrics.ssthresh_post_ms = floor_delay_ms;
     } else {
         if (g.metrics.post_delay_ms < floor_delay_ms) {
             g.metrics.post_delay_ms = floor_delay_ms;
@@ -88,6 +89,12 @@ void AdaptivePacingEngine::configureGroup(PacingGroup group, uint32_t floor_dela
             g.metrics.gap_ms = floor_gap_ms;
         } else if (g.metrics.gap_ms > ceiling_gap_ms) {
             g.metrics.gap_ms = ceiling_gap_ms;
+        }
+
+        if (g.metrics.ssthresh_post_ms < floor_delay_ms) {
+            g.metrics.ssthresh_post_ms = floor_delay_ms;
+        } else if (g.metrics.ssthresh_post_ms > ceiling_delay_ms) {
+            g.metrics.ssthresh_post_ms = ceiling_delay_ms;
         }
     }
 }
@@ -119,6 +126,10 @@ void AdaptivePacingEngine::onIncident(PacingGroup group, IncidentType incident, 
         g.incident_timestamps_us.pop_front();
     }
     g.incident_timestamps_us.push_back(now_us);
+
+    // update ssthresh threshold to current delay + 2ms margin
+    uint32_t last_incident_delay = g.metrics.post_delay_ms;
+    g.metrics.ssthresh_post_ms = std::min(g.metrics.ceiling_post_ms, last_incident_delay + 2);
 
     // additive increase
     g.metrics.post_delay_ms = std::min(g.metrics.ceiling_post_ms,
@@ -152,12 +163,17 @@ void AdaptivePacingEngine::onTransactionSuccess(PacingGroup group) {
     }
     g.metrics.consecutive_clean_words++;
 
-    // fast decay when roundtrip ipc latency has returned to floor levels
-    // if rtt is confirmed low, decay 2ms every 5 clean words
-    // otherwise decay conservatively 1ms every 20 clean words
-    bool rtt_healthy = (g.metrics.smoothed_rtt_ms <= std::max(g.metrics.floor_post_ms, 15u));
-    uint32_t decay_threshold = rtt_healthy ? kFastDecayWordThreshold : kConservativeDecayWordThreshold;
-    uint32_t step = rtt_healthy ? kFastDecayStepMs : kConservativeDecayStepMs;
+    // determine if rtt is healthy relative to observed baseline
+    bool rtt_healthy = (g.metrics.smoothed_rtt_ms == 0) ||
+                       (g.metrics.min_rtt_ms == 0) ||
+                       (g.metrics.smoothed_rtt_ms <= std::max(g.metrics.floor_post_ms, g.metrics.min_rtt_ms + 4));
+
+    // tcp-style ssthresh: fast decay when comfortably above incident threshold
+    bool above_ssthresh = (g.metrics.post_delay_ms > g.metrics.ssthresh_post_ms);
+    bool use_fast_decay = above_ssthresh && rtt_healthy;
+
+    uint32_t decay_threshold = use_fast_decay ? kFastDecayWordThreshold : kConservativeDecayWordThreshold;
+    uint32_t step = use_fast_decay ? kFastDecayStepMs : kConservativeDecayStepMs;
 
     if (g.metrics.consecutive_clean_words >= decay_threshold) {
         g.metrics.consecutive_clean_words = 0;
@@ -168,6 +184,10 @@ void AdaptivePacingEngine::onTransactionSuccess(PacingGroup group) {
         if (g.metrics.gap_ms > g.metrics.floor_gap_ms) {
             uint32_t delta = g.metrics.gap_ms - g.metrics.floor_gap_ms;
             g.metrics.gap_ms -= std::min(step, delta);
+        }
+        // relax ssthresh downwards during sustained clean periods
+        if (!use_fast_decay && g.metrics.ssthresh_post_ms > g.metrics.post_delay_ms) {
+            g.metrics.ssthresh_post_ms = g.metrics.post_delay_ms;
         }
         if (g.metrics.commit_delay_ms > 0 && g.metrics.smoothed_rtt_ms < 20) {
             g.metrics.commit_delay_ms -= 1;
@@ -183,6 +203,13 @@ void AdaptivePacingEngine::recordRtt(PacingGroup group, uint64_t rtt_us) {
     auto& g = getGroup(group);
     uint32_t rtt_ms = static_cast<uint32_t>((rtt_us + 500) / 1000);
 
+    // track baseline minimum rtt
+    if (rtt_ms > 0) {
+        if (g.metrics.min_rtt_ms == 0 || rtt_ms < g.metrics.min_rtt_ms) {
+            g.metrics.min_rtt_ms = rtt_ms;
+        }
+    }
+
     // smoothed rtt using exponential moving average
     if (g.metrics.smoothed_rtt_ms == 0) {
         g.metrics.smoothed_rtt_ms = rtt_ms;
@@ -190,15 +217,14 @@ void AdaptivePacingEngine::recordRtt(PacingGroup group, uint64_t rtt_us) {
         g.metrics.smoothed_rtt_ms = (g.metrics.smoothed_rtt_ms * 7 + rtt_ms * 3) / 10;
     }
 
-    // dynamic auto pacing based on observed rtt
-    if (g.metrics.smoothed_rtt_ms > g.metrics.floor_post_ms) {
-        uint32_t target_post = std::min(g.metrics.ceiling_post_ms, g.metrics.smoothed_rtt_ms);
-        if (target_post > g.metrics.post_delay_ms) {
-            g.metrics.post_delay_ms = target_post;
-        }
-    }
-
+    // dynamic auto pacing based on observed rtt for web and heavy apps
     if (group == PacingGroup::WebDraftJs || group == PacingGroup::HeavyApp) {
+        if (g.metrics.smoothed_rtt_ms > g.metrics.floor_post_ms) {
+            uint32_t target_post = std::min(g.metrics.ceiling_post_ms, g.metrics.smoothed_rtt_ms);
+            if (target_post > g.metrics.post_delay_ms) {
+                g.metrics.post_delay_ms = target_post;
+            }
+        }
         if (g.metrics.smoothed_rtt_ms >= 20) {
             g.metrics.commit_delay_ms = std::min(20u, std::max(10u, g.metrics.smoothed_rtt_ms / 2));
         } else {

@@ -70,7 +70,7 @@ private:
   void doCommitString(const std::string& text);
   void doCommitDirect(const std::string& text);
   std::string classifyGroup(const std::string& app, const std::string& site, bool is_autofill, bool used_uinput);
-  void logLatency(const std::string& group, uint64_t start_us, const std::string& action_type);
+  void logLatency(const std::string& group, uint64_t start_us, const std::string& action_type, const std::string& layer = "");
   void logCsv(uint64_t rtt_us, const std::string& action);
 
   ClakEngine* engine_;

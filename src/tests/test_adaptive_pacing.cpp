@@ -67,7 +67,8 @@ TEST(AdaptivePacingTest, SlowDecayTowardsFloor) {
     EXPECT_EQ(m.post_delay_ms, 16u); // 12 + 4
     EXPECT_EQ(m.gap_ms, 5u);         // 3 + 2
 
-    // simulate high rtt (25ms) so conservative decay (20 words per 1ms) is used
+    // record baseline idle rtt (2ms) then elevated rtt (25ms) so conservative decay is used
+    engine.recordRtt(PacingGroup::TerminalUinput, 2000ULL);
     engine.recordRtt(PacingGroup::TerminalUinput, 25000ULL);
 
     // simulate 19 successful transactions -> no decay yet
@@ -208,15 +209,24 @@ TEST(AdaptivePacingTest, ConfigureGroupZeroFloorAppliesImmediately) {
 TEST(AdaptivePacingTest, FastDecayWhenRttLow) {
     AdaptivePacingEngine engine;
     uint64_t t0 = 1000000ULL;
+    // baseline idle rtt
+    engine.recordRtt(PacingGroup::TerminalUinput, 2000ULL);
     // raise delay via starvation incidents
     engine.onIncident(PacingGroup::TerminalUinput, IncidentType::PacingStarvation, t0);
     engine.onIncident(PacingGroup::TerminalUinput, IncidentType::PacingStarvation, t0 + 10000ULL);
     EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).post_delay_ms, 20u);
+    EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).ssthresh_post_ms, 18u);
 
-    // low rtt (3ms) indicates clean idle ipc
-    engine.recordRtt(PacingGroup::TerminalUinput, 3000ULL);
+    // low rtt indicates clean idle ipc, above ssthresh allows fast decay
+    engine.recordRtt(PacingGroup::TerminalUinput, 2000ULL);
 
-    // 5 clean transactions should decay by 2ms
+    // 5 clean transactions should decay by 2ms down to ssthresh
+    for (int i = 0; i < 5; ++i) {
+        engine.onTransactionSuccess(PacingGroup::TerminalUinput);
+    }
+    EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).post_delay_ms, 18u);
+
+    // at ssthresh, fast decay halts and switches to conservative decay
     for (int i = 0; i < 5; ++i) {
         engine.onTransactionSuccess(PacingGroup::TerminalUinput);
     }
@@ -226,6 +236,8 @@ TEST(AdaptivePacingTest, FastDecayWhenRttLow) {
 TEST(AdaptivePacingTest, ConservativeDecayWhenRttHigh) {
     AdaptivePacingEngine engine;
     uint64_t t0 = 1000000ULL;
+    // record baseline idle rtt
+    engine.recordRtt(PacingGroup::TerminalUinput, 2000ULL);
     engine.onIncident(PacingGroup::TerminalUinput, IncidentType::PacingStarvation, t0);
     engine.onIncident(PacingGroup::TerminalUinput, IncidentType::PacingStarvation, t0 + 10000ULL);
     EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).post_delay_ms, 20u);
@@ -233,7 +245,7 @@ TEST(AdaptivePacingTest, ConservativeDecayWhenRttHigh) {
     // high rtt (25ms) indicates ongoing system load
     engine.recordRtt(PacingGroup::TerminalUinput, 25000ULL);
 
-    // 5 transactions must NOT decay under high rtt
+    // 5 transactions must not decay under high rtt
     for (int i = 0; i < 5; ++i) {
         engine.onTransactionSuccess(PacingGroup::TerminalUinput);
     }
@@ -244,4 +256,43 @@ TEST(AdaptivePacingTest, ConservativeDecayWhenRttHigh) {
         engine.onTransactionSuccess(PacingGroup::TerminalUinput);
     }
     EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).post_delay_ms, 19u);
+}
+
+TEST(AdaptivePacingTest, TcpStyleSsthreshDecayAndRelaxation) {
+    AdaptivePacingEngine engine;
+    uint64_t t0 = 1000000ULL;
+    // baseline idle rtt (2ms)
+    engine.recordRtt(PacingGroup::WebDraftJs, 2000ULL);
+
+    // initial draftjs post delay is 16ms
+    EXPECT_EQ(engine.metrics(PacingGroup::WebDraftJs).post_delay_ms, 16u);
+
+    // incident at 16ms establishes ssthresh at 18ms (16 + 2) and raises delay to 20ms
+    engine.onIncident(PacingGroup::WebDraftJs, IncidentType::PacingStarvation, t0);
+    EXPECT_EQ(engine.metrics(PacingGroup::WebDraftJs).post_delay_ms, 20u);
+    EXPECT_EQ(engine.metrics(PacingGroup::WebDraftJs).ssthresh_post_ms, 18u);
+
+    // fast decay above ssthresh: 5 clean words drop delay by 2ms to 18ms
+    for (int i = 0; i < 5; ++i) {
+        engine.onTransactionSuccess(PacingGroup::WebDraftJs);
+    }
+    EXPECT_EQ(engine.metrics(PacingGroup::WebDraftJs).post_delay_ms, 18u);
+
+    // at ssthresh, fast decay halts to prevent dropping into the danger zone
+    for (int i = 0; i < 5; ++i) {
+        engine.onTransactionSuccess(PacingGroup::WebDraftJs);
+    }
+    EXPECT_EQ(engine.metrics(PacingGroup::WebDraftJs).post_delay_ms, 18u);
+
+    // conservative decay: after 20 clean words total, decays 1ms and relaxes ssthresh
+    for (int i = 0; i < 15; ++i) {
+        engine.onTransactionSuccess(PacingGroup::WebDraftJs);
+    }
+    EXPECT_EQ(engine.metrics(PacingGroup::WebDraftJs).post_delay_ms, 17u);
+    EXPECT_EQ(engine.metrics(PacingGroup::WebDraftJs).ssthresh_post_ms, 17u);
+
+    // recurring incident at 17ms raises ssthresh to 19ms and delay to 21ms
+    engine.onIncident(PacingGroup::WebDraftJs, IncidentType::PacingStarvation, t0 + 5000000ULL);
+    EXPECT_EQ(engine.metrics(PacingGroup::WebDraftJs).post_delay_ms, 21u);
+    EXPECT_EQ(engine.metrics(PacingGroup::WebDraftJs).ssthresh_post_ms, 19u);
 }

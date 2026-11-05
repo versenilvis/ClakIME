@@ -39,6 +39,8 @@ struct PacingMetrics {
     uint32_t pre_delay_ms{8};
     uint32_t post_commit_window_ms{30};
     uint32_t hold_us{config::kDefaultUinputHoldUs};
+    uint32_t ssthresh_post_ms{0};
+    uint32_t min_rtt_ms{0};
 };
 
 class AdaptivePacingEngine {

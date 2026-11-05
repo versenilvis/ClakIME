@@ -324,11 +324,15 @@ std::string ClakState::classifyGroup(const std::string& app, const std::string& 
     return profile->name();
 }
 
-void ClakState::logLatency(const std::string& group, uint64_t start_us, const std::string& action_type) {
+void ClakState::logLatency(const std::string& group, uint64_t start_us, const std::string& action_type, const std::string& layer) {
     if (start_us == 0) return;
     uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
     double delta_ms = (now_us >= start_us) ? static_cast<double>(now_us - start_us) / 1000.0 : 0.0;
-    utils::clakLog("[LATENCY] group=" + group + " delta_ms=" + std::to_string(delta_ms) + " action=" + action_type);
+    std::string line = "[LATENCY] group=" + group + " delta_ms=" + std::to_string(delta_ms) + " action=" + action_type;
+    if (!layer.empty()) {
+        line += " layer=" + layer;
+    }
+    utils::clakLog(line);
 }
 
 void ClakState::logCsv(uint64_t rtt_us, const std::string& action) {
@@ -446,6 +450,12 @@ void ClakState::finishUinputDeletion(uint64_t rtt_us) {
     pacing::PacingGroup pgroup = pacing::AdaptivePacingEngine::classify(app, site, is_address_bar_fix_, is_draftjs, is_terminal);
     pacing_engine_.recordRtt(pgroup, rtt_us);
     pacing_engine_.onTransactionSuccess(pgroup);
+    auto pm = pacing_engine_.metrics(pgroup);
+    utils::clakLog("[PACING] group=" + std::to_string(static_cast<int>(pgroup)) +
+                   " post_delay=" + std::to_string(pm.post_delay_ms) +
+                   "ms rtt=" + std::to_string((rtt_us + 500) / 1000) +
+                   "ms ssthresh=" + std::to_string(pm.ssthresh_post_ms) +
+                   "ms clean=" + std::to_string(pm.consecutive_clean_words));
 
     if (op_start_us_ > 0) {
         uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
@@ -453,7 +463,7 @@ void ClakState::finishUinputDeletion(uint64_t rtt_us) {
         observeTransactionLatency(roundtrip_us);
     }
     logCsv(rtt_us, "UINPUT");
-    logLatency(op_group_, op_start_us_, "REPLACE");
+    logLatency(op_group_, op_start_us_, "REPLACE", "uinput");
     op_start_us_ = 0;
     std::string to_commit = pending_commit_string_;
     pending_commit_string_.clear();
@@ -734,7 +744,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                 op_start_us_ = 0;
                 return true;
             }
-            logLatency(classifyGroup(app, site, false, false), op_start_us_, "FORWARD");
+            logLatency(classifyGroup(app, site, false, false), op_start_us_, "FORWARD", "forwardKey");
             op_start_us_ = 0;
             return false;
 
@@ -947,7 +957,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                                 pending_commit_string_.clear();
                                 is_deleting_ = false;
                                 logCsv(0, "SURROUNDING");
-                                logLatency(currentProfile()->name(), op_start_us_, "REPLACE");
+                                logLatency(currentProfile()->name(), op_start_us_, "REPLACE", "surrounding");
                                 op_start_us_ = 0;
                                 replayBufferedKeys();
                             }
@@ -964,7 +974,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                         }
                     }
                     logCsv(0, "SURROUNDING");
-                    logLatency(currentProfile()->name(), op_start_us_, "REPLACE");
+                    logLatency(currentProfile()->name(), op_start_us_, "REPLACE", "surrounding");
                     op_start_us_ = 0;
                     last_text_len_ = 0;
                     return true;
