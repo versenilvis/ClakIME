@@ -197,12 +197,22 @@ pub fn run_diagnostics() -> DiagnosticReport {
     }
 
     // validate environment variables
+    let is_wayland = std::env::var("WAYLAND_DISPLAY").is_ok()
+        || std::env::var("XDG_SESSION_TYPE")
+            .map(|s| s == "wayland")
+            .unwrap_or(false);
     if let Some(ref gtk_im) = environment.gtk_im_module {
         if gtk_im == "ibus" {
             issues.push(DiagnosticIssue {
                 title: "GTK_IM_MODULE xung đột với IBus".to_string(),
                 message: "GTK_IM_MODULE đang được đặt là 'ibus', khiến ứng dụng GTK bỏ qua Fcitx5 và gây nuốt chữ".to_string(),
                 fix_command: Some("Xóa dòng GTK_IM_MODULE trong ~/.config/environment.d/99-clak-im.conf hoặc ~/.profile".to_string()),
+            });
+        } else if is_wayland && (gtk_im == "fcitx" || gtk_im == "fcitx5") {
+            warnings.push(DiagnosticWarning {
+                title: "GTK_IM_MODULE được đặt trên Wayland".to_string(),
+                message: "GTK_IM_MODULE=fcitx chạy qua DBus bất đồng bộ, có thể gây chèn thừa ký tự khi gõ nhanh. Trên Wayland nên để trống để GTK dùng giao thức text-input-v3 gốc".to_string(),
+                fix_command: Some("Xóa biến GTK_IM_MODULE khỏi môi trường (ví dụ trong ~/.config/environment.d/ hoặc ~/.pam_environment)".to_string()),
             });
         }
     }
@@ -637,6 +647,11 @@ mod tests {
 
     #[test]
     fn test_apply_pacing_profile() {
+        let tmp_dir = std::env::temp_dir().join(format!("clak_diag_test_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&tmp_dir);
+        let prev_xdg = std::env::var("XDG_CONFIG_HOME");
+        std::env::set_var("XDG_CONFIG_HOME", &tmp_dir);
+
         let pacing = checks::pacing_calc::PacingRecommendation {
             gap_ms: 5,
             terminal_post_delay_ms: 10,
@@ -657,6 +672,13 @@ mod tests {
         assert_eq!(cfg.pacing.draftjs_gap_ms, 5);
         assert_eq!(cfg.pacing.terminal_delay_ms, 10);
         assert_eq!(cfg.pacing.heavy_app_delay_ms, 22);
+
+        // restore environment
+        match prev_xdg {
+            Ok(v) => std::env::set_var("XDG_CONFIG_HOME", v),
+            Err(_) => std::env::remove_var("XDG_CONFIG_HOME"),
+        }
+        let _ = std::fs::remove_dir_all(&tmp_dir);
     }
 
     #[test]
@@ -667,5 +689,23 @@ mod tests {
         assert!(std::env::var("GTK_IM_MODULE").is_err());
         assert_eq!(std::env::var("QT_IM_MODULE").unwrap(), "fcitx");
         assert_eq!(std::env::var("XMODIFIERS").unwrap(), "@im=fcitx");
+    }
+
+    #[test]
+    fn test_gtk_im_module_fcitx_warns_on_wayland() {
+        std::env::set_var("WAYLAND_DISPLAY", "wayland-1");
+        std::env::set_var("GTK_IM_MODULE", "fcitx");
+
+        let report = run_diagnostics();
+        let has_warning = report
+            .warnings
+            .iter()
+            .any(|w| w.title.contains("GTK_IM_MODULE được đặt trên Wayland"));
+        assert!(
+            has_warning,
+            "diagnostics must warn when GTK_IM_MODULE=fcitx on Wayland"
+        );
+
+        std::env::remove_var("GTK_IM_MODULE");
     }
 }
