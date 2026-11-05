@@ -36,6 +36,13 @@ jobs:
       - name: Check code formatting
         run: cargo fmt --all -- --check
 
+      - name: Verify panic strategy is unwind
+        run: |
+          if grep -E 'panic\s*=\s*"abort"' Cargo.toml; then
+            echo "ERROR: panic = 'abort' found in Cargo.toml! This breaks catch_unwind in C ABI and crashes fcitx5 daemon on panic."
+            exit 1
+          fi
+
       - name: Run clippy linter
         run: cargo clippy --workspace -- -D warnings
 

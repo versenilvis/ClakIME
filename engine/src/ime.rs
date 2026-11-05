@@ -464,8 +464,10 @@ impl ClakContext {
 
             let sel_start_byte = std::cmp::min(cur_byte, anch_byte);
             let sel_end_byte = std::cmp::max(cur_byte, anch_byte);
-            let sel_start = std::cmp::min(cursor, anchor);
-            let sel_end = std::cmp::max(cursor, anchor);
+            let cur_clamped = std::cmp::min(cursor, char_count);
+            let anch_clamped = std::cmp::min(anchor, char_count);
+            let sel_start = std::cmp::min(cur_clamped, anch_clamped);
+            let sel_end = std::cmp::max(cur_clamped, anch_clamped);
 
             // address bar autocomplete applies to single-line fields without newlines
             let is_single_line = !text.is_empty() && !text.contains('\n');

@@ -907,10 +907,36 @@ fn test_typing_desktop() {
 }
 
 #[test]
-fn test_panic_unwind_guard() {
-    // verify that catch_unwind functions properly and panic strategy is unwind
-    let res = std::panic::catch_unwind(|| {
-        panic!("simulated panic for catch_unwind verification");
-    });
-    assert!(res.is_err(), "catch_unwind must be active to protect C ABI");
+fn test_surrounding_text_multibyte_and_clamped_boundary_slicing() {
+    let mut ctx = ClakContext::new(Method::Telex);
+
+    // multibyte text with 'đ', 'ế', 'ệ'
+    let text = "đường đến tiếng Việt";
+    let char_len = text.chars().count();
+
+    // 1. cursor = 0
+    let a1 = ctx.process_key(b'a' as u32, "a", false, Some(text), 0, 0);
+    assert_eq!(a1.action_type, ACTION_FORWARD);
+
+    // 2. cursor = char_len (at end of text, typing non-modifier key)
+    let mut ctx2 = ClakContext::new(Method::Telex);
+    let a2 = ctx2.process_key(b'q' as u32, "q", false, Some(text), char_len, char_len);
+    assert_eq!(a2.action_type, ACTION_FORWARD);
+
+    // 3. cursor > char_len (out of bounds, e.g. 9999, non-modifier key)
+    let mut ctx3 = ClakContext::new(Method::Telex);
+    let a3 = ctx3.process_key(b'q' as u32, "q", false, Some(text), 9999, 9999);
+    assert_eq!(a3.action_type, ACTION_FORWARD);
+
+    // 4. selection across multibyte chars
+    let mut ctx4 = ClakContext::new(Method::Telex);
+    let a4 = ctx4.process_key(b'x' as u32, "x", false, Some(text), 0, 5);
+    assert_eq!(a4.action_type, ACTION_FORWARD);
+
+    // 5. word seeding right after multibyte word "đến "
+    let mut ctx5 = ClakContext::new(Method::Telex);
+    let den_text = "đến ";
+    let den_len = den_text.chars().count();
+    let a5 = ctx5.process_key(b's' as u32, "s", false, Some(den_text), den_len, den_len);
+    assert_eq!(a5.action_type, ACTION_FORWARD);
 }
