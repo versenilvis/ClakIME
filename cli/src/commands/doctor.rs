@@ -1,3 +1,4 @@
+use clak_diagnostics::report::sanitize_path;
 use clak_diagnostics::run_diagnostics;
 
 pub fn execute(markdown: bool, json: bool, fix: bool) {
@@ -104,9 +105,10 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
         println!("  • fcitx5-remote: Không thể kết nối tới Fcitx5");
     }
 
-    println!("\n[4/10] Kiểm tra Binary & Nạp bộ nhớ (RAM):");
+    println!("\n[4/11] Kiểm tra Binary & Nạp bộ nhớ (RAM):");
     if report.memory.clak_loaded {
-        let path = report.memory.mapped_path.as_deref().unwrap_or("libclak.so");
+        let raw_path = report.memory.mapped_path.as_deref().unwrap_or("libclak.so");
+        let path = sanitize_path(raw_path);
         if report.memory.is_deleted_inode {
             println!(
                 "  • Bộ nhớ: \x1b[33m[CẢNH BÁO]\x1b[0m Fcitx5 đang giữ inode CŨ trong RAM: {}",
@@ -119,11 +121,11 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
         println!("  • Bộ nhớ: \x1b[31m[LỖI]\x1b[0m libclak.so chưa được Fcitx5 nạp vào tiến trình");
     }
 
-    println!("\n[5/10] Cấu hình và Nhật ký (Log):");
+    println!("\n[5/11] Cấu hình và Nhật ký (Log):");
     if report.config.config_file_exists {
         println!(
             "  • File cấu hình: \x1b[32m[OK]\x1b[0m {}",
-            report.config.config_path.display()
+            sanitize_path(&report.config.config_path.display().to_string())
         );
     } else {
         println!("  • File cấu hình: [MẶC ĐỊNH] Chưa tạo file riêng, đang dùng giá trị mặc định");
@@ -131,13 +133,13 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
     if report.config.log_file_exists {
         println!(
             "  • File log: \x1b[32m[OK]\x1b[0m {} ({:.1} KB)",
-            report.config.log_path.display(),
+            sanitize_path(&report.config.log_path.display().to_string()),
             report.config.log_size_kb.unwrap_or(0.0)
         );
     } else {
         println!(
             "  • File log: Chưa kích hoạt ghi log debug vào {}",
-            report.config.log_path.display()
+            sanitize_path(&report.config.log_path.display().to_string())
         );
     }
     if report.autostart.is_enabled {
@@ -260,7 +262,7 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
         );
     }
 
-    println!("\n[10/10] Đo Độ Trễ Phần Cứng & Pacing Đề Xuất:");
+    println!("\n[10/11] Đo Độ Trễ Phần Cứng & Pacing Đề Xuất:");
     println!(
         "  • Uinput RTT: {:.2} ms (Jitter: ±{:.2} ms, Write: {:.1} µs)",
         report.latency.measured_rtt_ms,
@@ -286,6 +288,46 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
         report.pacing.browser_post_delay_ms,
         report.pacing.draftjs_post_delay_ms,
         report.pacing.heavy_app_post_delay_ms
+    );
+
+    println!("\n[11/11] Zero-Keystroke Telemetry & Trạng Thái Pacing:");
+    let uptime_secs = report.telemetry.daemon_uptime_seconds;
+    let uptime_str = if uptime_secs >= 3600 {
+        format!("{} giờ {} phút ({}s)", uptime_secs / 3600, (uptime_secs % 3600) / 60, uptime_secs)
+    } else if uptime_secs >= 60 {
+        format!("{} phút ({}s)", uptime_secs / 60, uptime_secs)
+    } else {
+        format!("{}s", uptime_secs)
+    };
+    println!("  • Uptime daemon: {} | Giao thức: {}", uptime_str, report.telemetry.connected_protocol);
+    println!("  • Phân tách tầng xử lý:");
+    println!(
+        "    - Surrounding (GTK/Qt): {} thao tác (p50: {:.2}ms, p95: {:.2}ms, max: {:.2}ms)",
+        report.telemetry.surrounding_stats.count,
+        report.telemetry.surrounding_stats.p50_latency_ms,
+        report.telemetry.surrounding_stats.p95_latency_ms,
+        report.telemetry.surrounding_stats.max_latency_ms
+    );
+    println!(
+        "    - Uinput (Phím ảo): {} thao tác (p50: {:.2}ms, p95: {:.2}ms, max: {:.2}ms)",
+        report.telemetry.uinput_stats.count,
+        report.telemetry.uinput_stats.p50_latency_ms,
+        report.telemetry.uinput_stats.p95_latency_ms,
+        report.telemetry.uinput_stats.max_latency_ms
+    );
+    println!("    - Forward (Phím trực tiếp): {} thao tác", report.telemetry.forward_count);
+    println!("  • Snapshot 4 nhóm Pacing Profile:");
+    for g in &report.telemetry.groups {
+        println!(
+            "    - {}: delay {}ms (floor {}ms, ceiling {}ms, gap {}ms, hold {}µs, ssthresh {}ms)",
+            g.name, g.current_delay_ms, g.floor_ms, g.ceiling_ms, g.gap_ms, g.hold_us, g.ssthresh_ms
+        );
+    }
+    println!("  • Sự cố bất thường: {} drift, {} timeouts, {} overflows, {} mismatches",
+        report.telemetry.drift_detected_count,
+        report.telemetry.sentinel_timeout_count,
+        report.telemetry.overflow_count,
+        report.telemetry.surrounding_mismatch_count
     );
 
     if !report.conflicts.is_empty() {

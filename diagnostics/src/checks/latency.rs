@@ -243,6 +243,26 @@ pub fn check_latency() -> LatencyBenchmark {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LayerStats {
+    pub count: u32,
+    pub p50_latency_ms: f64,
+    pub p95_latency_ms: f64,
+    pub p99_latency_ms: f64,
+    pub max_latency_ms: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PacingGroupSnapshot {
+    pub name: String,
+    pub current_delay_ms: u32,
+    pub floor_ms: u32,
+    pub ceiling_ms: u32,
+    pub gap_ms: u32,
+    pub hold_us: u32,
+    pub ssthresh_ms: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PacingTelemetry {
     pub replace_count: u32,
     pub forward_count: u32,
@@ -250,77 +270,229 @@ pub struct PacingTelemetry {
     pub p95_latency_ms: f64,
     pub p99_latency_ms: f64,
     pub max_latency_ms: f64,
+    pub surrounding_stats: LayerStats,
+    pub uinput_stats: LayerStats,
+    pub groups: Vec<PacingGroupSnapshot>,
+    pub daemon_uptime_seconds: u64,
+    pub connected_protocol: String,
     pub drift_detected_count: u32,
     pub sentinel_timeout_count: u32,
     pub overflow_count: u32,
     pub surrounding_mismatch_count: u32,
 }
 
+fn compute_layer_stats(mut samples: Vec<f64>) -> LayerStats {
+    let count = samples.len() as u32;
+    if samples.is_empty() {
+        return LayerStats {
+            count: 0,
+            p50_latency_ms: 0.0,
+            p95_latency_ms: 0.0,
+            p99_latency_ms: 0.0,
+            max_latency_ms: 0.0,
+        };
+    }
+    samples.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let n = samples.len();
+    let p50 = samples[n / 2];
+    let p95 = samples[((n as f64 * 0.95).floor() as usize).min(n - 1)];
+    let p99 = samples[((n as f64 * 0.99).floor() as usize).min(n - 1)];
+    let max_lat = samples[n - 1];
+    LayerStats {
+        count,
+        p50_latency_ms: p50,
+        p95_latency_ms: p95,
+        p99_latency_ms: p99,
+        max_latency_ms: max_lat,
+    }
+}
+
+fn detect_daemon_uptime_seconds() -> u64 {
+    if let Ok(entries) = fs::read_dir("/proc") {
+        for entry in entries.flatten() {
+            if let Ok(pid) = entry.file_name().to_string_lossy().parse::<u32>() {
+                let cmdline_path = entry.path().join("cmdline");
+                if let Ok(content) = fs::read(&cmdline_path) {
+                    if let Some(first_null) = content.iter().position(|&b| b == 0) {
+                        let arg0 = String::from_utf8_lossy(&content[..first_null]);
+                        if std::path::Path::new(&*arg0).file_name().is_some_and(|n| n == "fcitx5") {
+                            if let Ok(meta) = fs::metadata(format!("/proc/{}", pid)) {
+                                if let Ok(mod_time) = meta.modified() {
+                                    if let Ok(elapsed) = mod_time.elapsed() {
+                                        return elapsed.as_secs();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    0
+}
+
+fn detect_connected_protocol() -> String {
+    let session = std::env::var("XDG_SESSION_TYPE").unwrap_or_default().to_lowercase();
+    let has_wayland = std::env::var("WAYLAND_DISPLAY").is_ok();
+    if session == "wayland" || has_wayland {
+        let comp = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().to_lowercase();
+        if comp.contains("kde") {
+            "Wayland (KWin text-input-v3 / virtual-keyboard-v1)".to_string()
+        } else if comp.contains("gnome") {
+            "Wayland (GNOME Shell DBus / text-input-v3)".to_string()
+        } else if comp.contains("hyprland") || comp.contains("sway") {
+            "Wayland (zwp_text_input_v3 / zwp_input_method_v2)".to_string()
+        } else {
+            "Wayland (zwp_text_input_v3)".to_string()
+        }
+    } else if std::env::var("DISPLAY").is_ok() {
+        "X11 (XIM / DBus Frontend)".to_string()
+    } else {
+        "DBus IPC (Standalone)".to_string()
+    }
+}
+
+fn detect_group_snapshots(log_content: &str) -> Vec<PacingGroupSnapshot> {
+    let mut snapshots = vec![
+        PacingGroupSnapshot {
+            name: "WebDraftJs (X/Twitter/TikTok/DraftJS)".to_string(),
+            current_delay_ms: 16,
+            floor_ms: 10,
+            ceiling_ms: 40,
+            gap_ms: 8,
+            hold_us: 1000,
+            ssthresh_ms: 10,
+        },
+        PacingGroupSnapshot {
+            name: "Terminal (Kitty/Alacritty/Ghostty)".to_string(),
+            current_delay_ms: 12,
+            floor_ms: 0,
+            ceiling_ms: 30,
+            gap_ms: 3,
+            hold_us: 1000,
+            ssthresh_ms: 0,
+        },
+        PacingGroupSnapshot {
+            name: "HeavyApp (WPS/JetBrains/Steam)".to_string(),
+            current_delay_ms: 15,
+            floor_ms: 8,
+            ceiling_ms: 35,
+            gap_ms: 4,
+            hold_us: 1000,
+            ssthresh_ms: 8,
+        },
+        PacingGroupSnapshot {
+            name: "Default (GTK/Qt/Desktop)".to_string(),
+            current_delay_ms: 8,
+            floor_ms: 4,
+            ceiling_ms: 30,
+            gap_ms: 2,
+            hold_us: 1000,
+            ssthresh_ms: 4,
+        },
+    ];
+
+    for line in log_content.lines() {
+        if line.contains("[PACING]") {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            let mut grp_idx = None;
+            let mut post_delay = None;
+            let mut ssthresh = None;
+            for p in parts {
+                if let Some(v) = p.strip_prefix("group=") {
+                    grp_idx = v.parse::<usize>().ok();
+                } else if let Some(v) = p.strip_prefix("post_delay=") {
+                    post_delay = v.trim_end_matches("ms").parse::<u32>().ok();
+                } else if let Some(v) = p.strip_prefix("ssthresh=") {
+                    ssthresh = v.trim_end_matches("ms").parse::<u32>().ok();
+                }
+            }
+            if let Some(idx) = grp_idx {
+                if idx < snapshots.len() {
+                    if let Some(pd) = post_delay {
+                        snapshots[idx].current_delay_ms = pd;
+                    }
+                    if let Some(st) = ssthresh {
+                        snapshots[idx].ssthresh_ms = st;
+                    }
+                }
+            }
+        }
+    }
+    snapshots
+}
+
 pub fn check_telemetry() -> PacingTelemetry {
-    let mut replaces: Vec<f64> = Vec::new();
+    let mut all_replaces: Vec<f64> = Vec::new();
+    let mut surrounding_replaces: Vec<f64> = Vec::new();
+    let mut uinput_replaces: Vec<f64> = Vec::new();
     let mut forwards = 0;
     let mut drifts = 0;
     let mut timeouts = 0;
     let mut overflows = 0;
     let mut mismatches = 0;
+    let log_content = fs::read_to_string("/tmp/clak.log").unwrap_or_default();
 
-    if let Ok(content) = fs::read_to_string("/tmp/clak.log") {
-        for line in content.lines() {
-            if line.contains("[LATENCY]") {
-                if line.contains("action=REPLACE") {
-                    if let Some(idx) = line.find("delta_ms=") {
-                        let sub = &line[idx + 9..];
-                        let num_str: String = sub
-                            .chars()
-                            .take_while(|c| c.is_ascii_digit() || *c == '.')
-                            .collect();
-                        if let Ok(ms) = num_str.parse::<f64>() {
-                            if ms > 0.0 && ms < 2000.0 {
-                                replaces.push(ms);
+    for line in log_content.lines() {
+        if line.contains("[LATENCY]") {
+            if line.contains("action=REPLACE") {
+                if let Some(idx) = line.find("delta_ms=") {
+                    let sub = &line[idx + 9..];
+                    let num_str: String = sub
+                        .chars()
+                        .take_while(|c| c.is_ascii_digit() || *c == '.')
+                        .collect();
+                    if let Ok(ms) = num_str.parse::<f64>() {
+                        if ms > 0.0 && ms < 2000.0 {
+                            all_replaces.push(ms);
+                            if line.contains("layer=surrounding") {
+                                surrounding_replaces.push(ms);
+                            } else if line.contains("layer=uinput") {
+                                uinput_replaces.push(ms);
                             }
                         }
                     }
-                } else if line.contains("action=FORWARD") {
-                    forwards += 1;
                 }
-            } else {
-                let lower = line.to_lowercase();
-                if lower.contains("event loop drift") {
-                    drifts += 1;
-                }
-                if lower.contains("sentinel timeout") || lower.contains("action=timeout") {
-                    timeouts += 1;
-                }
-                if lower.contains("buffer overflow") || lower.contains("dropped old key") {
-                    overflows += 1;
-                }
-                if lower.contains("surrounding mismatch") {
-                    mismatches += 1;
-                }
+            } else if line.contains("action=FORWARD") {
+                forwards += 1;
+            }
+        } else {
+            let lower = line.to_lowercase();
+            if lower.contains("event loop drift") {
+                drifts += 1;
+            }
+            if lower.contains("sentinel timeout") || lower.contains("action=timeout") {
+                timeouts += 1;
+            }
+            if lower.contains("buffer overflow") || lower.contains("dropped old key") {
+                overflows += 1;
+            }
+            if lower.contains("surrounding mismatch") {
+                mismatches += 1;
             }
         }
     }
 
-    let replace_count = replaces.len() as u32;
-    let (p50, p95, p99, max_lat) = if !replaces.is_empty() {
-        replaces.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-        let n = replaces.len();
-        let p50 = replaces[n / 2];
-        let p95 = replaces[((n as f64 * 0.95).floor() as usize).min(n - 1)];
-        let p99 = replaces[((n as f64 * 0.99).floor() as usize).min(n - 1)];
-        let max_lat = replaces[n - 1];
-        (p50, p95, p99, max_lat)
-    } else {
-        (0.0, 0.0, 0.0, 0.0)
-    };
+    let overall = compute_layer_stats(all_replaces);
+    let surrounding_stats = compute_layer_stats(surrounding_replaces);
+    let uinput_stats = compute_layer_stats(uinput_replaces);
+    let groups = detect_group_snapshots(&log_content);
+    let daemon_uptime_seconds = detect_daemon_uptime_seconds();
+    let connected_protocol = detect_connected_protocol();
 
     PacingTelemetry {
-        replace_count,
+        replace_count: overall.count,
         forward_count: forwards,
-        p50_latency_ms: p50,
-        p95_latency_ms: p95,
-        p99_latency_ms: p99,
-        max_latency_ms: max_lat,
+        p50_latency_ms: overall.p50_latency_ms,
+        p95_latency_ms: overall.p95_latency_ms,
+        p99_latency_ms: overall.p99_latency_ms,
+        max_latency_ms: overall.max_latency_ms,
+        surrounding_stats,
+        uinput_stats,
+        groups,
+        daemon_uptime_seconds,
+        connected_protocol,
         drift_detected_count: drifts,
         sentinel_timeout_count: timeouts,
         overflow_count: overflows,

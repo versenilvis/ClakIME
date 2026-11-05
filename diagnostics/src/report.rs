@@ -1,5 +1,19 @@
 use crate::DiagnosticReport;
 
+pub fn sanitize_path(path: &str) -> String {
+    if let Ok(home) = std::env::var("HOME") {
+        if !home.is_empty() && path.starts_with(&home) {
+            return format!("~{}", &path[home.len()..]);
+        }
+    }
+    if let Some(rest) = path.strip_prefix("/home/") {
+        if let Some(slash_idx) = rest.find('/') {
+            return format!("~{}", &rest[slash_idx..]);
+        }
+    }
+    path.to_string()
+}
+
 pub fn format_markdown(report: &DiagnosticReport) -> String {
     let mut out = String::new();
     out.push_str("# Clak Doctor: Báo Cáo Chẩn Đoán Hệ Thống\n\n");
@@ -74,7 +88,7 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
         }
     ));
     if let Some(ref path) = report.memory.mapped_path {
-        out.push_str(&format!("- Đường dẫn nạp: `{}`\n", path));
+        out.push_str(&format!("- Đường dẫn nạp: `{}`\n", sanitize_path(path)));
     }
     if report.memory.is_deleted_inode {
         out.push_str(
@@ -87,7 +101,7 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
     out.push_str(&format!(
         "- File cấu hình: {}\n",
         if report.config.config_file_exists {
-            format!("Tồn tại (`{}`)", report.config.config_path.display())
+            format!("Tồn tại (`{}`)", sanitize_path(&report.config.config_path.display().to_string()))
         } else {
             "Chưa tạo file riêng (dùng mặc định)".to_string()
         }
@@ -150,6 +164,8 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
             .frontends
             .gtk3_path
             .as_deref()
+            .map(sanitize_path)
+            .as_deref()
             .unwrap_or("Không tìm thấy")
     ));
     out.push_str(&format!(
@@ -157,6 +173,8 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
         report
             .frontends
             .gtk4_path
+            .as_deref()
+            .map(sanitize_path)
             .as_deref()
             .unwrap_or("Không tìm thấy")
     ));
@@ -166,6 +184,8 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
             .frontends
             .qt5_path
             .as_deref()
+            .map(sanitize_path)
+            .as_deref()
             .unwrap_or("Không tìm thấy")
     ));
     out.push_str(&format!(
@@ -173,6 +193,8 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
         report
             .frontends
             .qt6_path
+            .as_deref()
+            .map(sanitize_path)
             .as_deref()
             .unwrap_or("Không tìm thấy")
     ));
@@ -321,23 +343,67 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
     out.push('\n');
 
     out.push_str("## 11. Thống Kê Pacing & Bộ Đếm Sự Kiện (Zero-Keystroke Telemetry)\n");
+    let uptime_secs = report.telemetry.daemon_uptime_seconds;
+    let uptime_str = if uptime_secs >= 3600 {
+        format!("{} giờ {} phút ({}s)", uptime_secs / 3600, (uptime_secs % 3600) / 60, uptime_secs)
+    } else if uptime_secs >= 60 {
+        format!("{} phút ({}s)", uptime_secs / 60, uptime_secs)
+    } else {
+        format!("{}s", uptime_secs)
+    };
+    out.push_str(&format!("- Uptime bộ đếm Fcitx5: {}\n", uptime_str));
+    out.push_str(&format!("- Giao thức kết nối: {}\n", report.telemetry.connected_protocol));
     out.push_str(&format!(
-        "- Thao tác gõ: {} REPLACE, {} FORWARD\n",
+        "- Tổng thao tác gõ: {} REPLACE, {} FORWARD\n\n",
         report.telemetry.replace_count, report.telemetry.forward_count
     ));
-    if report.telemetry.replace_count > 0 {
-        out.push_str("- Phân phối độ trễ REPLACE:\n");
-        out.push_str(&format!("  * p50: {:.2} ms\n", report.telemetry.p50_latency_ms));
-        out.push_str(&format!("  * p95: {:.2} ms\n", report.telemetry.p95_latency_ms));
-        out.push_str(&format!("  * p99: {:.2} ms\n", report.telemetry.p99_latency_ms));
-        out.push_str(&format!("  * Cực đại: {:.2} ms\n", report.telemetry.max_latency_ms));
+
+    out.push_str("### Phân Tách Theo 3 Tầng Xử Lý\n");
+    out.push_str("| Tầng xử lý | Số thao tác | p50 | p95 | p99 | Cực đại |\n");
+    out.push_str("|---|---|---|---|---|---|\n");
+    out.push_str(&format!(
+        "| `surrounding` (GTK/Qt Native) | {} | {:.2} ms | {:.2} ms | {:.2} ms | {:.2} ms |\n",
+        report.telemetry.surrounding_stats.count,
+        report.telemetry.surrounding_stats.p50_latency_ms,
+        report.telemetry.surrounding_stats.p95_latency_ms,
+        report.telemetry.surrounding_stats.p99_latency_ms,
+        report.telemetry.surrounding_stats.max_latency_ms,
+    ));
+    out.push_str(&format!(
+        "| `uinput` (Virtual Keyboard) | {} | {:.2} ms | {:.2} ms | {:.2} ms | {:.2} ms |\n",
+        report.telemetry.uinput_stats.count,
+        report.telemetry.uinput_stats.p50_latency_ms,
+        report.telemetry.uinput_stats.p95_latency_ms,
+        report.telemetry.uinput_stats.p99_latency_ms,
+        report.telemetry.uinput_stats.max_latency_ms,
+    ));
+    out.push_str(&format!(
+        "| `forwardKey` (Phím xuyên thẳng) | {} | (không độ trễ) | - | - | - |\n\n",
+        report.telemetry.forward_count
+    ));
+
+    out.push_str("### Trạng Thái Hồ Sơ Pacing (4 Nhóm Ứng Dụng)\n");
+    out.push_str("| Nhóm ứng dụng | Delay hiện tại | Sàn (Floor) | Trần (Ceiling) | Gap | Hold phím | ssthresh an toàn |\n");
+    out.push_str("|---|---|---|---|---|---|---|\n");
+    for g in &report.telemetry.groups {
+        out.push_str(&format!(
+            "| {} | {} ms | {} ms | {} ms | {} ms | {} µs | {} ms |\n",
+            g.name, g.current_delay_ms, g.floor_ms, g.ceiling_ms, g.gap_ms, g.hold_us, g.ssthresh_ms
+        ));
     }
+    out.push('\n');
+
     out.push_str("- Bộ đếm sự kiện bất thường (Incidents):\n");
     out.push_str(&format!("  * Lệch đồng hồ (Event loop drift): {}\n", report.telemetry.drift_detected_count));
     out.push_str(&format!("  * Sentinel Timeouts: {}\n", report.telemetry.sentinel_timeout_count));
     out.push_str(&format!("  * Tràn hàng đợi (Buffer overflows): {}\n", report.telemetry.overflow_count));
     out.push_str(&format!("  * Lệch Surrounding Text: {}\n", report.telemetry.surrounding_mismatch_count));
     out.push_str("- Bảo mật quyền riêng tư: 100% không ghi ký tự hoặc nội dung văn bản.\n\n");
+
+    out.push_str("> [!TIP] Hướng dẫn dành cho Tester KWin / GNOME:\n");
+    out.push_str("> Hãy sử dụng bộ gõ bình thường trong vài giờ làm việc. Khi gặp bất kỳ ứng dụng nào bị nuốt chữ hoặc giật lag, hãy mở terminal chạy lệnh:\n");
+    out.push_str("> `clak doctor --markdown`\n");
+    out.push_str("> Sau đó copy toàn bộ nội dung báo cáo gửi kèm tên ứng dụng bị lỗi và triệu chứng gặp phải để đội ngũ Clak phân tích chính xác.\n\n");
 
     out.push_str("## Kết Luận & Hướng Xử Lý\n");
     if report.issues.is_empty() && report.warnings.is_empty() {

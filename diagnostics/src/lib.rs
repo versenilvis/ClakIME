@@ -18,7 +18,7 @@ pub use checks::daemon::{check_daemon, DaemonStatus};
 pub use checks::display::{check_display, DisplayEnvironment, MonitorInfo};
 pub use checks::environment::{check_environment, EnvironmentStatus};
 pub use checks::frontends::{check_frontends, FrontendStatus};
-pub use checks::latency::{check_latency, check_telemetry, LatencyBenchmark, PacingTelemetry};
+pub use checks::latency::{check_latency, check_telemetry, LatencyBenchmark, LayerStats, PacingGroupSnapshot, PacingTelemetry};
 pub use checks::memory::{check_memory, MemoryInspection};
 pub use checks::pacing_calc::{calculate_pacing, PacingRecommendation};
 pub use checks::permissions::{check_permissions, fix_input_permissions, PermissionChecks};
