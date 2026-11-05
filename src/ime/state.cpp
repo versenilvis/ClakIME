@@ -830,6 +830,14 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                 apps::UinputPacing pacing = currentProfile()->uinputPacing();
                 const ClakConfig* cfg = engine_ ? engine_->config() : nullptr;
                 bool adaptive_enabled = cfg ? clak_config_get_adaptive_pacing(cfg) : true;
+
+                const char* env_fixed_delay = std::getenv("CLAK_FIXED_DELAY_MS");
+                const char* env_fixed_gap = std::getenv("CLAK_FIXED_GAP_MS");
+                bool fixed_override = (env_fixed_delay != nullptr);
+                if (fixed_override) {
+                    adaptive_enabled = false;
+                }
+
                 pacing_engine_.setEnabled(adaptive_enabled);
 
                 bool is_terminal = ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal);
@@ -847,7 +855,16 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                         clak_config_get_heavy_app_delay_ms(cfg), clak_config_get_heavy_app_gap_ms(cfg), 35, 12);
                 }
 
-                if (is_address_bar || has_autofill_selection) {
+                if (fixed_override) {
+                    uint32_t f_delay = 10;
+                    try { f_delay = std::stoul(env_fixed_delay); } catch (...) {}
+                    uint32_t f_gap = pacing.gap_ms;
+                    if (env_fixed_gap) {
+                        try { f_gap = std::stoul(env_fixed_gap); } catch (...) {}
+                    }
+                    pacing.post_delay_ms = f_delay;
+                    pacing.gap_ms = f_gap;
+                } else if (is_address_bar || has_autofill_selection) {
                     pacing = {config::kAddressBarPostDelayMs, 2};
                 } else if (adaptive_enabled) {
                     pacing = pacing_engine_.uinputPacing(pgroup);
@@ -862,19 +879,23 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                               cfg ? clak_config_get_heavy_app_gap_ms(cfg) : 4};
                 }
 
-                if (surr.isValid() && ime::SurroundingVerifier::looksLikeMessengerComposer(surr)) {
-                    uint32_t settle_delay = ime::SurroundingVerifier::isFirstWordOfMessage(surr) ? 60u : 40u;
-                    pacing.post_delay_ms = std::max(pacing.post_delay_ms, settle_delay);
-                } else if (de::isKdeSession()) {
-                    pacing.post_delay_ms = std::max(pacing.post_delay_ms, 12u);
+                if (!fixed_override) {
+                    if (surr.isValid() && ime::SurroundingVerifier::looksLikeMessengerComposer(surr)) {
+                        uint32_t settle_delay = ime::SurroundingVerifier::isFirstWordOfMessage(surr) ? 60u : 40u;
+                        pacing.post_delay_ms = std::max(pacing.post_delay_ms, settle_delay);
+                    } else if (de::isKdeSession()) {
+                        pacing.post_delay_ms = std::max(pacing.post_delay_ms, 12u);
+                    }
                 }
-                uint32_t pre_delay = pacing_engine_.calculatePreDelay(pgroup, last_commit_time_us_, now_us);
+                uint32_t pre_delay = fixed_override ? 0 : pacing_engine_.calculatePreDelay(pgroup, last_commit_time_us_, now_us);
 
+                std::string pacing_mode = fixed_override ? "fixed" : (adaptive_enabled ? "adaptive" : "profile");
                 utils::clakLog("uinput waiting for sentinel: expected=" + std::to_string(bs_to_send) +
                                " (real=" + std::to_string(real_bs) + (has_autofill_selection ? " + 1 autofill" : "") +
-                               " + 1 sentinel) post_delay=" + std::to_string(pacing.post_delay_ms) + "ms gap=" +
-                               std::to_string(pacing.gap_ms) + "ms commit='" +
-                               (action.commit_str ? action.commit_str : "") + "' app=" + app + " site='" + site + "'");
+                               " + 1 sentinel) mode=" + pacing_mode + " post_delay=" + std::to_string(pacing.post_delay_ms) +
+                               "ms pre_delay=" + std::to_string(pre_delay) + "ms gap=" +
+                               std::to_string(pacing.gap_ms) + "ms hold=" + std::to_string(pacing.hold_us) +
+                               "us commit='" + (action.commit_str ? action.commit_str : "") + "' app=" + app + " site='" + site + "'");
 
                 if (uinput::UinputTool::instance().send_backspace(bs_to_send, pacing.post_delay_ms, pre_delay, pacing.gap_ms, pacing.hold_us)) {
                     repeat_handler_.cancel();

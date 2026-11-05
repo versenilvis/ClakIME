@@ -1452,6 +1452,42 @@ TEST_F(RegressionCorpusTest, test_regression_messenger_composer_shape_and_settle
     EXPECT_TRUE(ime::SurroundingVerifier::looksLikeFacebookComposer(ic.surroundingText()));
 }
 
+TEST_F(RegressionCorpusTest, test_regression_fixed_delay_env_override_locks_pacing) {
+    setenv("CLAK_FIXED_DELAY_MS", "35", 1);
+    setenv("CLAK_FIXED_GAP_MS", "9", 1);
+
+    platform::setMockActiveWindow(platform::WindowInfo{"helium", "tiktok.com", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "helium");
+    auto* state = ic.propertyFor(&engine_->factory());
+
+    size_t uinput_calls = 0;
+    uint32_t last_post_delay = 0;
+    uint32_t last_gap_ms = 0;
+    uinput::UinputTool::instance().setMockHandler([&](size_t, uint32_t post_delay, uint32_t, uint32_t gap_ms) {
+        uinput_calls++;
+        last_post_delay = post_delay;
+        last_gap_ms = gap_ms;
+        return true;
+    });
+
+    ic.setSurrounding("m", 1, 1);
+    ic.typeChar('o', state);
+    ic.setSurrounding("mo", 2, 2);
+    ic.typeChar('o', state);
+
+    EXPECT_TRUE(state->isDeleting());
+    EXPECT_EQ(uinput_calls, 1u);
+    EXPECT_EQ(last_post_delay, 35u);
+    EXPECT_EQ(last_gap_ms, 9u);
+
+    ic.sendCleanBackspace(state);
+    ic.sendCleanBackspace(state);
+    EXPECT_FALSE(state->isDeleting());
+
+    unsetenv("CLAK_FIXED_DELAY_MS");
+    unsetenv("CLAK_FIXED_GAP_MS");
+}
+
 } // namespace test
 } // namespace clak
 

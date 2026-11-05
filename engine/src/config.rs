@@ -143,6 +143,10 @@ pub struct PacingConfig {
     pub heavy_app_delay_ms: u32,
     #[serde(default = "default_heavy_app_gap_ms")]
     pub heavy_app_gap_ms: u32,
+    #[serde(default = "default_max_surr_lag_ms")]
+    pub max_surr_lag_ms: u64,
+    #[serde(default = "default_max_surr_window_chars")]
+    pub max_surr_window_chars: usize,
 }
 
 fn default_pacing_preset() -> String {
@@ -173,6 +177,14 @@ fn default_heavy_app_gap_ms() -> u32 {
     4
 }
 
+fn default_max_surr_lag_ms() -> u64 {
+    200
+}
+
+fn default_max_surr_window_chars() -> usize {
+    8
+}
+
 impl Default for PacingConfig {
     fn default() -> Self {
         Self {
@@ -184,6 +196,8 @@ impl Default for PacingConfig {
             terminal_gap_ms: default_terminal_gap_ms(),
             heavy_app_delay_ms: default_heavy_app_delay_ms(),
             heavy_app_gap_ms: default_heavy_app_gap_ms(),
+            max_surr_lag_ms: default_max_surr_lag_ms(),
+            max_surr_window_chars: default_max_surr_window_chars(),
         }
     }
 }

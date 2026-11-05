@@ -95,6 +95,8 @@ uint32_t    clak_config_get_terminal_delay_ms(const ClakConfig *cfg);
 uint32_t    clak_config_get_terminal_gap_ms(const ClakConfig *cfg);
 uint32_t    clak_config_get_heavy_app_delay_ms(const ClakConfig *cfg);
 uint32_t    clak_config_get_heavy_app_gap_ms(const ClakConfig *cfg);
+uint64_t    clak_config_get_max_surr_lag_ms(const ClakConfig *cfg);
+uintptr_t   clak_config_get_max_surr_window_chars(const ClakConfig *cfg);
 bool        clak_config_get_shift_autofix(const ClakConfig *cfg);
 void        clak_config_set_shift_autofix(ClakConfig *cfg, bool enabled);
 bool        clak_config_get_autocorrect(const ClakConfig *cfg);

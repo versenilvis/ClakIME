@@ -44,6 +44,8 @@ pub struct ClakContext {
     current_cursor: usize,
     pub last_replace_time: Option<std::time::Instant>,
     pub last_replace_cursor: Option<usize>,
+    pub max_surr_lag_ms: u64,
+    pub max_surr_window_chars: usize,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -85,6 +87,8 @@ impl ClakContext {
             current_cursor: 0,
             last_replace_time: None,
             last_replace_cursor: None,
+            max_surr_lag_ms: 200,
+            max_surr_window_chars: 8,
         }
     }
 
@@ -112,6 +116,8 @@ impl ClakContext {
             .iter()
             .map(|item| (item.trigger.clone(), item.replace.clone()))
             .collect();
+        self.max_surr_lag_ms = cfg.pacing.max_surr_lag_ms;
+        self.max_surr_window_chars = cfg.pacing.max_surr_window_chars;
     }
 
     pub fn reset(&mut self) {
@@ -562,10 +568,16 @@ impl ClakContext {
                         matches_last = true;
                     } else {
                         // match unaccented base only when replacement occurred recently in same word
+                        let window_limit = std::cmp::max(
+                            self.max_surr_window_chars,
+                            self.raw_buffer.chars().count().saturating_add(2),
+                        );
                         let is_stale_lag = match (self.last_replace_time, self.last_replace_cursor)
                         {
                             (Some(t), Some(c)) => {
-                                t.elapsed().as_millis() <= 200 && cursor >= c && (cursor - c) <= 5
+                                t.elapsed().as_millis() <= self.max_surr_lag_ms as u128
+                                    && cursor >= c
+                                    && (cursor - c) <= window_limit
                             }
                             _ => false,
                         };

@@ -156,6 +156,47 @@ fn test_to_base_ascii_rejects_after_timeout() {
 }
 
 #[test]
+fn test_to_base_ascii_supports_long_word_nghieng() {
+    let mut ctx = ClakContext::new(Method::Telex);
+
+    // nghieengs -> nghiêng
+    ctx.process_key(b'n' as u32, "n", false, Some(""), 0, 0);
+    ctx.process_key(b'g' as u32, "g", false, Some("n"), 1, 1);
+    ctx.process_key(b'h' as u32, "h", false, Some("ng"), 2, 2);
+    ctx.process_key(b'i' as u32, "i", false, Some("ngh"), 3, 3);
+    ctx.process_key(b'e' as u32, "e", false, Some("nghi"), 4, 4);
+    let a_ee = ctx.process_key(b'e' as u32, "e", false, Some("nghie"), 5, 5);
+    assert_eq!(a_ee.action_type, ACTION_REPLACE);
+    assert_eq!(ctx.last_composed, "nghiê");
+
+    // stale surrounding remains at "nghie" while app cursor moves forward
+    ctx.process_key(b'n' as u32, "n", false, Some("nghie"), 5, 5);
+    assert_eq!(ctx.last_composed, "nghiên");
+    ctx.process_key(b'g' as u32, "g", false, Some("nghie"), 5, 5);
+    assert_eq!(ctx.last_composed, "nghiêng");
+
+    // 's' adds tone to 7-char word, cursor at 5 or advanced
+    let a_s = ctx.process_key(b's' as u32, "s", false, Some("nghie"), 5, 5);
+    assert_ne!(
+        a_s.action_type, ACTION_FORWARD,
+        "s must not be forwarded raw for long word nghiêng"
+    );
+    assert_eq!(ctx.last_composed, "nghiếng");
+}
+
+#[test]
+fn test_custom_pacing_config_applies_lag_and_window() {
+    let mut ctx = ClakContext::new(Method::Telex);
+    let mut cfg = clak_engine::config::ClakConfig::default();
+    cfg.pacing.max_surr_lag_ms = 400;
+    cfg.pacing.max_surr_window_chars = 12;
+    ctx.apply_config(&cfg);
+
+    assert_eq!(ctx.max_surr_lag_ms, 400);
+    assert_eq!(ctx.max_surr_window_chars, 12);
+}
+
+#[test]
 fn test_tiengs_reset_bug() {
     let mut ctx = ClakContext::new(Method::Telex);
 

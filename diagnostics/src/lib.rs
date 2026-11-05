@@ -389,6 +389,8 @@ pub fn apply_pacing_profile(
     cfg.pacing.terminal_gap_ms = (pacing.gap_ms / 2).max(2);
     cfg.pacing.heavy_app_delay_ms = pacing.heavy_app_post_delay_ms;
     cfg.pacing.heavy_app_gap_ms = (pacing.gap_ms * 2 / 3).max(3);
+    cfg.pacing.max_surr_lag_ms = pacing.max_surr_lag_ms;
+    cfg.pacing.max_surr_window_chars = pacing.max_surr_window_chars;
     cfg.save()
 }
 
@@ -658,6 +660,8 @@ mod tests {
             browser_post_delay_ms: 14,
             draftjs_post_delay_ms: 18,
             heavy_app_post_delay_ms: 22,
+            max_surr_lag_ms: 200,
+            max_surr_window_chars: 8,
             estimated_replace_ms: 28.0,
             flicker_risk: "Thấp".to_string(),
             explanation: "test profile".to_string(),
@@ -672,6 +676,8 @@ mod tests {
         assert_eq!(cfg.pacing.draftjs_gap_ms, 5);
         assert_eq!(cfg.pacing.terminal_delay_ms, 10);
         assert_eq!(cfg.pacing.heavy_app_delay_ms, 22);
+        assert_eq!(cfg.pacing.max_surr_lag_ms, 200);
+        assert_eq!(cfg.pacing.max_surr_window_chars, 8);
 
         // restore environment
         match prev_xdg {
@@ -681,8 +687,11 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp_dir);
     }
 
+    static ENV_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn test_fix_environment_conflicts() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         std::env::set_var("GTK_IM_MODULE", "ibus");
         let res = fix_environment_conflicts();
         assert!(res.is_ok());
@@ -693,6 +702,7 @@ mod tests {
 
     #[test]
     fn test_gtk_im_module_fcitx_warns_on_wayland() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         std::env::set_var("WAYLAND_DISPLAY", "wayland-1");
         std::env::set_var("GTK_IM_MODULE", "fcitx");
 

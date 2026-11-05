@@ -309,6 +309,14 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
         "  * `heavy_app_post_delay_ms`: {} ms\n",
         report.pacing.heavy_app_post_delay_ms
     ));
+    out.push_str(&format!(
+        "  * `max_surr_lag_ms`: {} ms\n",
+        report.pacing.max_surr_lag_ms
+    ));
+    out.push_str(&format!(
+        "  * `max_surr_window_chars`: {} ký tự\n",
+        report.pacing.max_surr_window_chars
+    ));
     out.push('\n');
 
     out.push_str("## Kết Luận & Hướng Xử Lý\n");

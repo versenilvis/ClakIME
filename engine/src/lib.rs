@@ -810,6 +810,26 @@ pub unsafe extern "C" fn clak_config_get_heavy_app_gap_ms(cfg: *const config::Cl
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_config_get_max_surr_lag_ms(cfg: *const config::ClakConfig) -> u64 {
+    if cfg.is_null() {
+        200
+    } else {
+        (*cfg).pacing.max_surr_lag_ms
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_config_get_max_surr_window_chars(
+    cfg: *const config::ClakConfig,
+) -> usize {
+    if cfg.is_null() {
+        8
+    } else {
+        (*cfg).pacing.max_surr_window_chars
+    }
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn clak_config_get_shift_autofix(cfg: *const config::ClakConfig) -> bool {
     if cfg.is_null() {
         return false;
