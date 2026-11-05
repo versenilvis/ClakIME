@@ -76,6 +76,41 @@ fn test_hypothesis_tieengs_with_various_stale_surroundings() {
     }
 }
 
+/// positive test: tie → tiê (replace, surrounding still stale as "tie"), then n g s arrive
+/// with stale surrounding still showing "tie" (wayland hasn't caught up yet).
+/// to_base_ascii must match and engine must produce "tiếng", not forward 's' raw.
+/// this is the exact bug that was filed: "tiêngs" appearing instead of "tiếng".
+#[test]
+fn test_to_base_ascii_accepts_stale_tie_then_ngs_produces_tieng() {
+    let mut ctx = ClakContext::new(Method::Telex);
+
+    // tie (each key with fresh surrounding)
+    ctx.process_key(b't' as u32, "t", false, Some(""), 0, 0);
+    ctx.process_key(b'i' as u32, "i", false, Some("t"), 1, 1);
+    ctx.process_key(b'e' as u32, "e", false, Some("ti"), 2, 2);
+    // second e triggers replacement: "tie" -> "tiê", cursor still at 3
+    let a_ee = ctx.process_key(b'e' as u32, "e", false, Some("tie"), 3, 3);
+    assert_eq!(a_ee.action_type, ACTION_REPLACE);
+    assert_eq!(ctx.last_composed, "tiê");
+
+    // wayland hasn't delivered new surrounding yet - still shows "tie", cursor 3
+    ctx.process_key(b'n' as u32, "n", false, Some("tie"), 3, 3);
+    // 'n' appends without modification, so action is forward, but composition keeps tracking
+    assert_eq!(ctx.last_composed, "tiên");
+
+    // surrounding still stale "tie", cursor 3
+    ctx.process_key(b'g' as u32, "g", false, Some("tie"), 3, 3);
+    assert_eq!(ctx.last_composed, "tiêng");
+
+    // surrounding still stale "tie", cursor 3 - 's' adds tone
+    let a_s = ctx.process_key(b's' as u32, "s", false, Some("tie"), 3, 3);
+    assert_ne!(
+        a_s.action_type, ACTION_FORWARD,
+        "s was forwarded raw, got tiêngs bug"
+    );
+    assert_eq!(ctx.last_composed, "tiếng");
+}
+
 #[test]
 fn test_to_base_ascii_rejects_when_cursor_jumps() {
     let mut ctx = ClakContext::new(Method::Telex);
