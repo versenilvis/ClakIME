@@ -437,19 +437,35 @@ impl ClakContext {
         self.uncommit_candidate = None;
         self.just_deleted = false;
 
+        let surr_meta = surrounding_text.map(|text| {
+            let mut char_count = 0;
+            let mut cur_byte = text.len();
+            let mut anch_byte = text.len();
+            for (idx, _) in text.char_indices() {
+                if char_count == cursor {
+                    cur_byte = idx;
+                }
+                if char_count == anchor {
+                    anch_byte = idx;
+                }
+                char_count += 1;
+            }
+            (cur_byte, anch_byte, char_count)
+        });
+
         let mut has_autocomplete = false;
         if let Some(text) = surrounding_text {
+            let (cur_byte, anch_byte, char_count) = surr_meta.unwrap();
             let is_stale = match &self.stale_surr {
                 Some((st_text, st_cur)) => st_text == text && *st_cur == cursor,
                 None => false,
             };
             self.stale_surr = None;
 
-            let chars: Vec<char> = text.chars().collect();
-            let cur = std::cmp::min(chars.len(), cursor);
-            let anch = std::cmp::min(chars.len(), anchor);
-            let sel_start = std::cmp::min(cur, anch);
-            let sel_end = std::cmp::max(cur, anch);
+            let sel_start_byte = std::cmp::min(cur_byte, anch_byte);
+            let sel_end_byte = std::cmp::max(cur_byte, anch_byte);
+            let sel_start = std::cmp::min(cursor, anchor);
+            let sel_end = std::cmp::max(cursor, anchor);
 
             // address bar autocomplete applies to single-line fields without newlines
             let is_single_line = !text.is_empty() && !text.contains('\n');
@@ -457,16 +473,16 @@ impl ClakContext {
             // browser address bar autocomplete detection
             if is_single_line
                 && !self.raw_buffer.is_empty()
-                && sel_start < sel_end
-                && sel_end == chars.len()
+                && sel_start_byte < sel_end_byte
+                && sel_end_byte == text.len()
             {
-                let before_sel: String = chars[..sel_start].iter().collect();
+                let before_sel = &text[..sel_start_byte];
                 if before_sel.ends_with(&self.last_composed) {
                     has_autocomplete = true;
                 }
             }
 
-            if is_single_line && self.typed_over_selection && sel_start < sel_end {
+            if is_single_line && self.typed_over_selection && sel_start_byte < sel_end_byte {
                 has_autocomplete = true;
             }
 
@@ -475,7 +491,7 @@ impl ClakContext {
                 None => false,
             };
 
-            let before_cur: String = chars[..cur].iter().collect();
+            let before_cur = &text[..cur_byte];
             let mut matches_last = !self.last_composed.is_empty()
                 && (before_cur.ends_with(&self.last_composed)
                     || (!self.prev_composed.is_empty()
@@ -515,16 +531,17 @@ impl ClakContext {
                 }
             }
 
-            if !matches_last && !self.raw_buffer.is_empty() && cur > 0 {
-                let mut start = cur;
-                while start > 0 && !is_word_break(chars[start - 1] as u32) {
-                    start -= 1;
-                }
-                let word: String = chars[start..cur].iter().collect();
+            if !matches_last && !self.raw_buffer.is_empty() && cur_byte > 0 {
+                let word = if let Some(last_break_pos) = before_cur.rfind(|c: char| is_word_break(c as u32)) {
+                    let ch_len = before_cur[last_break_pos..].chars().next().map(|c| c.len_utf8()).unwrap_or(1);
+                    &before_cur[last_break_pos + ch_len..]
+                } else {
+                    before_cur
+                };
                 if !word.is_empty() {
-                    let word_telex = decompose_to_telex(&word);
+                    let word_telex = decompose_to_telex(word);
                     if self.raw_buffer.starts_with(&word_telex)
-                        || self.raw_buffer.starts_with(&word)
+                        || self.raw_buffer.starts_with(word)
                     {
                         matches_last = true;
                     }
@@ -539,13 +556,14 @@ impl ClakContext {
                 }
             } else if !has_autocomplete {
                 self.reset();
-                if is_single_line && sel_start == 0 && sel_end == chars.len() {
+                if is_single_line && sel_start == 0 && sel_end == char_count {
                     self.typed_over_selection = true;
                 }
             }
 
             // word seeding from surrounding text only when cursor is at word end
-            let is_at_word_end = cur == chars.len() || is_word_break(chars[cur] as u32);
+            let is_at_word_end = cur_byte == text.len()
+                || text[cur_byte..].chars().next().map(|c| is_word_break(c as u32)).unwrap_or(true);
             let is_telex_mod = matches!(
                 key_ch.to_ascii_lowercase(),
                 'a' | 'e' | 'o' | 'd' | 'w' | 's' | 'f' | 'r' | 'x' | 'j'
@@ -554,22 +572,19 @@ impl ClakContext {
                 && !has_autocomplete
                 && cursor == anchor
                 && self.last_composed.is_empty()
-                && cur > 0
+                && cur_byte > 0
                 && is_telex_mod
                 && is_at_word_end
             {
-                let mut start = cur;
-                while start > 0 {
-                    let prev_char = chars[start - 1];
-                    if is_word_break(prev_char as u32) {
-                        break;
-                    }
-                    start -= 1;
-                }
-                let old_word: String = chars[start..cur].iter().collect();
+                let old_word = if let Some(last_break_pos) = before_cur.rfind(|c: char| is_word_break(c as u32)) {
+                    let ch_len = before_cur[last_break_pos..].chars().next().map(|c| c.len_utf8()).unwrap_or(1);
+                    &before_cur[last_break_pos + ch_len..]
+                } else {
+                    before_cur
+                };
                 if !old_word.is_empty() && old_word.chars().all(|c| c.is_alphabetic()) {
-                    self.raw_buffer = decompose_to_telex(&old_word);
-                    self.last_composed = old_word;
+                    self.raw_buffer = decompose_to_telex(old_word);
+                    self.last_composed = old_word.to_string();
                 }
             }
         } else {
@@ -581,20 +596,18 @@ impl ClakContext {
         if self.auto_capitalize && key_ch.is_alphabetic() && key_ch.is_lowercase() {
             let mut should_cap = self.sentence_cap_state == SentenceCapState::ReadyToCapitalize;
             if !should_cap {
-                if let Some(text) = surrounding_text {
-                    let chars: Vec<char> = text.chars().collect();
-                    let cur = std::cmp::min(chars.len(), cursor);
-                    if cur == 0 {
+                if let (Some(text), Some((cur_byte, _, _))) = (surrounding_text, surr_meta) {
+                    let before_cur = &text[..cur_byte];
+                    if before_cur.is_empty() {
                         should_cap = true;
                     } else {
-                        let mut i = cur;
-                        let mut saw_sp = false;
-                        while i > 0 && chars[i - 1].is_whitespace() {
-                            saw_sp = true;
-                            i -= 1;
-                        }
-                        if saw_sp && i > 0 && matches!(chars[i - 1], '.' | '?' | '!') {
-                            should_cap = true;
+                        let trimmed = before_cur.trim_end_matches(char::is_whitespace);
+                        if trimmed.len() < before_cur.len() && !trimmed.is_empty() {
+                            if let Some(last_char) = trimmed.chars().next_back() {
+                                if matches!(last_char, '.' | '?' | '!') {
+                                    should_cap = true;
+                                }
+                            }
                         }
                     }
                 }
@@ -610,15 +623,14 @@ impl ClakContext {
 
         // protect file extensions and code identifiers after boundaries
         if self.raw_buffer.is_empty() && key_ch.is_alphabetic() {
-            if let Some(text) = surrounding_text {
-                let chars: Vec<char> = text.chars().collect();
-                let cur = std::cmp::min(chars.len(), cursor);
-                if cur > 0 {
-                    let prev_ch = chars[cur - 1];
+            if let (Some(text), Some((cur_byte, _, _))) = (surrounding_text, surr_meta) {
+                let before_cur = &text[..cur_byte];
+                let mut prev_chars = before_cur.chars().rev();
+                if let Some(prev_ch) = prev_chars.next() {
                     let is_ident_boundary = match prev_ch {
                         '_' | '/' => true,
-                        '.' => cur > 1 && !chars[cur - 2].is_whitespace(),
-                        '-' => cur > 1 && chars[cur - 2].is_alphabetic(),
+                        '.' => prev_chars.next().map(|c| !c.is_whitespace()).unwrap_or(false),
+                        '-' => prev_chars.next().map(|c| c.is_alphabetic()).unwrap_or(false),
                         _ => false,
                     };
                     if is_ident_boundary {

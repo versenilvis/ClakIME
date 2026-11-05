@@ -154,6 +154,51 @@ fn bench_charset(c: &mut Criterion) {
     });
 }
 
+fn bench_surrounding_text(c: &mut Criterion) {
+    let base_paragraph = "Đây là văn bản tiếng Việt mẫu dùng để kiểm thử hiệu năng bộ gõ khi có surrounding text từ ứng dụng. ";
+    let text_1k = base_paragraph.repeat(10);
+    let chars_1k_count = text_1k.chars().count();
+    let text_10k = base_paragraph.repeat(100);
+    let chars_10k_count = text_10k.chars().count();
+
+    let mut group = c.benchmark_group("surrounding_text");
+    group.bench_function("keystroke_no_surrounding", |b| {
+        let mut ctx = clak_engine::ClakContext::new(clak_engine::Method::Telex);
+        b.iter(|| {
+            ctx.process_key(black_box(0x61), black_box("a"), false, None, 0, 0)
+        })
+    });
+
+    group.bench_function("keystroke_surrounding_1k", |b| {
+        let mut ctx = clak_engine::ClakContext::new(clak_engine::Method::Telex);
+        b.iter(|| {
+            ctx.process_key(
+                black_box(0x61),
+                black_box("a"),
+                false,
+                Some(black_box(&text_1k)),
+                black_box(chars_1k_count),
+                black_box(chars_1k_count),
+            )
+        })
+    });
+
+    group.bench_function("keystroke_surrounding_10k", |b| {
+        let mut ctx = clak_engine::ClakContext::new(clak_engine::Method::Telex);
+        b.iter(|| {
+            ctx.process_key(
+                black_box(0x61),
+                black_box("a"),
+                false,
+                Some(black_box(&text_10k)),
+                black_box(chars_10k_count),
+                black_box(chars_10k_count),
+            )
+        })
+    });
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_single_char,
@@ -164,5 +209,6 @@ criterion_group!(
     bench_vni,
     bench_teipvni,
     bench_charset,
+    bench_surrounding_text,
 );
 criterion_main!(benches);
