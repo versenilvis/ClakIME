@@ -905,3 +905,12 @@ fn test_typing_desktop() {
     assert_eq!(simulate("laptop "), "laptop ");
     assert_eq!(simulate("react "), "react ");
 }
+
+#[test]
+fn test_panic_unwind_guard() {
+    // verify that catch_unwind functions properly and panic strategy is unwind
+    let res = std::panic::catch_unwind(|| {
+        panic!("simulated panic for catch_unwind verification");
+    });
+    assert!(res.is_err(), "catch_unwind must be active to protect C ABI");
+}
