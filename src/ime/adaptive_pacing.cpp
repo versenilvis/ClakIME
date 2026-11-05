@@ -28,6 +28,19 @@ AdaptivePacingEngine::AdaptivePacingEngine(bool enabled)
             web_draftjs_.metrics.hold_us = h;
         } catch (...) {}
     }
+
+    const char* env_pinned = std::getenv("CLAK_PINNED_DELAY_MS");
+    if (env_pinned) {
+        try {
+            uint32_t p = static_cast<uint32_t>(std::stoul(env_pinned));
+            for (auto* g : {&web_draftjs_, &terminal_uinput_, &heavy_app_, &default_group_}) {
+                g->metrics.post_delay_ms = p;
+                g->metrics.floor_post_ms = p;
+                g->metrics.ceiling_post_ms = p;
+                g->metrics.ssthresh_post_ms = p;
+            }
+        } catch (...) {}
+    }
 }
 
 void AdaptivePacingEngine::setEnabled(bool enabled) {
@@ -68,6 +81,15 @@ const AdaptivePacingEngine::GroupState& AdaptivePacingEngine::getGroup(PacingGro
 
 void AdaptivePacingEngine::configureGroup(PacingGroup group, uint32_t floor_delay_ms, uint32_t floor_gap_ms,
                                          uint32_t ceiling_delay_ms, uint32_t ceiling_gap_ms) {
+    const char* env_pinned = std::getenv("CLAK_PINNED_DELAY_MS");
+    if (env_pinned) {
+        try {
+            uint32_t p = static_cast<uint32_t>(std::stoul(env_pinned));
+            floor_delay_ms = p;
+            ceiling_delay_ms = p;
+        } catch (...) {}
+    }
+
     auto& g = getGroup(group);
     g.metrics.floor_post_ms = floor_delay_ms;
     g.metrics.floor_gap_ms = floor_gap_ms;
@@ -130,6 +152,9 @@ void AdaptivePacingEngine::onIncident(PacingGroup group, IncidentType incident, 
     // update ssthresh threshold to current delay + 2ms margin
     uint32_t last_incident_delay = g.metrics.post_delay_ms;
     g.metrics.ssthresh_post_ms = std::min(g.metrics.ceiling_post_ms, last_incident_delay + 2);
+    if (std::getenv("CLAK_DISABLE_SSTHRESH")) {
+        g.metrics.ssthresh_post_ms = g.metrics.floor_post_ms;
+    }
 
     // additive increase
     g.metrics.post_delay_ms = std::min(g.metrics.ceiling_post_ms,
@@ -137,6 +162,9 @@ void AdaptivePacingEngine::onIncident(PacingGroup group, IncidentType incident, 
     g.metrics.gap_ms = std::min(g.metrics.ceiling_gap_ms,
                                 g.metrics.gap_ms + kAdditiveGapStepMs);
     g.metrics.consecutive_clean_words = 0;
+    utils::clakLog("[PACING_INCIDENT] group=" + std::to_string(static_cast<int>(group)) +
+                   " post_delay=" + std::to_string(g.metrics.post_delay_ms) +
+                   "ms ssthresh=" + std::to_string(g.metrics.ssthresh_post_ms) + "ms");
 }
 
 void AdaptivePacingEngine::observeTimerDrift(PacingGroup group, uint64_t deadline_us, uint64_t fired_at_us) {
@@ -163,10 +191,12 @@ void AdaptivePacingEngine::onTransactionSuccess(PacingGroup group) {
     }
     g.metrics.consecutive_clean_words++;
 
-    // determine if rtt is healthy relative to observed baseline
+    // determine if rtt is healthy relative to observed p10 baseline
+    // proportional threshold of baseline * 1.5 with 2ms floor for fast systems
+    uint32_t rtt_threshold = std::max(2u, g.metrics.min_rtt_ms * 3 / 2);
     bool rtt_healthy = (g.metrics.smoothed_rtt_ms == 0) ||
                        (g.metrics.min_rtt_ms == 0) ||
-                       (g.metrics.smoothed_rtt_ms <= std::max(g.metrics.floor_post_ms, g.metrics.min_rtt_ms + 4));
+                       (g.metrics.smoothed_rtt_ms <= rtt_threshold);
 
     // tcp-style ssthresh: fast decay when comfortably above incident threshold
     bool above_ssthresh = (g.metrics.post_delay_ms > g.metrics.ssthresh_post_ms);
@@ -203,11 +233,16 @@ void AdaptivePacingEngine::recordRtt(PacingGroup group, uint64_t rtt_us) {
     auto& g = getGroup(group);
     uint32_t rtt_ms = static_cast<uint32_t>((rtt_us + 500) / 1000);
 
-    // track baseline minimum rtt
+    // track baseline rtt using p10 in a sliding window to resist fast outliers
     if (rtt_ms > 0) {
-        if (g.metrics.min_rtt_ms == 0 || rtt_ms < g.metrics.min_rtt_ms) {
-            g.metrics.min_rtt_ms = rtt_ms;
+        g.rtt_samples.push_back(rtt_ms);
+        if (g.rtt_samples.size() > 50) {
+            g.rtt_samples.pop_front();
         }
+        std::vector<uint32_t> sorted(g.rtt_samples.begin(), g.rtt_samples.end());
+        std::sort(sorted.begin(), sorted.end());
+        size_t p10_idx = sorted.size() / 10;
+        g.metrics.min_rtt_ms = sorted[p10_idx];
     }
 
     // smoothed rtt using exponential moving average

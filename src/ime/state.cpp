@@ -451,8 +451,13 @@ void ClakState::finishUinputDeletion(uint64_t rtt_us) {
     pacing_engine_.recordRtt(pgroup, rtt_us);
     pacing_engine_.onTransactionSuccess(pgroup);
     auto pm = pacing_engine_.metrics(pgroup);
+    uint32_t active_post_delay = pm.post_delay_ms;
+    const char* env_fixed_delay = std::getenv("CLAK_FIXED_DELAY_MS");
+    if (env_fixed_delay) {
+        try { active_post_delay = std::stoul(env_fixed_delay); } catch (...) {}
+    }
     utils::clakLog("[PACING] group=" + std::to_string(static_cast<int>(pgroup)) +
-                   " post_delay=" + std::to_string(pm.post_delay_ms) +
+                   " post_delay=" + std::to_string(active_post_delay) +
                    "ms rtt=" + std::to_string((rtt_us + 500) / 1000) +
                    "ms ssthresh=" + std::to_string(pm.ssthresh_post_ms) +
                    "ms clean=" + std::to_string(pm.consecutive_clean_words));
@@ -866,12 +871,14 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                 if (fixed_override) {
                     uint32_t f_delay = 10;
                     try { f_delay = std::stoul(env_fixed_delay); } catch (...) {}
-                    uint32_t f_gap = pacing.gap_ms;
+                    auto base_pacing = pacing_engine_.uinputPacing(pgroup);
+                    uint32_t f_gap = base_pacing.gap_ms;
                     if (env_fixed_gap) {
                         try { f_gap = std::stoul(env_fixed_gap); } catch (...) {}
                     }
                     pacing.post_delay_ms = f_delay;
                     pacing.gap_ms = f_gap;
+                    pacing.hold_us = base_pacing.hold_us;
                 } else if (is_address_bar || has_autofill_selection) {
                     pacing = {config::kAddressBarPostDelayMs, 2};
                 } else if (adaptive_enabled) {
@@ -895,7 +902,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                         pacing.post_delay_ms = std::max(pacing.post_delay_ms, 12u);
                     }
                 }
-                uint32_t pre_delay = fixed_override ? 0 : pacing_engine_.calculatePreDelay(pgroup, last_commit_time_us_, now_us);
+                uint32_t pre_delay = pacing_engine_.calculatePreDelay(pgroup, last_commit_time_us_, now_us);
 
                 std::string pacing_mode = fixed_override ? "fixed" : (adaptive_enabled ? "adaptive" : "profile");
                 utils::clakLog("uinput waiting for sentinel: expected=" + std::to_string(bs_to_send) +

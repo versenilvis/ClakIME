@@ -236,8 +236,10 @@ TEST(AdaptivePacingTest, FastDecayWhenRttLow) {
 TEST(AdaptivePacingTest, ConservativeDecayWhenRttHigh) {
     AdaptivePacingEngine engine;
     uint64_t t0 = 1000000ULL;
-    // record baseline idle rtt
-    engine.recordRtt(PacingGroup::TerminalUinput, 2000ULL);
+    // record baseline idle rtt (2ms) across multiple samples
+    for (int i = 0; i < 10; ++i) {
+        engine.recordRtt(PacingGroup::TerminalUinput, 2000ULL);
+    }
     engine.onIncident(PacingGroup::TerminalUinput, IncidentType::PacingStarvation, t0);
     engine.onIncident(PacingGroup::TerminalUinput, IncidentType::PacingStarvation, t0 + 10000ULL);
     EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).post_delay_ms, 20u);
@@ -256,6 +258,47 @@ TEST(AdaptivePacingTest, ConservativeDecayWhenRttHigh) {
         engine.onTransactionSuccess(PacingGroup::TerminalUinput);
     }
     EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).post_delay_ms, 19u);
+}
+
+TEST(AdaptivePacingTest, FastOutlierDoesNotPolluteP10Baseline) {
+    AdaptivePacingEngine engine;
+    // normal samples around 10ms
+    for (int i = 0; i < 20; ++i) {
+        engine.recordRtt(PacingGroup::TerminalUinput, 10000ULL);
+    }
+    // a single anomalously fast sample (100us = 0ms)
+    engine.recordRtt(PacingGroup::TerminalUinput, 100ULL);
+
+    // min_rtt_ms (p10) should still be 10ms, not 0ms
+    EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).min_rtt_ms, 10u);
+}
+
+TEST(AdaptivePacingTest, SsthreshPreventsPrematureDecayAtHighDelay) {
+    AdaptivePacingEngine engine;
+    uint64_t t0 = 1000000ULL;
+    for (int i = 0; i < 10; ++i) {
+        engine.recordRtt(PacingGroup::WebDraftJs, 2000ULL);
+    }
+    // force delay up to 28ms via multiple incidents
+    for (int i = 0; i < 3; ++i) {
+        engine.onIncident(PacingGroup::WebDraftJs, IncidentType::PacingStarvation, t0 + i * 10000ULL);
+    }
+    // current delay is 28ms, ssthresh is 26ms
+    auto m = engine.metrics(PacingGroup::WebDraftJs);
+    EXPECT_EQ(m.post_delay_ms, 28u);
+    EXPECT_EQ(m.ssthresh_post_ms, 26u);
+
+    // fast decay drops delay from 28ms to 26ms in 5 words
+    for (int i = 0; i < 5; ++i) {
+        engine.onTransactionSuccess(PacingGroup::WebDraftJs);
+    }
+    EXPECT_EQ(engine.metrics(PacingGroup::WebDraftJs).post_delay_ms, 26u);
+
+    // in the next 14 words of brief idle, ssthresh holds delay at 26ms
+    for (int i = 0; i < 14; ++i) {
+        engine.onTransactionSuccess(PacingGroup::WebDraftJs);
+    }
+    EXPECT_EQ(engine.metrics(PacingGroup::WebDraftJs).post_delay_ms, 26u);
 }
 
 TEST(AdaptivePacingTest, TcpStyleSsthreshDecayAndRelaxation) {

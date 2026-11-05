@@ -14,6 +14,57 @@ pub fn sanitize_path(path: &str) -> String {
     path.to_string()
 }
 
+pub fn sanitize_privacy(text: &str) -> String {
+    let mut out = text.to_string();
+    if let Ok(home) = std::env::var("HOME") {
+        if !home.is_empty() {
+            out = out.replace(&home, "~");
+        }
+    }
+    let mut cursor = 0;
+    while let Some(pos) = out[cursor..].find("/home/") {
+        let actual_pos = cursor + pos;
+        let rest = &out[actual_pos + 6..];
+        let end_idx = rest
+            .find(['/', ' ', '\'', '"', '`', '\n', '\t', ':', ';', ')', ']'])
+            .unwrap_or(rest.len());
+        let username_part = &rest[..end_idx];
+        if !username_part.is_empty() {
+            let full_home = format!("/home/{}", username_part);
+            out = out.replace(&full_home, "~");
+        }
+        cursor = actual_pos + 1;
+        if cursor >= out.len() {
+            break;
+        }
+    }
+
+    if let Ok(user) = std::env::var("USER") {
+        if !user.is_empty() && user.len() >= 3 && user != "root" && user != "arch" && user != "linux" {
+            out = out.replace(&format!("/{}", user), "/~");
+            out = out.replace(&format!("u:{}", user), "u:$USER");
+            out = out.replace(&format!("\"{}\"", user), "\"$USER\"");
+            out = out.replace(&format!("'{}'", user), "'$USER'");
+        }
+    }
+
+    if let Ok(output) = std::process::Command::new("hostname").output() {
+        if output.status.success() {
+            let host = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !host.is_empty()
+                && host != "localhost"
+                && host.len() >= 3
+                && !host.eq_ignore_ascii_case("arch")
+                && !host.eq_ignore_ascii_case("linux")
+            {
+                out = out.replace(&host, "localhost");
+            }
+        }
+    }
+
+    out
+}
+
 pub fn format_markdown(report: &DiagnosticReport) -> String {
     let mut out = String::new();
     out.push_str("# Clak Doctor: Báo Cáo Chẩn Đoán Hệ Thống\n\n");
@@ -41,6 +92,7 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
             "Thiếu quyền ghi"
         }
     ));
+    out.push_str("  * Quyết định tầng xử lý: Quyền ghi `/dev/uinput` cho phép kích hoạt tầng `uinput` (bàn phím ảo phần cứng), áp dụng pacing thích nghi chống nuốt chữ cho các app không hỗ trợ surrounding text (Kitty, Ghostty, Alacritty, Chrome, VSCode, Discord). Nếu thiếu quyền ghi, hệ thống buộc phải lùi về tầng `forwardKey` hoặc XTest fallback với độ trễ cao hơn và dễ rơi phím.\n");
     out.push_str(&format!(
         "- XTest Fallback: {}\n",
         if report.permissions.xtest_available {
@@ -132,6 +184,17 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
             .as_deref()
             .unwrap_or("(không đặt)")
     ));
+    match report.environment.gtk_im_module.as_deref() {
+        Some("fcitx") => {
+            out.push_str("  * Quyết định tầng xử lý: `GTK_IM_MODULE=fcitx` ép ứng dụng GTK kết nối trực tiếp qua DBus IM module, mở khóa trọn vẹn tầng `surrounding` text (thay thế nguyên từ tức thì, mượt mà, không phụ thuộc pacing/delay).\n");
+        }
+        Some("wayland") | None => {
+            out.push_str("  * Quyết định tầng xử lý: Khuyến nghị trên Wayland hiện đại (GNOME 47 / KWin 6). Ứng dụng Wayland native dùng giao thức text-input-v3 để tận dụng tầng `surrounding`, trong khi terminal/Electron tự động fallback sang tầng `uinput`.\n");
+        }
+        Some(other) => {
+            out.push_str(&format!("  * Quyết định tầng xử lý: Giá trị lạ `{}` có thể vô hiệu hóa surrounding text của ứng dụng GTK, đẩy về tầng fallback `forwardKey`.\n", other));
+        }
+    }
     out.push_str(&format!(
         "- QT_IM_MODULE: `{}`\n",
         report
@@ -359,6 +422,10 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
     ));
 
     out.push_str("### Phân Tách Theo 3 Tầng Xử Lý\n");
+    out.push_str("> Quyết định tầng xử lý:\n");
+    out.push_str("> - `surrounding`: Tầng tối ưu nhất cho GTK/Qt native qua DBus hoặc Wayland text-input protocol (thay thế trực tiếp qua API, 0 rớt phím).\n");
+    out.push_str("> - `uinput`: Tầng xử lý chính cho terminal/browser/Electron khi có quyền ghi `/dev/uinput` (dùng adaptive pacing điều tiết nhịp backspace an toàn).\n");
+    out.push_str("> - `forwardKey`: Tầng fallback truyền phím thô qua compositor khi không có surrounding và thiếu quyền uinput.\n\n");
     out.push_str("| Tầng xử lý | Số thao tác | p50 | p95 | p99 | Cực đại |\n");
     out.push_str("|---|---|---|---|---|---|\n");
     out.push_str(&format!(
@@ -429,5 +496,5 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
         }
     }
 
-    out
+    sanitize_privacy(&out)
 }

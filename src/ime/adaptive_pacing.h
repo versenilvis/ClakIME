@@ -84,6 +84,7 @@ private:
     struct GroupState {
         PacingMetrics metrics;
         std::deque<uint64_t> incident_timestamps_us;
+        std::deque<uint32_t> rtt_samples;
     };
 
     GroupState& getGroup(PacingGroup group);

@@ -5,6 +5,8 @@ import time
 import json
 import signal
 import subprocess
+import difflib
+import csv
 
 # 4 phases x 35 words = 140 words
 P1_RAW = "ddaay buoori sangs treen ddirnh nuis cao mang laij mootj carm giacs thaatj suwj thanh tharn vaf tuyeetj vowfi. nhuwxng tia nawngs vowis khoong gian roojng lowsn chieeus roji xuoongs khawps cais "
@@ -22,20 +24,27 @@ P4_EXP = "môi trường terminal của hệ điều hành linux. dù là viết
 FULL_EXPECTED = (P1_EXP + P2_EXP + P3_EXP + P4_EXP).strip()
 
 def clean_state_files():
-    for p in ["/tmp/clak.log", "/tmp/matrix_term.bin", "/tmp/matrix_term.ready"]:
+    for p in ["/tmp/clak.log", "/tmp/matrix_term.bin", "/tmp/matrix_term.bin.lines", "/tmp/matrix_term.ready"]:
         if os.path.exists(p):
             try: os.remove(p)
             except OSError: pass
 
-def restart_fcitx5(fixed_delay_ms=None):
+def restart_fcitx5(mode="adaptive", fixed_delay_ms=None, disable_ssthresh=False):
     clean_state_files()
     env = dict(os.environ)
-    if fixed_delay_ms is not None:
-        env["CLAK_FIXED_DELAY_MS"] = str(fixed_delay_ms)
+    env.pop("CLAK_FIXED_DELAY_MS", None)
+    env.pop("CLAK_FIXED_GAP_MS", None)
+    env.pop("CLAK_PINNED_DELAY_MS", None)
+    env.pop("CLAK_DISABLE_SSTHRESH", None)
+    env["CLAK_UINPUT_HOLD_US"] = "1000"
+
+    if mode == "fixed":
+        env["CLAK_FIXED_DELAY_MS"] = str(fixed_delay_ms if fixed_delay_ms is not None else 13)
         env["CLAK_FIXED_GAP_MS"] = "3"
-    else:
-        env.pop("CLAK_FIXED_DELAY_MS", None)
-        env.pop("CLAK_FIXED_GAP_MS", None)
+    elif mode == "adaptive":
+        if disable_ssthresh:
+            env["CLAK_DISABLE_SSTHRESH"] = "1"
+
     subprocess.run(["fcitx5", "-r", "-d"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(1.0)
     for _ in range(30):
@@ -92,13 +101,18 @@ def focus_electron_window():
         time.sleep(0.05)
     return False
 
-def parse_pacing_events(clak_log, start_offset):
+def parse_pacing_events(clak_log, start_offset, end_offset=None):
     events = []
     if not os.path.exists(clak_log):
         return events
     with open(clak_log, "r", encoding="utf-8", errors="ignore") as f:
         f.seek(start_offset)
-        for line in f:
+        while True:
+            if end_offset is not None and f.tell() >= end_offset:
+                break
+            line = f.readline()
+            if not line:
+                break
             if "[PACING]" in line:
                 try:
                     parts = line.strip().split()
@@ -113,26 +127,20 @@ def parse_pacing_events(clak_log, start_offset):
                         "clean": clean,
                     })
                 except Exception: pass
-            elif "uinput waiting for sentinel:" in line and "post_delay=" in line:
-                try:
-                    parts = line.split("post_delay=")[1].split()
-                    delay = int(parts[0].replace("ms", ""))
-                    events.append({
-                        "post_delay": delay,
-                        "rtt": 0,
-                        "ssthresh": 0,
-                        "clean": 0,
-                    })
-                except Exception: pass
     return events
 
-def run_alternating_experiment(use_harsh=False, fixed_delay_ms=None):
-    mode_str = f"Fixed Delay = {fixed_delay_ms}ms" if fixed_delay_ms is not None else "Adaptive Pacing (ssthresh)"
+def run_alternating_experiment(mode="adaptive", use_harsh=False, fixed_delay_ms=None,
+                               disable_ssthresh=False, csv_path="/tmp/alternating_load_log.csv"):
+    if mode == "fixed":
+        mode_str = f"Fixed Delay ({fixed_delay_ms or 13}ms)"
+    else:
+        mode_str = "Adaptive (NO ssthresh - fast decay to floor)" if disable_ssthresh else "Adaptive (WITH ssthresh - safe threshold hold)"
+
     print("================================================================================")
     print("THÍ NGHIỆM TẢI BẬT/TẮT LUÂN PHIÊN (ALTERNATING LOAD SPIKES: IDLE -> LOAD -> IDLE -> LOAD)")
     print(f"Chế độ động cơ: {mode_str}")
     print(f"Mức tải: {'Khắc nghiệt (CPUQuota=25% + glxgears + cpu_stress)' if use_harsh else 'Thực tế (glxgears + cpu_stress)'}")
-    print("Mục tiêu: Kiểm tra xem ssthresh có bảo vệ độ trễ không bị tụt quá sâu khi tải quay lại không")
+    print("Mục tiêu: Cô lập cơ chế ssthresh khi tải quay lại đột ngột sau pha nghỉ ngắn")
     print("================================================================================\n")
 
     tmp_out = "/tmp/matrix_term.bin"
@@ -146,9 +154,8 @@ def run_alternating_experiment(use_harsh=False, fixed_delay_ms=None):
     env = dict(os.environ)
     env.pop("ELECTRON_RUN_AS_NODE", None)
 
-    restart_fcitx5(fixed_delay_ms=fixed_delay_ms)
+    restart_fcitx5(mode=mode, fixed_delay_ms=fixed_delay_ms, disable_ssthresh=disable_ssthresh)
 
-    # Pre-spawn glxgears in background and immediately pause it
     p_gpu = subprocess.Popen(["glxgears"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(0.4)
     p_gpu.send_signal(signal.SIGSTOP)
@@ -172,10 +179,18 @@ def run_alternating_experiment(use_harsh=False, fixed_delay_ms=None):
         print("ERROR: Electron không sẵn sàng!")
         if proc: proc.kill()
         p_gpu.kill()
-        return
+        return None
 
     focus_electron_window()
-    time.sleep(0.5)
+    time.sleep(0.3)
+
+    # ensure clak active in electron
+    for _ in range(15):
+        subprocess.run(["fcitx5-remote", "-s", "clak"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(0.1)
+        res = subprocess.run(["fcitx5-remote", "-n"], capture_output=True, text=True)
+        if res.stdout.strip() == "clak":
+            break
 
     clak_log = "/tmp/clak.log"
     p_cpu = None
@@ -183,14 +198,14 @@ def run_alternating_experiment(use_harsh=False, fixed_delay_ms=None):
 
     offsets = []
     try:
-        # Pha 1: Ranh
-        print("Pha 1 (Rảnh): Gõ phần 1 không tải...")
+        # Phase 1: Idle (35 words)
+        print("1. Pha 1 (Rảnh): Gõ 35 từ không tải...")
         offsets.append(os.path.getsize(clak_log) if os.path.exists(clak_log) else 0)
         subprocess.run(["wtype", "-d", "10", P1_RAW], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(0.3)
 
-        # Pha 2: Bat tai 1
-        print("Pha 2 (Tải nặng #1): BẬT TẢI NẶNG (glxgears + cpu_stress) và gõ phần 2...")
+        # Phase 2: Load Spike #1 (35 words)
+        print("2. Pha 2 (Tải nặng #1): BẬT TẢI NẶNG (glxgears + cpu_stress) và gõ 35 từ...")
         offsets.append(os.path.getsize(clak_log) if os.path.exists(clak_log) else 0)
         p_gpu.send_signal(signal.SIGCONT)
         p_cpu = subprocess.Popen(["python3", cpu_script, "3600"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -198,8 +213,8 @@ def run_alternating_experiment(use_harsh=False, fixed_delay_ms=None):
         subprocess.run(["wtype", "-d", "10", P2_RAW], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(0.5)
 
-        # Pha 3: Tat tai (Hoi phuc)
-        print("Pha 3 (Rảnh trở lại): TẮT TẢI, gõ phần 3 để fast decay co delay xuống...")
+        # Phase 3: Pause / Recovery (35 words)
+        print("3. Pha 3 (Nghỉ ngắn 35 từ): TẮT TẢI NẶNG...")
         offsets.append(os.path.getsize(clak_log) if os.path.exists(clak_log) else 0)
         p_gpu.send_signal(signal.SIGSTOP)
         if p_cpu:
@@ -212,8 +227,8 @@ def run_alternating_experiment(use_harsh=False, fixed_delay_ms=None):
         subprocess.run(["wtype", "-d", "10", P3_RAW], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(0.3)
 
-        # Pha 4: Bat tai tro lai (Kiem tra ssthresh bao ve)
-        print("Pha 4 (Tải nặng quay lại #2): BẬT TẢI NẶNG TRỞ LẠI và gõ phần 4...")
+        # Phase 4: Load Spike #2 returns (35 words)
+        print("4. Pha 4 (TẢI NẶNG QUAY LẠI ĐỘT NGỘT): Bật tải nặng #2 và gõ 35 từ...")
         offsets.append(os.path.getsize(clak_log) if os.path.exists(clak_log) else 0)
         p_gpu.send_signal(signal.SIGCONT)
         p_cpu = subprocess.Popen(["python3", cpu_script, "3600"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -221,7 +236,6 @@ def run_alternating_experiment(use_harsh=False, fixed_delay_ms=None):
         subprocess.run(["wtype", "-d", "10", P4_RAW], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(0.5)
 
-        # Ket thuc
         subprocess.run(["wtype", "-M", "ctrl", "-k", "d", "-m", "ctrl"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(0.5)
     finally:
@@ -247,27 +261,47 @@ def run_alternating_experiment(use_harsh=False, fixed_delay_ms=None):
     act_words = actual.split()
 
     p_lens = [len(P1_EXP.split()), len(P2_EXP.split()), len(P3_EXP.split()), len(P4_EXP.split())]
-    errors = [[], [], [], []]
 
-    for i in range(min(len(exp_words), len(act_words))):
-        ew = exp_words[i]
-        aw = act_words[i]
-        if ew != aw:
-            cum = 0
-            for p_idx, l in enumerate(p_lens):
-                if i < cum + l:
-                    errors[p_idx].append((i - cum, ew, aw))
-                    break
-                cum += l
+    # match with SequenceMatcher
+    matcher = difflib.SequenceMatcher(None, exp_words, act_words)
+    aligned_words = []
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            for k in range(i2 - i1):
+                aligned_words.append({"exp": exp_words[i1 + k], "act": act_words[j1 + k], "is_error": False})
+        elif tag == "replace":
+            max_len = max(i2 - i1, j2 - j1)
+            for k in range(max_len):
+                ew = exp_words[i1 + k] if (i1 + k < i2) else "<missing>"
+                aw = act_words[j1 + k] if (j1 + k < j2) else "<extra>"
+                aligned_words.append({"exp": ew, "act": aw, "is_error": True})
+        elif tag == "delete":
+            for k in range(i1, i2):
+                aligned_words.append({"exp": exp_words[k], "act": "<missing>", "is_error": True})
+        elif tag == "insert":
+            for k in range(j1, j2):
+                aligned_words.append({"exp": "<extra>", "act": act_words[k], "is_error": True})
 
     p_delays = []
-    for off in offsets:
-        p_delays.append(parse_pacing_events(clak_log, off))
+    for i in range(len(offsets)):
+        start = offsets[i]
+        end = offsets[i + 1] if i + 1 < len(offsets) else None
+        p_delays.append(parse_pacing_events(clak_log, start, end))
+
+    # split aligned_words into 4 phases
+    errors = [[], [], [], []]
+    cum = 0
+    for p_idx, l in enumerate(p_lens):
+        phase_words = aligned_words[cum:cum+l]
+        for w_idx, w in enumerate(phase_words):
+            if w["is_error"]:
+                errors[p_idx].append((w_idx, w["exp"], w["act"]))
+        cum += l
 
     print("\n--------------------------------------------------------------------------------")
     print("KẾT QUẢ THEO 4 PHA LUÂN PHIÊN")
     print("--------------------------------------------------------------------------------")
-    phases = ["Pha 1 (Rảnh)", "Pha 2 (Tải nặng #1)", "Pha 3 (Rảnh phục hồi)", "Pha 4 (Tải nặng #2)"]
+    phases = ["Pha 1 (Rảnh)", "Pha 2 (Tải nặng #1)", "Pha 3 (Rảnh/Nghỉ)", "Pha 4 (Tải nặng #2 - Tải quay lại)"]
     for idx, name in enumerate(phases):
         l = p_lens[idx]
         errs = errors[idx]
@@ -277,35 +311,36 @@ def run_alternating_experiment(use_harsh=False, fixed_delay_ms=None):
         if errs:
             for w_i, ew, aw in errs[:5]:
                 print(f"      + Lỗi từ #{w_i}: '{ew}' != '{aw}'")
-            if len(errs) > 5:
-                print(f"      + ... và {len(errs) - 5} từ lỗi khác")
         if delays:
             d_vals = [d["post_delay"] for d in delays]
             s_vals = [d["ssthresh"] for d in delays if d["ssthresh"] > 0]
             s_str = f", ssthresh={s_vals[-1]}ms" if s_vals else ""
             print(f"  - Delay: ban đầu {d_vals[0]}ms -> đỉnh {max(d_vals)}ms -> kết thúc {d_vals[-1]}ms{s_str}")
 
-    all_d = []
-    for d in p_delays:
-        all_d.extend(d)
-    distinct = []
-    for d in all_d:
-        v = d["post_delay"]
-        if not distinct or distinct[-1] != v:
-            distinct.append(v)
-    print(f"\nChuỗi bậc thang toàn bộ 4 pha: {' -> '.join(str(v) + 'ms' for v in distinct)}")
-
     total_errs = sum(len(e) for e in errors)
     print("\n================================================================================")
-    print("TỔNG KẾT THÍ NGHIỆM LUÂN PHIÊN")
-    print("================================================================================")
-    print(f"Trạng thái: {'SẠCH LỖI 100%' if total_errs == 0 else f'Có {total_errs} từ lỗi'}")
+    print(f"TỔNG KẾT: {mode_str} -> Lỗi Pha 4 (Tải quay lại): {len(errors[3])}/35 từ | Tổng lỗi: {total_errs}/140")
     print("================================================================================\n")
+
+    return {
+        "mode": mode_str,
+        "p4_errors": len(errors[3]),
+        "total_errors": total_errs,
+        "delays": p_delays
+    }
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--harsh", action="store_true", help="Apply systemd CPUQuota=25%% to electron")
-    parser.add_argument("--fixed-delay", type=int, default=None, help="Lock fixed delay in ms for baseline control")
+    parser.add_argument("--mode", choices=["adaptive", "fixed"], default="adaptive")
+    parser.add_argument("--fixed-delay", type=int, default=13)
+    parser.add_argument("--disable-ssthresh", action="store_true")
+    parser.add_argument("--harsh", action="store_true")
     args = parser.parse_args()
-    run_alternating_experiment(use_harsh=args.harsh, fixed_delay_ms=args.fixed_delay)
+
+    run_alternating_experiment(
+        mode=args.mode,
+        use_harsh=args.harsh,
+        fixed_delay_ms=args.fixed_delay,
+        disable_ssthresh=args.disable_ssthresh
+    )

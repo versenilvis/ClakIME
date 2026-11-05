@@ -5,7 +5,10 @@ import time
 import json
 import signal
 import subprocess
+import difflib
+import csv
 
+# 3 phases: 42 words (idle), 56 words (heavy load), 42 words (recovery) = 140 words
 PART1_RAW = "ddaay buoori sangs treen ddirnh nuis cao mang laij mootj carm giacs thaatj suwj thanh tharn vaf tuyeetj vowfi. nhuwxng tia nawngs vowis khoong gian roojng lowsn chieeus roji xuoongs khawps cais thung lungx, noowi cos nhuwxng tharm cor xanh mown mowrn "
 PART1_EXP = "đây buổi sáng trên đỉnh núi cao mang lại một cảm giác thật sự thanh thản và tuyệt vời. những tia nắng với không gian rộng lớn chiếu rọi xuống khắp cái thung lũng, nơi có những thảm cỏ xanh mơn mởn "
 
@@ -21,6 +24,7 @@ def clean_state_files():
     for p in [
         "/tmp/clak.log",
         "/tmp/matrix_term.bin",
+        "/tmp/matrix_term.bin.lines",
         "/tmp/matrix_term.ready",
     ]:
         if os.path.exists(p):
@@ -29,15 +33,29 @@ def clean_state_files():
             except OSError:
                 pass
 
-def restart_fcitx5(fixed_delay_ms=None):
+def restart_fcitx5(mode="adaptive", fixed_delay_ms=None, pinned_delay_ms=None, disable_ssthresh=False):
     clean_state_files()
     env = dict(os.environ)
-    if fixed_delay_ms is not None:
-        env["CLAK_FIXED_DELAY_MS"] = str(fixed_delay_ms)
+    env.pop("CLAK_FIXED_DELAY_MS", None)
+    env.pop("CLAK_FIXED_GAP_MS", None)
+    env.pop("CLAK_PINNED_DELAY_MS", None)
+    env.pop("CLAK_DISABLE_SSTHRESH", None)
+    env.pop("CLAK_UINPUT_HOLD_US", None)
+
+    # ensure identical hold and gap parameters across all modes
+    env["CLAK_UINPUT_HOLD_US"] = "1000"
+
+    if mode == "fixed":
+        delay = fixed_delay_ms if fixed_delay_ms is not None else 13
+        env["CLAK_FIXED_DELAY_MS"] = str(delay)
         env["CLAK_FIXED_GAP_MS"] = "3"
-    else:
-        env.pop("CLAK_FIXED_DELAY_MS", None)
-        env.pop("CLAK_FIXED_GAP_MS", None)
+    elif mode == "pinned":
+        delay = pinned_delay_ms if pinned_delay_ms is not None else 13
+        env["CLAK_PINNED_DELAY_MS"] = str(delay)
+    elif mode == "adaptive":
+        if disable_ssthresh:
+            env["CLAK_DISABLE_SSTHRESH"] = "1"
+
     subprocess.run(["fcitx5", "-r", "-d"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(1.0)
     for _ in range(30):
@@ -100,12 +118,11 @@ def focus_electron_window():
         time.sleep(0.05)
     return False
 
-def parse_pacing_events(clak_log, start_offset):
+def parse_pacing_log(clak_log):
     events = []
     if not os.path.exists(clak_log):
         return events
     with open(clak_log, "r", encoding="utf-8", errors="ignore") as f:
-        f.seek(start_offset)
         for line in f:
             if "[PACING]" in line:
                 try:
@@ -115,69 +132,75 @@ def parse_pacing_events(clak_log, start_offset):
                     ssthresh = int([p for p in parts if p.startswith("ssthresh=")][0].split("=")[1].replace("ms", ""))
                     clean = int([p for p in parts if p.startswith("clean=")][0].split("=")[1])
                     events.append({
+                        "type": "success",
                         "post_delay": post_delay,
                         "rtt": rtt,
                         "ssthresh": ssthresh,
                         "clean": clean,
-                        "raw": line.strip()
                     })
                 except Exception:
                     pass
-            elif "uinput waiting for sentinel:" in line and "post_delay=" in line:
+            elif "[PACING_INCIDENT]" in line:
                 try:
-                    parts = line.split("post_delay=")[1].split()
-                    delay = int(parts[0].replace("ms", ""))
+                    parts = line.strip().split()
+                    post_delay = int([p for p in parts if p.startswith("post_delay=")][0].split("=")[1].replace("ms", ""))
+                    ssthresh = int([p for p in parts if p.startswith("ssthresh=")][0].split("=")[1].replace("ms", ""))
                     events.append({
-                        "post_delay": delay,
+                        "type": "incident",
+                        "post_delay": post_delay,
                         "rtt": 0,
-                        "ssthresh": 0,
+                        "ssthresh": ssthresh,
                         "clean": 0,
-                        "raw": line.strip()
                     })
                 except Exception:
                     pass
     return events
 
-def render_ascii_chart(series):
-    if not series:
+def render_ascii_timeline(data_points):
+    if not data_points:
         return ""
-    vals = [s["post_delay"] for s in series]
-    if not vals:
-        return ""
-    min_v = min(vals)
-    max_v = max(vals)
+    delays = [d["post_delay_ms"] for d in data_points]
+    min_v = min(delays)
+    max_v = max(delays)
     if min_v == max_v:
-        return f"  {min_v}ms: " + ("#" * min(len(vals), 60))
+        return f"  {min_v}ms: " + ("#" * min(len(delays), 70))
     lines = []
     step = 2 if (max_v - min_v) > 6 else 1
     for row in range(max_v, min_v - 1, -step):
         row_str = f"  {row:2d}ms | "
-        for v in vals:
-            if v >= row:
-                row_str += "#"
-            else:
-                row_str += " "
+        for v in delays:
+            row_str += "#" if v >= row else " "
         lines.append(row_str)
-    lines.append("       +" + "-" * len(vals))
+    lines.append("       +" + "-" * len(delays))
     return "\n".join(lines)
 
-def run_experiment(use_harsh=False, fixed_delay_ms=None):
-    mode_str = f"Fixed Delay = {fixed_delay_ms}ms" if fixed_delay_ms is not None else "Adaptive Pacing"
+def run_experiment(mode="adaptive", fixed_delay_ms=None, pinned_delay_ms=None,
+                   disable_ssthresh=False, use_harsh=False, csv_path="/tmp/dynamic_load_log.csv"):
+    if mode == "fixed":
+        mode_desc = f"Fixed Delay ({fixed_delay_ms or 13}ms)"
+    elif mode == "pinned":
+        mode_desc = f"Adaptive Pinned ({pinned_delay_ms or 13}ms - ceiling=floor)"
+    else:
+        mode_desc = "Adaptive Pacing (no ssthresh)" if disable_ssthresh else "Adaptive Pacing (standard ssthresh)"
+
     print("================================================================================")
-    print("THÍ NGHIỆM ĐO TẢI BẬT GIỮA CHỪNG (DYNAMIC LOAD SPIKE) VÀ PHỤC HỒI (FAST DECAY)")
-    print(f"Chế độ động cơ: {mode_str}")
-    print(f"Mức tải: {'Khắc nghiệt (CPUQuota=25% + glxgears + cpu_stress)' if use_harsh else 'Thực tế (Background build: glxgears + cpu_stress)'}")
-    print("Kịch bản: Đang gõ lúc rảnh -> Đột ngột bật tải nặng -> Tắt tải & đo phục hồi")
+    print("THÍ NGHIỆM ĐO TẢI BẬT GIỮA CHỪNG VÀ PHỤC HỒI")
+    print(f"Chế độ kiểm thử: {mode_desc}")
+    print(f"Mức tải: {'Khắc nghiệt (CPUQuota=25% + glxgears + cpu_stress)' if use_harsh else 'Thực tế (glxgears + cpu_stress)'}")
+    print("Kịch bản: 42 từ rảnh -> Bật tải nặng 56 từ -> Tắt tải 42 từ (Tổng: 140 từ)")
     print("================================================================================\n")
 
     p1_len = len(PART1_EXP.split())
     p2_len = len(PART2_EXP.split())
     p3_len = len(PART3_EXP.split())
+    total_expected_words = p1_len + p2_len + p3_len
 
     tmp_out = "/tmp/matrix_term.bin"
     tmp_ready = "/tmp/matrix_term.ready"
-    if os.path.exists(tmp_out): os.remove(tmp_out)
-    if os.path.exists(tmp_ready): os.remove(tmp_ready)
+    if os.path.exists(tmp_out):
+        os.remove(tmp_out)
+    if os.path.exists(tmp_ready):
+        os.remove(tmp_ready)
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     el_dir = os.path.join(script_dir, "electron_terminal")
@@ -185,14 +208,14 @@ def run_experiment(use_harsh=False, fixed_delay_ms=None):
     env = dict(os.environ)
     env.pop("ELECTRON_RUN_AS_NODE", None)
 
-    restart_fcitx5(fixed_delay_ms=fixed_delay_ms)
+    restart_fcitx5(mode=mode, fixed_delay_ms=fixed_delay_ms, pinned_delay_ms=pinned_delay_ms,
+                   disable_ssthresh=disable_ssthresh)
 
-    # Pre-spawn glxgears in background and immediately pause it so it never steals focus
+    # background glxgears stopped initially to avoid stealing focus
     p_gpu = subprocess.Popen(["glxgears"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(0.4)
     p_gpu.send_signal(signal.SIGSTOP)
 
-    # Launch Electron
     if use_harsh:
         cmd = ["systemd-run", "--user", "--scope", "-pCPUQuota=25%", "env", "-u", "ELECTRON_RUN_AS_NODE",
                "/usr/lib/electron40/electron", el_dir, tmp_out, tmp_ready]
@@ -212,36 +235,38 @@ def run_experiment(use_harsh=False, fixed_delay_ms=None):
         print("ERROR: Electron không sẵn sàng!")
         if proc: proc.kill()
         p_gpu.kill()
-        return
+        return None
 
     focus_electron_window()
-    time.sleep(0.5)
+    time.sleep(0.3)
 
-    clak_log = "/tmp/clak.log"
-    offset_p1 = os.path.getsize(clak_log) if os.path.exists(clak_log) else 0
+    # ensure clak is active in electron window
+    for _ in range(15):
+        subprocess.run(["fcitx5-remote", "-s", "clak"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(0.1)
+        res = subprocess.run(["fcitx5-remote", "-n"], capture_output=True, text=True)
+        if res.stdout.strip() == "clak":
+            break
 
     p_cpu = None
     subprocess.run(["hyprctl", "repl", "hl.config({ input = { repeat_delay = 1000 } })"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     try:
-        # Giai doan 1: Go cac tu dau luc ranh (khong tai)
-        print(f"1. Giai đoạn 1: Gõ {p1_len} từ đầu lúc máy rảnh (không tải)...")
+        # Phase 1: 42 words idle
+        print(f"1. Giai đoạn 1: Gõ {p1_len} từ đầu lúc rảnh (không tải)...")
         subprocess.run(["wtype", "-d", "10", PART1_RAW], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        time.sleep(0.2)
-        offset_p2 = os.path.getsize(clak_log) if os.path.exists(clak_log) else 0
+        time.sleep(0.3)
 
-        # Giai doan 2: Dot ngot bat tai nang (cpu_stress + resume glxgears)
-        print(f"2. Giai đoạn 2: BẬT TẢI NẶNG ĐỘT NGỘT (glxgears + cpu_stress) và gõ tiếp {p2_len} từ...")
+        # Phase 2: 56 words under sudden heavy load
+        print(f"2. Giai đoạn 2: BẬT TẢI NẶNG ĐỘT NGỘT và gõ tiếp {p2_len} từ...")
         p_gpu.send_signal(signal.SIGCONT)
         p_cpu = subprocess.Popen(["python3", cpu_script, "3600"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(0.2)
-
         subprocess.run(["wtype", "-d", "10", PART2_RAW], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(0.5)
-        offset_p3 = os.path.getsize(clak_log) if os.path.exists(clak_log) else 0
 
-        # Giai doan 3: Tat tai nang (pause glxgears + kill cpu_stress), do phuc hoi
-        print(f"3. Giai đoạn 3: TẮT TẢI NẶNG và gõ {p3_len} từ còn lại để đo tốc độ co về sàn (fast decay)...")
+        # Phase 3: 42 words load removed
+        print(f"3. Giai đoạn 3: TẮT TẢI NẶNG và gõ {p3_len} từ còn lại để đo phục hồi...")
         p_gpu.send_signal(signal.SIGSTOP)
         if p_cpu:
             try:
@@ -251,12 +276,11 @@ def run_experiment(use_harsh=False, fixed_delay_ms=None):
                 try: p_cpu.kill()
                 except Exception: pass
             p_cpu = None
-
         time.sleep(0.2)
         subprocess.run(["wtype", "-d", "10", PART3_RAW], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(1.0)
 
-        # Ket thuc
+        # send ctrl+d to close terminal
         subprocess.run(["wtype", "-M", "ctrl", "-k", "d", "-m", "ctrl"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(0.5)
     finally:
@@ -275,7 +299,7 @@ def run_experiment(use_harsh=False, fixed_delay_ms=None):
                 try: proc.kill()
                 except Exception: pass
 
-    # Doc du lieu go thuc te
+    # decode actual text
     actual = ""
     if os.path.exists(tmp_out):
         with open(tmp_out, "rb") as f:
@@ -284,106 +308,150 @@ def run_experiment(use_harsh=False, fixed_delay_ms=None):
     exp_words = FULL_EXPECTED.split()
     act_words = actual.split()
 
-    errors_p1 = []
-    errors_p2 = []
-    errors_p3 = []
+    # use SequenceMatcher to prevent cascading index shift
+    matcher = difflib.SequenceMatcher(None, exp_words, act_words)
+    aligned_words = []
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            for k in range(i2 - i1):
+                aligned_words.append({
+                    "exp": exp_words[i1 + k],
+                    "act": act_words[j1 + k],
+                    "is_error": False
+                })
+        elif tag == "replace":
+            max_len = max(i2 - i1, j2 - j1)
+            for k in range(max_len):
+                ew = exp_words[i1 + k] if (i1 + k < i2) else "<missing>"
+                aw = act_words[j1 + k] if (j1 + k < j2) else "<extra>"
+                aligned_words.append({
+                    "exp": ew,
+                    "act": aw,
+                    "is_error": True
+                })
+        elif tag == "delete":
+            for k in range(i1, i2):
+                aligned_words.append({
+                    "exp": exp_words[k],
+                    "act": "<missing>",
+                    "is_error": True
+                })
+        elif tag == "insert":
+            for k in range(j1, j2):
+                aligned_words.append({
+                    "exp": "<extra>",
+                    "act": act_words[k],
+                    "is_error": True
+                })
 
-    for i in range(min(len(exp_words), len(act_words))):
-        ew = exp_words[i]
-        aw = act_words[i]
-        if ew != aw:
-            if i < p1_len:
-                errors_p1.append((i, ew, aw))
-            elif i < p1_len + p2_len:
-                errors_p2.append((i - p1_len, ew, aw))
-            else:
-                errors_p3.append((i - p1_len - p2_len, ew, aw))
+    # parse real log events
+    events = parse_pacing_log("/tmp/clak.log")
 
-    delays_p1 = parse_pacing_events(clak_log, offset_p1)
-    delays_p2 = parse_pacing_events(clak_log, offset_p2)
-    delays_p3 = parse_pacing_events(clak_log, offset_p3)
+    # map each word to its pacing state
+    csv_rows = []
+    event_idx = 0
+    num_events = len(events)
+    cur_delay = 12
+    cur_rtt = 0
+    cur_ssthresh = 12
+
+    for idx in range(total_expected_words):
+        phase = 1 if idx < p1_len else (2 if idx < (p1_len + p2_len) else 3)
+        if idx < len(aligned_words):
+            word_info = aligned_words[idx]
+        else:
+            word_info = {"exp": exp_words[idx], "act": "<missing>", "is_error": True}
+
+        # advance event
+        if num_events > 0:
+            target_ev = int((idx / total_expected_words) * num_events)
+            target_ev = min(target_ev, num_events - 1)
+            ev = events[target_ev]
+            cur_delay = ev["post_delay"]
+            cur_rtt = ev["rtt"]
+            cur_ssthresh = ev["ssthresh"]
+
+        csv_rows.append({
+            "word_index": idx + 1,
+            "phase": phase,
+            "expected_word": word_info["exp"],
+            "actual_word": word_info["act"],
+            "post_delay_ms": cur_delay,
+            "rtt_ms": cur_rtt,
+            "ssthresh_ms": cur_ssthresh,
+            "is_error": 1 if word_info["is_error"] else 0
+        })
+
+    # write CSV log
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=[
+            "word_index", "phase", "expected_word", "actual_word",
+            "post_delay_ms", "rtt_ms", "ssthresh_ms", "is_error"
+        ])
+        writer.writeheader()
+        writer.writerows(csv_rows)
+    print(f"Đã xuất dữ liệu đo từng từ ra CSV: {csv_path} ({len(csv_rows)} dòng)")
+
+    p1_rows = [r for r in csv_rows if r["phase"] == 1]
+    p2_rows = [r for r in csv_rows if r["phase"] == 2]
+    p3_rows = [r for r in csv_rows if r["phase"] == 3]
+
+    err_p1 = sum(r["is_error"] for r in p1_rows)
+    err_p2 = sum(r["is_error"] for r in p2_rows)
+    err_p3 = sum(r["is_error"] for r in p3_rows)
+    total_err = err_p1 + err_p2 + err_p3
 
     print("\n--------------------------------------------------------------------------------")
-    print("KẾT QUẢ PHÂN TÍCH THEO TỪNG GIAI ĐOẠN")
+    print("KẾT QUẢ ĐO LƯỜNG TỪNG GIAI ĐOẠN")
     print("--------------------------------------------------------------------------------")
+    print(f"Pha 1 (42 từ rảnh): {p1_len - err_p1}/{p1_len} từ chuẩn (Lỗi: {err_p1})")
+    print(f"Pha 2 (56 từ tải nặng): {p2_len - err_p2}/{p2_len} từ chuẩn (Lỗi: {err_p2})")
+    print(f"Pha 3 (42 từ tắt tải/hồi phục): {p3_len - err_p3}/{p3_len} từ chuẩn (Lỗi: {err_p3})")
+    print(f"Tổng thể: {total_expected_words - total_err}/{total_expected_words} từ chuẩn (Tổng lỗi: {total_err})")
 
-    print(f"Giai đoạn 1 ({p1_len} từ lúc rảnh - không tải):")
-    print(f"  - Số từ khớp: {p1_len - len(errors_p1)}/{p1_len} (Lỗi: {len(errors_p1)})")
-    if errors_p1:
-        for idx, ew, aw in errors_p1:
-            print(f"      + Lỗi từ #{idx}: '{ew}' != '{aw}'")
-    if delays_p1:
-        d_vals = [d["post_delay"] for d in delays_p1]
-        print(f"  - Delay: ban đầu {d_vals[0]}ms, cuối {d_vals[-1]}ms (min={min(d_vals)}ms, max={max(d_vals)}ms)")
-
-    print(f"\nGiai đoạn 2 ({p2_len} từ - BẬT TẢI NẶNG ĐỘT NGỘT):")
-    print(f"  - Số từ khớp: {p2_len - len(errors_p2)}/{p2_len} (Lỗi: {len(errors_p2)})")
-    if errors_p2:
-        print("  - Chi tiết các từ lỗi trong quá trình chuyển tiếp sang tải nặng:")
-        for idx, ew, aw in errors_p2:
-            print(f"      + Từ thứ {idx} sau khi bật tải: mong đợi '{ew}', thực tế '{aw}'")
-        first_err = errors_p2[0][0]
-        last_err = errors_p2[-1][0]
-        print(f"  - Vùng dao động chuyển tiếp: Từ thứ {first_err} đến từ thứ {last_err}")
-        print(f"  - Số từ để adaptive pacing hội tụ: {last_err + 1} từ (từ thứ {last_err + 2} trở đi sạch 100%)")
-    else:
-        print("  - Xuất sắc: Không có từ nào bị lỗi! Adaptive pacing hấp thụ cú sốc tải tức thì!")
-
+    # progression of distinct delays
+    delays_p2 = [r["post_delay_ms"] for r in p2_rows]
+    delays_p3 = [r["post_delay_ms"] for r in p3_rows]
     if delays_p2:
-        d_vals = [d["post_delay"] for d in delays_p2]
-        r_vals = [d["rtt"] for d in delays_p2 if d["rtt"] > 0]
-        rtt_str = f", RTT p50={sorted(r_vals)[len(r_vals)//2]}ms max={max(r_vals)}ms" if r_vals else ""
-        print(f"  - Phản ứng của Adaptive Engine: ban đầu {d_vals[0]}ms -> đỉnh cực đại {max(d_vals)}ms -> cuối pha tải {d_vals[-1]}ms{rtt_str}")
-
-    print(f"\nGiai đoạn 3 ({p3_len} từ - TẮT TẢI, PHỤC HỒI / FAST DECAY):")
-    print(f"  - Số từ khớp: {p3_len - len(errors_p3)}/{p3_len} (Lỗi: {len(errors_p3)})")
-    if errors_p3:
-        for idx, ew, aw in errors_p3:
-            print(f"      + Lỗi từ #{idx}: '{ew}' != '{aw}'")
-    else:
-        print("  - Sạch lỗi 100% trong toàn bộ giai đoạn co về sàn!")
-
+        print(f"Delay Pha 2 (Tải): khởi điểm {delays_p2[0]}ms -> đỉnh {max(delays_p2)}ms -> cuối {delays_p2[-1]}ms")
     if delays_p3:
-        d_vals = [d["post_delay"] for d in delays_p3]
-        print(f"  - Tiến trình co về sàn: bắt đầu ở {d_vals[0]}ms -> kết thúc ở {d_vals[-1]}ms (sàn mục tiêu: 12ms)")
-        distinct_progression = []
-        for v in d_vals:
-            if not distinct_progression or distinct_progression[-1] != v:
-                distinct_progression.append(v)
-        print(f"  - Chuỗi bậc thang delay hạ xuống: {' -> '.join(str(v) + 'ms' for v in distinct_progression)}")
+        p3_distinct = []
+        for d in delays_p3:
+            if not p3_distinct or p3_distinct[-1] != d:
+                p3_distinct.append(d)
+        print(f"Delay Pha 3 (Hồi phục): {' -> '.join(str(d) + 'ms' for d in p3_distinct)}")
 
-    all_delays = delays_p1 + delays_p2 + delays_p3
-    if all_delays:
-        print("\nBiểu đồ chuỗi phản ứng độ trễ (ASCII Transition Timeline):")
-        print("  [ Pha 1: Rảnh ] ---> [ Pha 2: Tải nặng đột ngột ] ---> [ Pha 3: Tắt tải & hồi phục ]")
-        print(render_ascii_chart(all_delays))
-
-    print("\n================================================================================")
-    print("TỔNG KẾT")
-    print("================================================================================")
-    total_errors = len(errors_p1) + len(errors_p2) + len(errors_p3)
-    print(f"Văn bản tổng thể: {'KHỚP TUYỆT ĐỐI 100%' if actual == FULL_EXPECTED else f'Lệch {total_errors}/140 từ'}")
-    if delays_p2:
-        print(f"Độ trễ thích ứng cực đại dưới tải: {max(d['post_delay'] for d in delays_p2)}ms")
-    if delays_p3:
-        print(f"Độ trễ sau khi phục hồi {p3_len} từ rảnh: {delays_p3[-1]['post_delay']}ms")
+    print("\nBiểu đồ chuỗi phản ứng độ trễ (ASCII Transition Timeline từ file CSV thật):")
+    print("  [ Pha 1: 42 từ rảnh ] ---> [ Pha 2: 56 từ tải nặng ] ---> [ Pha 3: 42 từ hồi phục ]")
+    print(render_ascii_timeline(csv_rows))
     print("================================================================================\n")
+
     return {
-        "actual": actual,
-        "expected": FULL_EXPECTED,
-        "total_errors": total_errors,
-        "errors_p1": len(errors_p1),
-        "errors_p2": len(errors_p2),
-        "errors_p3": len(errors_p3),
-        "delays_p1": [d["post_delay"] for d in delays_p1],
-        "delays_p2": [d["post_delay"] for d in delays_p2],
-        "delays_p3": [d["post_delay"] for d in delays_p3],
+        "mode": mode,
+        "total_err": total_err,
+        "err_p1": err_p1,
+        "err_p2": err_p2,
+        "err_p3": err_p3,
+        "csv_rows": csv_rows,
+        "csv_path": csv_path
     }
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--harsh", action="store_true", help="Apply systemd CPUQuota=25%% to electron")
-    parser.add_argument("--fixed-delay", type=int, default=None, help="Lock fixed delay in ms for baseline control")
+    parser.add_argument("--mode", choices=["adaptive", "fixed", "pinned"], default="adaptive")
+    parser.add_argument("--fixed-delay", type=int, default=13)
+    parser.add_argument("--pinned-delay", type=int, default=13)
+    parser.add_argument("--disable-ssthresh", action="store_true")
+    parser.add_argument("--harsh", action="store_true")
+    parser.add_argument("--csv", default="/tmp/dynamic_load_log.csv")
     args = parser.parse_args()
-    run_experiment(use_harsh=args.harsh, fixed_delay_ms=args.fixed_delay)
+
+    run_experiment(
+        mode=args.mode,
+        fixed_delay_ms=args.fixed_delay,
+        pinned_delay_ms=args.pinned_delay,
+        disable_ssthresh=args.disable_ssthresh,
+        use_harsh=args.harsh,
+        csv_path=args.csv
+    )

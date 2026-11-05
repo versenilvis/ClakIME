@@ -68,11 +68,11 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
 
     println!("\n[2/10] Thiết bị ảo và Quyền hạn:");
     if report.permissions.uinput_writable {
-        println!("  • /dev/uinput: \x1b[32m[OK]\x1b[0m Khả dụng (chống nuốt chữ Kitty, Ghostty, Chrome, VSCode)");
+        println!("  • /dev/uinput: \x1b[32m[OK]\x1b[0m Khả dụng (quyết định kích hoạt tầng `uinput` ảo hóa kernel cho Electron/Terminal/Browser)");
     } else if report.permissions.xtest_available {
-        println!("  • /dev/uinput: \x1b[33m[FALLBACK]\x1b[0m Thiếu quyền ghi, đang dùng XTest fallback trên X11/XWayland");
+        println!("  • /dev/uinput: \x1b[33m[FALLBACK]\x1b[0m Thiếu quyền ghi, đang dùng XTest fallback trên X11/XWayland (nguy cơ rơi phím)");
     } else {
-        println!("  • /dev/uinput: \x1b[31m[THIẾU QUYỀN]\x1b[0m Người dùng chưa có quyền ghi vào /dev/uinput");
+        println!("  • /dev/uinput: \x1b[31m[THIẾU QUYỀN]\x1b[0m Người dùng chưa có quyền ghi vào /dev/uinput (buộc lùi về tầng forwardKey)");
     }
     if report.permissions.input_readable_count > 0 {
         println!(
@@ -165,6 +165,11 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
         .as_deref()
         .unwrap_or("(chưa đặt)");
     println!("  • GTK_IM_MODULE: {}", gtk_str);
+    match report.environment.gtk_im_module.as_deref() {
+        Some("fcitx") => println!("    (Kích hoạt tầng `surrounding` text trực tiếp qua DBus IM module cho app GTK)"),
+        Some("wayland") | None => println!("    (Để trống / wayland: chuẩn Wayland hiện đại, app Wayland native dùng text-input `surrounding`, app khác dùng `uinput`)"),
+        Some(other) => println!("    (Giá trị '{}' có thể gây lỗi nạp module và làm mất surrounding text)", other),
+    }
     println!("  • QT_IM_MODULE: {}", qt_str);
     println!("  • XMODIFIERS: {}", xmod_str);
     if report.environment.env_file_exists {

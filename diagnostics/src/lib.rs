@@ -720,4 +720,40 @@ mod tests {
 
         std::env::remove_var("GTK_IM_MODULE");
     }
+
+    #[test]
+    fn test_doctor_privacy_no_leak() {
+        let report = run_diagnostics();
+        let md = report.to_markdown();
+
+        if let Ok(home) = std::env::var("HOME") {
+            if !home.is_empty() {
+                assert!(
+                    !md.contains(&home),
+                    "markdown output leaked HOME path: {}",
+                    home
+                );
+            }
+        }
+        if let Ok(user) = std::env::var("USER") {
+            if !user.is_empty() && user.len() >= 3 && user != "arch" && user != "linux" {
+                assert!(
+                    !md.contains(&format!("/home/{}", user)),
+                    "markdown output leaked /home/$USER"
+                );
+            }
+        }
+        assert!(
+            md.contains("Quyết định tầng xử lý"),
+            "markdown output must explicitly explain processing tier decision"
+        );
+        assert!(
+            md.contains("`/dev/uinput`"),
+            "markdown output must mention /dev/uinput"
+        );
+        assert!(
+            md.contains("GTK_IM_MODULE"),
+            "markdown output must mention GTK_IM_MODULE"
+        );
+    }
 }
