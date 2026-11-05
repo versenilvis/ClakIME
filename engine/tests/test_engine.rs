@@ -62,6 +62,7 @@ fn telex_uow() {
     assert_eq!(t("cuowcs"), "cước");
     assert_eq!(t("dduwowcj"), "được");
     assert_eq!(t("nguwowif"), "người");
+    assert_eq!(t("nguwowfi"), "người");
     assert_eq!(t("uwocs"), "ước");
     assert_eq!(t("truwocs"), "trước");
     assert_eq!(t("luwowcs"), "lước");

@@ -7,7 +7,7 @@
 namespace clak {
 namespace config {
 
-constexpr size_t kMaxBufferedKeys = 50;
+constexpr size_t kMaxBufferedKeys = 256;
 constexpr int kMismatchThreshold = 3;
 constexpr uint64_t kSafetyTimeoutUs = 200000;
 constexpr uint64_t kSelectionDeletionTimeoutUs = 250000;

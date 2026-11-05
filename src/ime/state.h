@@ -95,6 +95,7 @@ private:
   std::string op_group_;
 
   std::string pending_commit_string_;
+  std::function<void()> flush_replay_batch_;
   std::unique_ptr<fcitx::EventSourceTime> safety_timer_;
   std::unique_ptr<fcitx::EventSourceTime> commit_timer_;
   std::unique_ptr<fcitx::EventSourceTime> surr_lag_timer_;

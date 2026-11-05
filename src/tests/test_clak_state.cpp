@@ -181,6 +181,92 @@ TEST_F(ClakStateTest, GivenKeysBufferedDuringDelete_ReplaysInOriginalOrder) {
     EXPECT_EQ(ic.commits[0], "đ ba");
 }
 
+TEST_F(ClakStateTest, GivenTieengs_WhenKeysArriveDuringUinputDeletion) {
+    platform::setMockActiveWindow(platform::WindowInfo{"kitty", "kitty", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "kitty");
+    ime::ClakState state(engine_.get(), &ic);
+    ic.setSurroundingEnabled(false);
+
+    std::vector<std::string> event_order;
+    uinput::UinputTool::instance().setMockHandler([&](size_t count, uint32_t, uint32_t, uint32_t) {
+        event_order.push_back("uinput_bs_" + std::to_string(count));
+        return true;
+    });
+    ic.on_commit = [&](const std::string& text) {
+        event_order.push_back("commit_" + text);
+    };
+
+    ic.typeChar('t', &state);
+    ic.typeChar('i', &state);
+    ic.typeChar('e', &state);
+    ic.typeChar('e', &state);
+
+    EXPECT_TRUE(state.isDeleting());
+    EXPECT_EQ(event_order.size(), 1u);
+    EXPECT_EQ(event_order[0], "uinput_bs_2");
+
+    ic.typeChar('n', &state);
+    ic.typeChar('g', &state);
+    ic.typeChar('s', &state);
+
+    EXPECT_EQ(state.bufferedKeysCount(), 3u);
+
+    ic.sendCleanBackspace(&state);
+    ic.sendCleanBackspace(&state);
+
+    // flush batch commit before sending new backspaces to prevent racing
+    ASSERT_GE(event_order.size(), 3u);
+    EXPECT_EQ(event_order[1], "commit_êng");
+    EXPECT_EQ(event_order[2], "uinput_bs_4");
+}
+
+TEST_F(ClakStateTest, GivenStaleSurroundingTextAfterReplacement_DoesNotResetOnToneKey) {
+    platform::setMockActiveWindow(platform::WindowInfo{"google-chrome", "Chrome", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "google-chrome");
+    ime::ClakState state(engine_.get(), &ic);
+
+    ic.setSurrounding("te", 2, 2);
+    ic.typeChar('t', &state);
+    ic.typeChar('e', &state);
+    ic.typeChar('e', &state);
+
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "ê");
+
+    // stale surrounding text simulation
+    ic.setSurrounding("te", 2, 2);
+    ic.clearHistory();
+    ic.typeChar('s', &state);
+
+    EXPECT_FALSE(ic.deletions.empty());
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits[0], "ế");
+}
+
+TEST_F(ClakStateTest, GivenStaleSurroundingTextLaggingTwoKeys_DoesNotResetOnTieengs) {
+    platform::setMockActiveWindow(platform::WindowInfo{"google-chrome", "Chrome", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "google-chrome");
+    ime::ClakState state(engine_.get(), &ic);
+
+    ic.setSurrounding("tie", 3, 3);
+    ic.typeChar('t', &state);
+    ic.typeChar('i', &state);
+    ic.typeChar('e', &state);
+    ic.typeChar('e', &state);
+
+    // stale surrounding text simulation
+    ic.setSurrounding("tie", 3, 3);
+    ic.typeChar('n', &state);
+    ic.setSurrounding("tie", 3, 3);
+    ic.typeChar('g', &state);
+    ic.setSurrounding("tie", 3, 3);
+    ic.clearHistory();
+    ic.typeChar('s', &state);
+
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_NE(ic.commits[0], "s");
+}
+
 TEST_F(ClakStateTest, GivenChromiumNormalPage_UsesSurroundingText) {
     // normal browser page with valid surrounding text should use surrounding text deletion
     MockInputContext ic(instance_->inputContextManager(), "google-chrome");

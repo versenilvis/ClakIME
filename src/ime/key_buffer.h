@@ -19,7 +19,8 @@ public:
               const std::function<bool(const fcitx::Key&)>& handle_key_fn,
               const std::function<void(const std::string&)>& commit_fn,
               const std::function<void(const fcitx::Key&)>& forward_fn,
-              const std::function<bool()>& is_deleting_fn);
+              const std::function<bool()>& is_deleting_fn,
+              const std::function<void(std::function<void()>)>& set_flush_hook = nullptr);
 
   size_t size() const { return keys_.size(); }
   bool empty() const { return keys_.empty(); }

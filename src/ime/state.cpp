@@ -473,7 +473,8 @@ void ClakState::replayBufferedKeys(const std::string& initial_batch) {
         [this](const fcitx::Key& k) { return handleKey(k); },
         [this](const std::string& str) { doCommitString(str); },
         [this](const fcitx::Key& k) { ic_->forwardKey(k); },
-        [this]() { return is_deleting_; }
+        [this]() { return is_deleting_; },
+        [this](std::function<void()> hook) { flush_replay_batch_ = hook; }
     );
 }
 
@@ -660,6 +661,14 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                    " site='" + site + "' -> " + action_name + " del=" + std::to_string(action.delete_count) +
                    " commit='" + std::string(action.commit_str ? action.commit_str : "") + "'");
 
+    if (action.action_type == CLAK_ACTION_REPLACE ||
+        action.action_type == CLAK_ACTION_ADDRESS_BAR_FIX ||
+        action.action_type == CLAK_ACTION_REPLACE_SURROUNDING) {
+        if (flush_replay_batch_) {
+            flush_replay_batch_();
+        }
+    }
+
     if (!pending_commit_string_.empty()) {
         doCommitString(pending_commit_string_);
         pending_commit_string_.clear();
@@ -792,6 +801,9 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                     pacing.post_delay_ms = std::max(pacing.post_delay_ms, 12u);
                 }
                 uint32_t pre_delay = 0;
+                if (last_commit_time_us_ > 0 && (now_us - last_commit_time_us_) < 30000) {
+                    pre_delay = std::max(pacing.post_delay_ms, 8u);
+                }
 
                 utils::clakLog("uinput waiting for sentinel: expected=" + std::to_string(bs_to_send) +
                                " (real=" + std::to_string(real_bs) + (has_autofill_selection ? " + 1 autofill" : "") +

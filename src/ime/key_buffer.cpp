@@ -18,7 +18,8 @@ void KeyBuffer::replay(const std::string& initial_batch,
                        const std::function<bool(const fcitx::Key&)>& handle_key_fn,
                        const std::function<void(const std::string&)>& commit_fn,
                        const std::function<void(const fcitx::Key&)>& forward_fn,
-                       const std::function<bool()>& is_deleting_fn) {
+                       const std::function<bool()>& is_deleting_fn,
+                       const std::function<void(std::function<void()>)>& set_flush_hook) {
     std::string batch_commit = initial_batch;
     auto flush_batch = [&batch_commit, &commit_fn]() {
         if (!batch_commit.empty()) {
@@ -30,8 +31,13 @@ void KeyBuffer::replay(const std::string& initial_batch,
         }
     };
 
+    if (set_flush_hook) {
+        set_flush_hook([&flush_batch]() { flush_batch(); });
+    }
+
     if (keys_.empty()) {
         flush_batch();
+        if (set_flush_hook) set_flush_hook(nullptr);
         return;
     }
     auto pending = std::move(keys_);
@@ -45,6 +51,7 @@ void KeyBuffer::replay(const std::string& initial_batch,
             keys_.push_back(k);
             continue;
         }
+
         if (!handle_key_fn(k)) {
             bool has_ctrl_alt = k.states().test(fcitx::KeyState::Ctrl) ||
                                 k.states().test(fcitx::KeyState::Alt) ||
@@ -65,6 +72,7 @@ void KeyBuffer::replay(const std::string& initial_batch,
         }
     }
     flush_batch();
+    if (set_flush_hook) set_flush_hook(nullptr);
 }
 
 } // namespace ime
