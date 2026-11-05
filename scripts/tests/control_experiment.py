@@ -59,11 +59,15 @@ def main():
     args = parser.parse_args()
 
     events_file = "/tmp/clak_control_exp.jsonl"
+    ready_file = "/tmp/clak_control_exp.ready"
     if os.path.exists(events_file):
         os.remove(events_file)
+    if os.path.exists(ready_file):
+        os.remove(ready_file)
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     receiver_script = os.path.join(script_dir, "raw_receiver.py")
+    window_title = "clak_experiment_window"
 
     print(f"=== CLAK CONTROL EXPERIMENT ===")
     print(f"Trials: {args.count}")
@@ -72,16 +76,32 @@ def main():
     print(f"Events log: {events_file}")
 
     # launch kitty running raw_receiver
-    kitty_cmd = ["kitty", "--title", "clak_experiment_window", "python3", receiver_script, events_file]
+    kitty_cmd = ["kitty", "--title", window_title, "python3", receiver_script, events_file, ready_file]
     proc = subprocess.Popen(kitty_cmd)
 
-    # wait for window to map and start
-    time.sleep(1.2)
+    # wait for receiver readiness marker
+    t0 = time.time()
+    while time.time() - t0 < 5.0:
+        if os.path.exists(ready_file):
+            break
+        time.sleep(0.05)
 
-    # ensure focus in hyprland
-    focus_lua = 'for _, w in ipairs(hl.get_windows()) do if w.class == "kitty" then hl.dispatch(hl.dsp.focus({ window = w })) break end end'
+    # ensure focus in hyprland and verify activewindow
+    focus_lua = f'for _, w in ipairs(hl.get_windows()) do if w.title == "{window_title}" then hl.dispatch(hl.dsp.focus({{ window = w }})) break end end'
     subprocess.run(["hyprctl", "repl", focus_lua], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(0.3)
+
+    t0 = time.time()
+    while time.time() - t0 < 3.0:
+        res = subprocess.run(["hyprctl", "activewindow", "-j"], capture_output=True, text=True)
+        try:
+            data = json.loads(res.stdout)
+            if data.get("title") == window_title:
+                break
+        except Exception:
+            pass
+        time.sleep(0.05)
+
+    time.sleep(0.1)
 
     # switch fcitx5 to clak
     subprocess.run(["fcitx5-remote", "-s", "clak"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

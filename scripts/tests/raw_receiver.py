@@ -2,31 +2,30 @@ import os
 import sys
 import tty
 import termios
-import time
-import json
 
-output_file = sys.argv[1] if len(sys.argv) > 1 else "/tmp/raw_receiver_events.jsonl"
+output_file = sys.argv[1] if len(sys.argv) > 1 else "/tmp/raw_receiver.bin"
+ready_file = sys.argv[2] if len(sys.argv) > 2 else "/tmp/clak_receiver.ready"
 
 fd = sys.stdin.fileno()
 old_settings = termios.tcgetattr(fd)
 
-# unbuffered stdout
-sys.stdout.reconfigure(line_buffering=True)
-print(f"READY:{output_file}")
-
 try:
     tty.setraw(fd)
-    with open(output_file, "w", encoding="utf-8") as f:
+    with open(ready_file, "w") as f_ready:
+        f_ready.write("ready\n")
+        f_ready.flush()
+
+    with open(output_file, "wb") as f:
         while True:
             b = os.read(fd, 1)
-            if not b or b == b'\x04': # eof or ctrl+d
+            if not b or b == b'\x04':
                 break
-            record = {
-                "t": time.time(),
-                "b": b[0],
-                "char": chr(b[0]) if 0x20 <= b[0] <= 0x7e else ""
-            }
-            f.write(json.dumps(record) + "\n")
+            f.write(b)
             f.flush()
 finally:
     termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    if os.path.exists(ready_file):
+        try:
+            os.remove(ready_file)
+        except OSError:
+            pass

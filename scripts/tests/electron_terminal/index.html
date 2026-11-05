@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="/opt/antigravity-ide/resources/app/node_modules/@xterm/xterm/css/xterm.css">
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #1e1e1e; overflow: hidden; }
+        #terminal { width: 100%; height: 100%; }
+    </style>
+</head>
+<body>
+    <div id="terminal"></div>
+    <script>
+        const { ipcRenderer } = require('electron');
+        const fs = require('fs');
+        const { Terminal } = require('/opt/antigravity-ide/resources/app/node_modules/@xterm/xterm/lib/xterm.js');
+
+        const term = new Terminal({
+            cols: 160,
+            rows: 30,
+            cursorBlink: true
+        });
+        term.open(document.getElementById('terminal'));
+        term.focus();
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const outputFile = urlParams.get('out') || '/tmp/electron_term.txt';
+        try { fs.writeFileSync(outputFile, ''); } catch (e) {}
+
+        function flushBufferLines() {
+            try {
+                let lines = [];
+                for (let i = 0; i < term.buffer.active.length; i++) {
+                    const line = term.buffer.active.getLine(i);
+                    if (line) {
+                        const str = line.translateToString(true);
+                        if (str.length > 0) {
+                            lines.push(str);
+                        }
+                    }
+                }
+                fs.writeFileSync(outputFile + '.lines', lines.join(''));
+            } catch (e) {}
+        }
+
+        term.onData(data => {
+            try {
+                fs.appendFileSync(outputFile, data);
+            } catch (e) {}
+
+            for (let i = 0; i < data.length; i++) {
+                const ch = data[i];
+                if (ch === '\x04') { // ctrl+d
+                    flushBufferLines();
+                    ipcRenderer.send('finish');
+                    return;
+                } else if (ch === '\r') {
+                    term.write('\r\n');
+                } else if (ch === '\x7f' || ch === '\x08') {
+                    term.write('\b \b');
+                } else {
+                    term.write(ch);
+                }
+            }
+        });
+
+        window.addEventListener('beforeunload', () => {
+            flushBufferLines();
+        });
+
+        window.addEventListener('focus', () => {
+            setTimeout(() => {
+                ipcRenderer.send('ready');
+            }, 600);
+        });
+
+        // fallback if focus event already fired before listener
+        setTimeout(() => {
+            if (document.hasFocus()) {
+                ipcRenderer.send('ready');
+            }
+        }, 1200);
+    </script>
+</body>
+</html>
