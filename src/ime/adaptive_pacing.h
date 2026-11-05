@@ -71,8 +71,11 @@ public:
 
     // constants
     static constexpr uint64_t kSlidingWindowUs = 10000000ULL; // 10 seconds
-    static constexpr uint32_t kDecayWordThreshold = 40;       // words before 1ms decay
-    static constexpr uint32_t kAdditiveDelayStepMs = 4;       // additive increase
+    static constexpr uint32_t kFastDecayWordThreshold = 5;
+    static constexpr uint32_t kConservativeDecayWordThreshold = 20;
+    static constexpr uint32_t kFastDecayStepMs = 2;
+    static constexpr uint32_t kConservativeDecayStepMs = 1;
+    static constexpr uint32_t kAdditiveDelayStepMs = 4;
     static constexpr uint32_t kAdditiveGapStepMs = 2;
 
 private:

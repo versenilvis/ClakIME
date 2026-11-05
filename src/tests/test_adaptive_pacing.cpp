@@ -67,22 +67,25 @@ TEST(AdaptivePacingTest, SlowDecayTowardsFloor) {
     EXPECT_EQ(m.post_delay_ms, 16u); // 12 + 4
     EXPECT_EQ(m.gap_ms, 5u);         // 3 + 2
 
-    // simulate 39 successful transactions -> no decay yet
-    for (int i = 0; i < 39; ++i) {
+    // simulate high rtt (25ms) so conservative decay (20 words per 1ms) is used
+    engine.recordRtt(PacingGroup::TerminalUinput, 25000ULL);
+
+    // simulate 19 successful transactions -> no decay yet
+    for (int i = 0; i < 19; ++i) {
         engine.onTransactionSuccess(PacingGroup::TerminalUinput);
     }
     m = engine.metrics(PacingGroup::TerminalUinput);
     EXPECT_EQ(m.post_delay_ms, 16u);
     EXPECT_EQ(m.gap_ms, 5u);
 
-    // 40th transaction -> 1ms decay
+    // 20th transaction -> 1ms decay
     engine.onTransactionSuccess(PacingGroup::TerminalUinput);
     m = engine.metrics(PacingGroup::TerminalUinput);
     EXPECT_EQ(m.post_delay_ms, 15u);
     EXPECT_EQ(m.gap_ms, 4u);
 
     // decay repeatedly towards floor, never drops below floor
-    for (int i = 0; i < 40 * 20; ++i) {
+    for (int i = 0; i < 20 * 20; ++i) {
         engine.onTransactionSuccess(PacingGroup::TerminalUinput);
     }
     m = engine.metrics(PacingGroup::TerminalUinput);
@@ -200,4 +203,45 @@ TEST(AdaptivePacingTest, ConfigureGroupZeroFloorAppliesImmediately) {
     EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).gap_ms, 0u);
     EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).floor_post_ms, 0u);
     EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).floor_gap_ms, 0u);
+}
+
+TEST(AdaptivePacingTest, FastDecayWhenRttLow) {
+    AdaptivePacingEngine engine;
+    uint64_t t0 = 1000000ULL;
+    // raise delay via starvation incidents
+    engine.onIncident(PacingGroup::TerminalUinput, IncidentType::PacingStarvation, t0);
+    engine.onIncident(PacingGroup::TerminalUinput, IncidentType::PacingStarvation, t0 + 10000ULL);
+    EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).post_delay_ms, 20u);
+
+    // low rtt (3ms) indicates clean idle ipc
+    engine.recordRtt(PacingGroup::TerminalUinput, 3000ULL);
+
+    // 5 clean transactions should decay by 2ms
+    for (int i = 0; i < 5; ++i) {
+        engine.onTransactionSuccess(PacingGroup::TerminalUinput);
+    }
+    EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).post_delay_ms, 18u);
+}
+
+TEST(AdaptivePacingTest, ConservativeDecayWhenRttHigh) {
+    AdaptivePacingEngine engine;
+    uint64_t t0 = 1000000ULL;
+    engine.onIncident(PacingGroup::TerminalUinput, IncidentType::PacingStarvation, t0);
+    engine.onIncident(PacingGroup::TerminalUinput, IncidentType::PacingStarvation, t0 + 10000ULL);
+    EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).post_delay_ms, 20u);
+
+    // high rtt (25ms) indicates ongoing system load
+    engine.recordRtt(PacingGroup::TerminalUinput, 25000ULL);
+
+    // 5 transactions must NOT decay under high rtt
+    for (int i = 0; i < 5; ++i) {
+        engine.onTransactionSuccess(PacingGroup::TerminalUinput);
+    }
+    EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).post_delay_ms, 20u);
+
+    // only after 20 clean transactions does it decay by 1ms
+    for (int i = 0; i < 15; ++i) {
+        engine.onTransactionSuccess(PacingGroup::TerminalUinput);
+    }
+    EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).post_delay_ms, 19u);
 }

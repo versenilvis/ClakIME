@@ -152,14 +152,22 @@ void AdaptivePacingEngine::onTransactionSuccess(PacingGroup group) {
     }
     g.metrics.consecutive_clean_words++;
 
-    // slow decay towards floor
-    if (g.metrics.consecutive_clean_words >= kDecayWordThreshold) {
+    // fast decay when roundtrip ipc latency has returned to floor levels
+    // if rtt is confirmed low, decay 2ms every 5 clean words
+    // otherwise decay conservatively 1ms every 20 clean words
+    bool rtt_healthy = (g.metrics.smoothed_rtt_ms <= std::max(g.metrics.floor_post_ms, 15u));
+    uint32_t decay_threshold = rtt_healthy ? kFastDecayWordThreshold : kConservativeDecayWordThreshold;
+    uint32_t step = rtt_healthy ? kFastDecayStepMs : kConservativeDecayStepMs;
+
+    if (g.metrics.consecutive_clean_words >= decay_threshold) {
         g.metrics.consecutive_clean_words = 0;
         if (g.metrics.post_delay_ms > g.metrics.floor_post_ms) {
-            g.metrics.post_delay_ms -= 1;
+            uint32_t delta = g.metrics.post_delay_ms - g.metrics.floor_post_ms;
+            g.metrics.post_delay_ms -= std::min(step, delta);
         }
         if (g.metrics.gap_ms > g.metrics.floor_gap_ms) {
-            g.metrics.gap_ms -= 1;
+            uint32_t delta = g.metrics.gap_ms - g.metrics.floor_gap_ms;
+            g.metrics.gap_ms -= std::min(step, delta);
         }
         if (g.metrics.commit_delay_ms > 0 && g.metrics.smoothed_rtt_ms < 20) {
             g.metrics.commit_delay_ms -= 1;
@@ -182,15 +190,15 @@ void AdaptivePacingEngine::recordRtt(PacingGroup group, uint64_t rtt_us) {
         g.metrics.smoothed_rtt_ms = (g.metrics.smoothed_rtt_ms * 7 + rtt_ms * 3) / 10;
     }
 
-    // dynamic auto pacing for web rich text and heavy apps
-    if (group == PacingGroup::WebDraftJs || group == PacingGroup::HeavyApp) {
-        if (g.metrics.smoothed_rtt_ms > g.metrics.floor_post_ms) {
-            uint32_t target_post = std::min(g.metrics.ceiling_post_ms, g.metrics.smoothed_rtt_ms);
-            if (target_post > g.metrics.post_delay_ms) {
-                g.metrics.post_delay_ms = target_post;
-            }
+    // dynamic auto pacing based on observed rtt
+    if (g.metrics.smoothed_rtt_ms > g.metrics.floor_post_ms) {
+        uint32_t target_post = std::min(g.metrics.ceiling_post_ms, g.metrics.smoothed_rtt_ms);
+        if (target_post > g.metrics.post_delay_ms) {
+            g.metrics.post_delay_ms = target_post;
         }
+    }
 
+    if (group == PacingGroup::WebDraftJs || group == PacingGroup::HeavyApp) {
         if (g.metrics.smoothed_rtt_ms >= 20) {
             g.metrics.commit_delay_ms = std::min(20u, std::max(10u, g.metrics.smoothed_rtt_ms / 2));
         } else {
