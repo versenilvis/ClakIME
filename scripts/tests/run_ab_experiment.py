@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Lưu ý: Nếu script bị SIGKILL (kill -9), chạy 'hyprctl reload' để khôi phục cấu hình repeat_rate của bàn phím.
 import os
 import sys
 import time
@@ -6,6 +7,50 @@ import json
 import subprocess
 import argparse
 import difflib
+import atexit
+import signal
+
+class HyprlandRepeatGuard:
+    def __init__(self):
+        self.orig_rate = None
+        self.orig_delay = None
+
+    def query(self, option):
+        try:
+            res = subprocess.run(["hyprctl", "getoption", f"input:{option}", "-j"], capture_output=True, text=True)
+            if res.returncode == 0:
+                data = json.loads(res.stdout)
+                return data.get("int", None)
+        except Exception:
+            pass
+        return None
+
+    def disable(self):
+        if self.orig_rate is None:
+            self.orig_rate = self.query("repeat_rate")
+        if self.orig_delay is None:
+            self.orig_delay = self.query("repeat_delay")
+        subprocess.run(["hyprctl", "repl", "hl.config({ input = { repeat_rate = 0 } })"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        rate = self.query("repeat_rate")
+        return rate == 0
+
+    def restore(self):
+        if self.orig_rate is not None:
+            subprocess.run(["hyprctl", "repl", f"hl.config({{ input = {{ repeat_rate = {self.orig_rate} }} }})"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.orig_rate = None
+        if self.orig_delay is not None:
+            subprocess.run(["hyprctl", "repl", f"hl.config({{ input = {{ repeat_delay = {self.orig_delay} }} }})"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.orig_delay = None
+
+repeat_guard = HyprlandRepeatGuard()
+atexit.register(repeat_guard.restore)
+
+def _sig_handler(sig, frame):
+    repeat_guard.restore()
+    sys.exit(128 + sig)
+
+signal.signal(signal.SIGINT, _sig_handler)
+signal.signal(signal.SIGTERM, _sig_handler)
 
 RAW_TEXT = "ddaay buoori sangs treen ddirnh nuis cao mang laij mootj carm giacs thaatj suwj thanh tharn vaf tuyeetj vowfi. nhuwxng tia nawngs vowis khoong gian roojng lowsn chieeus roji xuoongs khawps cais thung lungx, noowi cos nhuwxng tharm cor xanh mown mowrn vaf dofng suoosi nhor luowjn uoosn quanh qua tuwfng khe ddas. con nguwowfi noowi ddaay luoon chawm chir, kieen trif gawsn bos vowis ruoojng ddoofng, giuwx gifn truyeefn thoongs vawn hoas ddaamj ddaf barn sawsc cuar toor tieen. booj gox tieengs vieetj clak hoatj ddoojng voo cufng muowjt maf, pharn hoofi nhanh chongs vaf chinhs xacs treen cais mooi truwowfng terminal cuar heej ddieefu hanhf linux. duf laf vieest mootj ddoanj vawn hay laapj trinhf phaafn meefm phuwsc tapj, trari nghieemj gox phims luoon muowjt maf vaf ddem laij suwj thoari mais tuyeetj ddoosi cho nguwowif suwr dujng."
 
@@ -177,14 +222,14 @@ def run_single_trial(mode, load_type, gap_ms, cpu_quota=25):
             time.sleep(0.5)
             continue
 
-        subprocess.run(["hyprctl", "repl", "hl.config({ input = { repeat_delay = 1000 } })"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        repeat_guard.disable()
         try:
             subprocess.run(["wtype", "-d", str(gap_ms), RAW_TEXT], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             time.sleep(0.8)
             subprocess.run(["wtype", "-M", "ctrl", "-k", "d", "-m", "ctrl"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             time.sleep(0.4)
         finally:
-            subprocess.run(["hyprctl", "repl", "hl.config({ input = { repeat_delay = 150 } })"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            repeat_guard.restore()
 
         if proc:
             try:

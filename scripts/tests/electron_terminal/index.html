@@ -26,9 +26,44 @@
         const urlParams = new URLSearchParams(window.location.search);
         const outputFile = urlParams.get('out') || '/tmp/electron_term.txt';
         const lagMs = parseInt(urlParams.get('lag') || '0', 10);
+        const lagEventsStr = urlParams.get('lagEvents') || '';
+        const lagEvents = [];
+        if (lagEventsStr) {
+            lagEventsStr.split(',').forEach(pair => {
+                const parts = pair.split(':');
+                if (parts.length === 2) {
+                    const idx = parseInt(parts[0], 10);
+                    const dur = parseInt(parts[1], 10);
+                    if (!isNaN(idx) && !isNaN(dur)) {
+                        lagEvents.push({ idx: idx, dur: dur, fired: false, stopped: false });
+                    }
+                }
+            });
+            lagEvents.sort((a, b) => a.idx - b.idx);
+        }
+
+        function signalBurstGroup(sig) {
+            try {
+                if (!fs.existsSync('/tmp/clak_burst_pgids.txt')) return false;
+                const content = fs.readFileSync('/tmp/clak_burst_pgids.txt', 'utf8').trim();
+                if (!content) return false;
+                for (const line of content.split(/\s+/)) {
+                    const pgid = parseInt(line, 10);
+                    if (!isNaN(pgid) && pgid > 0) {
+                        try { process.kill(-pgid, sig); } catch (e) {}
+                    }
+                }
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        let totalCharsReceived = 0;
         try { fs.writeFileSync(outputFile, ''); } catch (e) {}
 
         function flushBufferLines() {
+            signalBurstGroup('SIGSTOP');
             try {
                 let lines = [];
                 for (let i = 0; i < term.buffer.active.length; i++) {
@@ -45,6 +80,24 @@
         }
 
         term.onData(data => {
+            totalCharsReceived += data.length;
+            const hasBurstFile = fs.existsSync('/tmp/clak_burst_pgids.txt');
+            for (const ev of lagEvents) {
+                if (!ev.fired && totalCharsReceived >= ev.idx) {
+                    ev.fired = true;
+                    if (hasBurstFile) {
+                        signalBurstGroup('SIGCONT');
+                    } else {
+                        const end = performance.now() + ev.dur;
+                        while (performance.now() < end) {}
+                    }
+                    break;
+                }
+                if (hasBurstFile && ev.fired && !ev.stopped && totalCharsReceived >= ev.idx + ev.dur) {
+                    ev.stopped = true;
+                    signalBurstGroup('SIGSTOP');
+                }
+            }
             if (lagMs > 0) {
                 const end = performance.now() + lagMs;
                 while (performance.now() < end) {}

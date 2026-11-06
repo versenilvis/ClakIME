@@ -4,9 +4,10 @@ import signal
 import sys
 import time
 
-def worker(stop_flag):
+def worker(stop_flag, nice_val):
     try:
-        os.nice(10)
+        if nice_val != 0:
+            os.nice(nice_val)
     except Exception:
         pass
     while not stop_flag.value:
@@ -14,8 +15,9 @@ def worker(stop_flag):
 
 if __name__ == "__main__":
     cores = os.cpu_count() or 4
+    nice_val = int(sys.argv[2]) if len(sys.argv) > 2 else 10
     stop_flag = multiprocessing.Value("b", False)
-    procs = [multiprocessing.Process(target=worker, args=(stop_flag,)) for _ in range(cores)]
+    procs = [multiprocessing.Process(target=worker, args=(stop_flag, nice_val)) for _ in range(cores)]
     for p in procs:
         p.start()
 
