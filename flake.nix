@@ -47,6 +47,7 @@
                 fcitx5
                 libinput
                 systemd
+                xorg.libxcb
               ];
 
               cmakeFlags = [
@@ -76,6 +77,7 @@
               fcitx5
               libinput
               systemd
+              xorg.libxcb
               rustc
               cargo
               rustfmt

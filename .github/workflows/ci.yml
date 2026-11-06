@@ -108,7 +108,7 @@ jobs:
                 build-essential cmake ninja-build extra-cmake-modules pkg-config \
                 libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev \
                 fcitx5 fcitx5-modules \
-                libinput-dev libudev-dev curl git libgtest-dev
+                libinput-dev libudev-dev libxcb1-dev curl git libgtest-dev
               curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
               echo "$HOME/.cargo/bin" >> $GITHUB_PATH
               export PATH="$HOME/.cargo/bin:$PATH"
@@ -120,7 +120,7 @@ jobs:
             setup: |
               dnf install -y \
                 gcc-c++ cmake ninja-build extra-cmake-modules fcitx5 fcitx5-devel \
-                libinput-devel systemd-devel pkgconfig curl git gtest-devel
+                libinput-devel systemd-devel libxcb-devel pkgconfig curl git gtest-devel
               curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
               echo "$HOME/.cargo/bin" >> $GITHUB_PATH
               export PATH="$HOME/.cargo/bin:$PATH"

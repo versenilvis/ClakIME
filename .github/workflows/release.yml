@@ -33,6 +33,7 @@ jobs:
             libfcitx5utils-dev \
             libinput-dev \
             libudev-dev \
+            libxcb1-dev \
             libxkbcommon-dev \
             libfontconfig1-dev \
             pkg-config \
