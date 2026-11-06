@@ -12,6 +12,7 @@ void logRttCsv(uint64_t rtt_us, double delta_ms, const std::string& frontend,
                const std::string& group, const std::string& app, const std::string& action);
 void setLogEnabled(bool enabled);
 bool isLogEnabled();
+const char* clakGetEnv(const char* key);
 
 } // namespace utils
 } // namespace clak

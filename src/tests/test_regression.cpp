@@ -591,6 +591,7 @@ TEST_F(RegressionCorpusTest, test_regression_twitter_delete_all_and_retype) {
 }
 
 TEST_F(RegressionCorpusTest, test_regression_unknown_site_draftjs_auto_detect) {
+    setenv("CLAK_ADAPTIVE", "1", 1);
     // unknown domain not in hardcoded list
     platform::setMockActiveWindow(platform::WindowInfo{"google-chrome", "Some React App - random-site.org", 1234});
     MockInputContext ic(instance_->inputContextManager(), "google-chrome");
@@ -609,21 +610,33 @@ TEST_F(RegressionCorpusTest, test_regression_unknown_site_draftjs_auto_detect) {
     // initially not draftjs
     EXPECT_FALSE(state->isDraftJsEditor());
 
-    // type 'd' then 'd'
+    // 1st mismatch: must NOT switch to WebDraftJs on a single lagging event
     ic.setSurrounding("", 0, 0);
     ic.typeChar('d', state);
-
-    // 2nd 'd' tries surrounding delete
     ic.setSurrounding("d", 1, 1);
     ic.typeChar('d', state);
     EXPECT_FALSE(ic.deletions.empty());
-
-    // react dom ignored the delete, so surrounding text became "dđ" instead of "đ"
     ic.setSurrounding("dđ", 2, 2);
-    // next keystroke verifies surrounding and detects ignored delete
+    ic.typeChar(' ', state);
+    EXPECT_FALSE(state->isDraftJsEditor());
+
+    // 2nd mismatch: still must NOT switch to WebDraftJs
+    ic.setSurrounding("", 0, 0);
+    ic.typeChar('d', state);
+    ic.setSurrounding("d", 1, 1);
+    ic.typeChar('d', state);
+    ic.setSurrounding("dđ", 2, 2);
+    ic.typeChar(' ', state);
+    EXPECT_FALSE(state->isDraftJsEditor());
+
+    // 3rd consecutive mismatch: now switches to WebDraftJs
+    ic.setSurrounding("", 0, 0);
+    ic.typeChar('d', state);
+    ic.setSurrounding("d", 1, 1);
+    ic.typeChar('d', state);
+    ic.setSurrounding("dđ", 2, 2);
     ic.typeChar('d', state);
 
-    // verify that draftjs was immediately auto-detected
     EXPECT_TRUE(state->isDraftJsEditor());
     EXPECT_TRUE(state->isRichTextEditor());
 
@@ -631,6 +644,14 @@ TEST_F(RegressionCorpusTest, test_regression_unknown_site_draftjs_auto_detect) {
     EXPECT_GT(uinput_calls, 0);
     EXPECT_GE(last_post_delay, config::kDraftJsPostDelayMs);
     EXPECT_GE(last_gap_ms, config::kDraftJsGapMs);
+
+    // focus change (onDeactivate) must reset WebDraftJs classification
+    ic.sendCleanBackspace(state);
+    ic.sendCleanBackspace(state);
+    state->onDeactivate();
+    EXPECT_FALSE(state->isDraftJsEditor());
+    EXPECT_FALSE(state->isRichTextEditor());
+    unsetenv("CLAK_ADAPTIVE");
 }
 
 TEST_F(RegressionCorpusTest, test_regression_backspace_hold_continues_deleting_when_composing_empties) {
@@ -719,9 +740,9 @@ TEST_F(RegressionCorpusTest, test_regression_zero_cursor_surrounding_never_crash
     EXPECT_EQ(uinput_bs_sent, 2);
     EXPECT_TRUE(state->isDeleting());
 
-    // Must automatically flag editor as DraftJS/RichText
-    EXPECT_TRUE(state->isDraftJsEditor());
-    EXPECT_TRUE(state->isRichTextEditor());
+    // 1st underflow event must NOT flag editor as DraftJS yet (requires 3 consecutive events)
+    EXPECT_FALSE(state->isDraftJsEditor());
+    EXPECT_FALSE(state->isRichTextEditor());
 
     // Send backspaces to finish deletion and commit 'đ'
     ic.sendCleanBackspace(state);
@@ -730,6 +751,32 @@ TEST_F(RegressionCorpusTest, test_regression_zero_cursor_surrounding_never_crash
     EXPECT_FALSE(state->isDeleting());
     ASSERT_FALSE(ic.commits.empty());
     EXPECT_EQ(ic.commits.back(), "đ");
+
+    // 2nd underflow event: still not DraftJS
+    ic.typeChar(' ', state);
+    ic.setSurrounding("\n", 0, 0);
+    ic.typeChar('d', state);
+    ic.setSurrounding("\n", 0, 0);
+    ic.typeChar('d', state);
+    EXPECT_FALSE(state->isDraftJsEditor());
+    ic.sendCleanBackspace(state);
+    ic.sendCleanBackspace(state);
+
+    // 3rd consecutive underflow event: now flagged as DraftJS/RichText
+    ic.typeChar(' ', state);
+    ic.setSurrounding("\n", 0, 0);
+    ic.typeChar('d', state);
+    ic.setSurrounding("\n", 0, 0);
+    ic.typeChar('d', state);
+    EXPECT_TRUE(state->isDraftJsEditor());
+    EXPECT_TRUE(state->isRichTextEditor());
+    ic.sendCleanBackspace(state);
+    ic.sendCleanBackspace(state);
+
+    // Focus switch resets DraftJS flag
+    state->onDeactivate();
+    EXPECT_FALSE(state->isDraftJsEditor());
+    EXPECT_FALSE(state->isRichTextEditor());
 }
 
 TEST_F(RegressionCorpusTest, test_regression_twitter_draftjs_newline_proactive_detection) {
@@ -1241,6 +1288,7 @@ TEST_F(RegressionCorpusTest, test_regression_buffered_forward_key_batches_with_p
 }
 
 TEST_F(RegressionCorpusTest, test_regression_tiktok_uses_uinput_with_draftjs_pacing) {
+    setenv("CLAK_ADAPTIVE", "1", 1);
     // tiktok comment box uses react contenteditable where surrounding text freezes at cursor 0
     // clak must use uinput with draftjs pacing to ensure reliable deletions without compositor crash or key swallowing
     platform::setMockActiveWindow(platform::WindowInfo{"helium", "tiktok.com", 1234});
@@ -1289,9 +1337,11 @@ TEST_F(RegressionCorpusTest, test_regression_tiktok_uses_uinput_with_draftjs_pac
     EXPECT_FALSE(state->isDeleting());
     ASSERT_FALSE(ic.commits.empty());
     EXPECT_EQ(ic.commits.back(), "đ");
+    unsetenv("CLAK_ADAPTIVE");
 }
 
 TEST_F(RegressionCorpusTest, test_regression_claude_ai_search_bar_uses_uinput_with_draftjs_pacing) {
+    setenv("CLAK_ADAPTIVE", "1", 1);
     // claude search bar is single-line and behaves like draftjs controlled input
     platform::setMockActiveWindow(platform::WindowInfo{"helium", "claude.ai", 1234});
     MockInputContext ic(instance_->inputContextManager(), "helium");
@@ -1331,6 +1381,7 @@ TEST_F(RegressionCorpusTest, test_regression_claude_ai_search_bar_uses_uinput_wi
     ic.sendCleanBackspace(state);
     EXPECT_FALSE(state->isDeleting());
     EXPECT_EQ(ic.commits.back(), "ộ");
+    unsetenv("CLAK_ADAPTIVE");
 }
 
 TEST_F(RegressionCorpusTest, test_regression_claude_ai_chat_bar_uses_surrounding_text) {

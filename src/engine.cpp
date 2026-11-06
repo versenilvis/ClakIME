@@ -90,8 +90,14 @@ void ClakEngine::loadConfig() {
         if (!env) {
             utils::setLogEnabled(debug_log);
         }
+        bool is_adaptive_env = (utils::clakGetEnv("CLAK_ADAPTIVE") &&
+                                std::string(utils::clakGetEnv("CLAK_ADAPTIVE")) == "1" &&
+                                !utils::clakGetEnv("CLAK_SIMPLE_BACKOFF"));
+        std::string pacing_mode = utils::clakGetEnv("CLAK_FIXED_DELAY_MS") ? "fixed" :
+                                  (!is_adaptive_env ? "fixed_13_backoff" : "adaptive");
         utils::clakLog("config loaded: version=" + std::to_string(config_version_) +
-                       " startup=" + (global_enabled_ ? "vietnamese" : "english"));
+                       " startup=" + (global_enabled_ ? "vietnamese" : "english") +
+                       " mode=" + pacing_mode);
     }
 }
 
@@ -203,6 +209,7 @@ void ClakEngine::deactivate(const fcitx::InputMethodEntry& entry, fcitx::InputCo
     auto* state = ic ? ic->propertyFor(&factory_) : nullptr;
     if (state) {
         state->cancelRepeat();
+        state->onDeactivate();
     }
 }
 

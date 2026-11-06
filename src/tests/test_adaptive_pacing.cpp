@@ -1,9 +1,21 @@
 #include <gtest/gtest.h>
+#include <cstdlib>
 #include "ime/adaptive_pacing.h"
 
 using namespace clak::pacing;
 
-TEST(AdaptivePacingTest, InitialMetricsAndFloors) {
+class AdaptivePacingTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        setenv("CLAK_ADAPTIVE", "1", 1);
+        unsetenv("CLAK_SIMPLE_BACKOFF");
+    }
+    void TearDown() override {
+        unsetenv("CLAK_ADAPTIVE");
+    }
+};
+
+TEST_F(AdaptivePacingTest, InitialMetricsAndFloors) {
     AdaptivePacingEngine engine;
     EXPECT_TRUE(engine.isEnabled());
 
@@ -22,7 +34,7 @@ TEST(AdaptivePacingTest, InitialMetricsAndFloors) {
     EXPECT_EQ(heavy.gap_ms, 4u);
 }
 
-TEST(AdaptivePacingTest, AdditiveIncreaseOnStarvation) {
+TEST_F(AdaptivePacingTest, AdditiveIncreaseOnStarvation) {
     AdaptivePacingEngine engine;
     uint64_t t0 = 1000000ULL;
 
@@ -39,7 +51,7 @@ TEST(AdaptivePacingTest, AdditiveIncreaseOnStarvation) {
     EXPECT_EQ(m.gap_ms, 12u);
 }
 
-TEST(AdaptivePacingTest, FilterKeyCollisionAndDeliberateTimeouts) {
+TEST_F(AdaptivePacingTest, FilterKeyCollisionAndDeliberateTimeouts) {
     AdaptivePacingEngine engine;
     uint64_t t0 = 1000000ULL;
 
@@ -57,7 +69,7 @@ TEST(AdaptivePacingTest, FilterKeyCollisionAndDeliberateTimeouts) {
     EXPECT_EQ(m.gap_ms, 8u);
 }
 
-TEST(AdaptivePacingTest, SlowDecayTowardsFloor) {
+TEST_F(AdaptivePacingTest, SlowDecayTowardsFloor) {
     AdaptivePacingEngine engine;
     uint64_t t0 = 1000000ULL;
 
@@ -94,7 +106,7 @@ TEST(AdaptivePacingTest, SlowDecayTowardsFloor) {
     EXPECT_EQ(m.gap_ms, 0u);
 }
 
-TEST(AdaptivePacingTest, CeilingClamp) {
+TEST_F(AdaptivePacingTest, CeilingClamp) {
     AdaptivePacingEngine engine;
     uint64_t t0 = 1000000ULL;
 
@@ -107,7 +119,7 @@ TEST(AdaptivePacingTest, CeilingClamp) {
     EXPECT_EQ(m.gap_ms, 20u);
 }
 
-TEST(AdaptivePacingTest, Classification) {
+TEST_F(AdaptivePacingTest, Classification) {
     EXPECT_EQ(AdaptivePacingEngine::classify("x-terminal-emulator", "", false), PacingGroup::TerminalUinput);
     EXPECT_EQ(AdaptivePacingEngine::classify("kitty", "", false), PacingGroup::TerminalUinput);
     EXPECT_EQ(AdaptivePacingEngine::classify("alacritty", "", false), PacingGroup::TerminalUinput);
@@ -124,7 +136,7 @@ TEST(AdaptivePacingTest, Classification) {
     EXPECT_EQ(AdaptivePacingEngine::classify("electron-xterm", "clak_electron_xterm", false), PacingGroup::TerminalUinput);
 }
 
-TEST(AdaptivePacingTest, SubFrameMismatchIgnored) {
+TEST_F(AdaptivePacingTest, SubFrameMismatchIgnored) {
     AdaptivePacingEngine engine;
     uint64_t t0 = 1000000ULL;
 
@@ -141,7 +153,7 @@ TEST(AdaptivePacingTest, SubFrameMismatchIgnored) {
     EXPECT_EQ(m.gap_ms, 10u);
 }
 
-TEST(AdaptivePacingTest, EventLoopTimerDriftCompensation) {
+TEST_F(AdaptivePacingTest, EventLoopTimerDriftCompensation) {
     AdaptivePacingEngine engine;
 
     // drift < 5ms ignored
@@ -163,7 +175,7 @@ TEST(AdaptivePacingTest, EventLoopTimerDriftCompensation) {
     EXPECT_EQ(engine.driftCompensation(PacingGroup::WebDraftJs), 14u);
 }
 
-TEST(AdaptivePacingTest, DynamicRttAutoPacing) {
+TEST_F(AdaptivePacingTest, DynamicRttAutoPacing) {
     AdaptivePacingEngine engine;
 
     // fast rtt keeps default delay and zero commit settle window
@@ -181,7 +193,7 @@ TEST(AdaptivePacingTest, DynamicRttAutoPacing) {
     EXPECT_GE(engine.commitCompensation(PacingGroup::WebDraftJs), 10u);
 }
 
-TEST(AdaptivePacingTest, CalculatePreDelayWithinPostCommitWindow) {
+TEST_F(AdaptivePacingTest, CalculatePreDelayWithinPostCommitWindow) {
     AdaptivePacingEngine engine;
     uint64_t t_commit = 5000000ULL;
 
@@ -199,7 +211,7 @@ TEST(AdaptivePacingTest, CalculatePreDelayWithinPostCommitWindow) {
     EXPECT_EQ(engine.calculatePreDelay(PacingGroup::TerminalUinput, t_commit, t_commit + 15000ULL), 0u);
 }
 
-TEST(AdaptivePacingTest, ConfigureGroupZeroFloorAppliesImmediately) {
+TEST_F(AdaptivePacingTest, ConfigureGroupZeroFloorAppliesImmediately) {
     AdaptivePacingEngine engine;
     EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).post_delay_ms, 12u);
     EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).gap_ms, 3u);
@@ -211,7 +223,7 @@ TEST(AdaptivePacingTest, ConfigureGroupZeroFloorAppliesImmediately) {
     EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).floor_gap_ms, 0u);
 }
 
-TEST(AdaptivePacingTest, FastDecayWhenRttLow) {
+TEST_F(AdaptivePacingTest, FastDecayWhenRttLow) {
     AdaptivePacingEngine engine;
     uint64_t t0 = 1000000ULL;
     // baseline idle rtt
@@ -238,7 +250,7 @@ TEST(AdaptivePacingTest, FastDecayWhenRttLow) {
     EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).post_delay_ms, 18u);
 }
 
-TEST(AdaptivePacingTest, ConservativeDecayWhenRttHigh) {
+TEST_F(AdaptivePacingTest, ConservativeDecayWhenRttHigh) {
     AdaptivePacingEngine engine;
     uint64_t t0 = 1000000ULL;
     // record baseline idle rtt (2ms) across multiple samples
@@ -265,7 +277,7 @@ TEST(AdaptivePacingTest, ConservativeDecayWhenRttHigh) {
     EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).post_delay_ms, 19u);
 }
 
-TEST(AdaptivePacingTest, FastOutlierDoesNotPolluteP10Baseline) {
+TEST_F(AdaptivePacingTest, FastOutlierDoesNotPolluteP10Baseline) {
     AdaptivePacingEngine engine;
     // normal samples around 10ms
     for (int i = 0; i < 20; ++i) {
@@ -278,7 +290,7 @@ TEST(AdaptivePacingTest, FastOutlierDoesNotPolluteP10Baseline) {
     EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).min_rtt_ms, 10u);
 }
 
-TEST(AdaptivePacingTest, ProlongedHighRttDoesNotInflateBaselineOrTriggerPrematureDecay) {
+TEST_F(AdaptivePacingTest, ProlongedHighRttDoesNotInflateBaselineOrTriggerPrematureDecay) {
     AdaptivePacingEngine engine;
     uint64_t t0 = 1000000ULL;
     // initial idle baseline of 2ms
@@ -304,7 +316,7 @@ TEST(AdaptivePacingTest, ProlongedHighRttDoesNotInflateBaselineOrTriggerPrematur
     EXPECT_GT(engine.metrics(PacingGroup::TerminalUinput).post_delay_ms, engine.metrics(PacingGroup::TerminalUinput).floor_post_ms);
 }
 
-TEST(AdaptivePacingTest, SsthreshPreventsPrematureDecayAtHighDelay) {
+TEST_F(AdaptivePacingTest, SsthreshPreventsPrematureDecayAtHighDelay) {
     AdaptivePacingEngine engine;
     uint64_t t0 = 1000000ULL;
     for (int i = 0; i < 10; ++i) {
@@ -332,7 +344,7 @@ TEST(AdaptivePacingTest, SsthreshPreventsPrematureDecayAtHighDelay) {
     EXPECT_EQ(engine.metrics(PacingGroup::WebDraftJs).post_delay_ms, 26u);
 }
 
-TEST(AdaptivePacingTest, TcpStyleSsthreshDecayAndRelaxation) {
+TEST_F(AdaptivePacingTest, TcpStyleSsthreshDecayAndRelaxation) {
     AdaptivePacingEngine engine;
     uint64_t t0 = 1000000ULL;
     // baseline idle rtt (2ms)
@@ -369,4 +381,32 @@ TEST(AdaptivePacingTest, TcpStyleSsthreshDecayAndRelaxation) {
     engine.onIncident(PacingGroup::WebDraftJs, IncidentType::PacingStarvation, t0 + 5000000ULL);
     EXPECT_EQ(engine.metrics(PacingGroup::WebDraftJs).post_delay_ms, 21u);
     EXPECT_EQ(engine.metrics(PacingGroup::WebDraftJs).ssthresh_post_ms, 19u);
+}
+
+TEST(SimpleBackoffDefaultTest, DefaultModeUsesFixed13WithBackoffAndDecay) {
+    unsetenv("CLAK_ADAPTIVE");
+    unsetenv("CLAK_SIMPLE_BACKOFF");
+    AdaptivePacingEngine engine;
+
+    for (auto grp : {PacingGroup::WebDraftJs, PacingGroup::TerminalUinput, PacingGroup::HeavyApp, PacingGroup::Default}) {
+        auto m = engine.metrics(grp);
+        EXPECT_EQ(m.post_delay_ms, 13u);
+        EXPECT_EQ(m.gap_ms, 2u);
+        EXPECT_EQ(m.floor_post_ms, 13u);
+        EXPECT_EQ(m.ceiling_post_ms, 30u);
+        EXPECT_EQ(engine.calculatePreDelay(grp, 1000000ULL, 1010000ULL), 13u);
+    }
+
+    // incident jumps to 30ms / 4ms
+    engine.onIncident(PacingGroup::Default, IncidentType::PacingStarvation, 1000000ULL);
+    EXPECT_EQ(engine.metrics(PacingGroup::Default).post_delay_ms, 30u);
+    EXPECT_EQ(engine.metrics(PacingGroup::Default).gap_ms, 4u);
+    EXPECT_EQ(engine.calculatePreDelay(PacingGroup::Default, 1000000ULL, 1010000ULL), 30u);
+
+    // 20 clean words decay by 1ms
+    for (int i = 0; i < 20; ++i) {
+        engine.onTransactionSuccess(PacingGroup::Default);
+    }
+    EXPECT_EQ(engine.metrics(PacingGroup::Default).post_delay_ms, 29u);
+    EXPECT_EQ(engine.metrics(PacingGroup::Default).gap_ms, 3u);
 }

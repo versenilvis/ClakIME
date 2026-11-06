@@ -153,9 +153,24 @@ bool UinputTool::send_backspace_direct(size_t count, uint32_t post_delay_ms, uin
     }
 
     // paced uinput worker thread prevents blocking fcitx event loop
-    std::thread([this, count, post_delay_ms, pre_delay_ms, gap_ms, hold_us]() {
+    uint64_t batch_id = active_batch_id_.fetch_add(1, std::memory_order_acq_rel) + 1;
+    emitted_in_batch_.store(0, std::memory_order_release);
+    uint64_t dispatch_start_us = monotonic_now_us();
+
+    std::thread([this, count, post_delay_ms, pre_delay_ms, gap_ms, hold_us, batch_id, dispatch_start_us]() {
+        auto is_cancelled = [this, batch_id, dispatch_start_us]() -> bool {
+            if (cancelled_batch_id_.load(std::memory_order_acquire) >= batch_id) {
+                return true;
+            }
+            if (monotonic_now_us() - dispatch_start_us > 800000ULL) {
+                return true;
+            }
+            return false;
+        };
+
         if (pre_delay_ms > 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(pre_delay_ms));
+            if (is_cancelled()) return;
         }
 
         auto emit_bs = [this, hold_us]() {
@@ -186,10 +201,12 @@ bool UinputTool::send_backspace_direct(size_t count, uint32_t post_delay_ms, uin
                     utils::clakLog("ERROR: uinput write failed: errno=" + std::to_string(err) + " (" + strerror(err) + ")");
                 }
             }
+            emitted_in_batch_.fetch_add(1, std::memory_order_acq_rel);
         };
 
         // send deletion backspaces before the sentinel
         if (gap_ms == 0 && hold_us == 0 && count > 1) {
+            if (is_cancelled()) return;
             std::lock_guard<std::mutex> lock(uinput_mutex_);
             if (direct_fd_ >= 0) {
                 std::vector<struct input_event> evs;
@@ -201,9 +218,11 @@ bool UinputTool::send_backspace_direct(size_t count, uint32_t post_delay_ms, uin
                     evs.push_back({ {}, EV_SYN, SYN_REPORT, 0 });
                 }
                 (void)write(direct_fd_, evs.data(), evs.size() * sizeof(struct input_event));
+                emitted_in_batch_.fetch_add(count - 1, std::memory_order_acq_rel);
             }
         } else {
             for (size_t i = 0; i < count - 1; ++i) {
+                if (is_cancelled()) return;
                 emit_bs();
                 if (gap_ms > 0 && i + 1 < count - 1) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(gap_ms));
@@ -214,6 +233,7 @@ bool UinputTool::send_backspace_direct(size_t count, uint32_t post_delay_ms, uin
         // wait for target app to finish deletion before dispatching sentinel
         if (post_delay_ms > 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(post_delay_ms));
+            if (is_cancelled()) return;
         }
 
         // record sentinel emission time immediately before dispatching sentinel

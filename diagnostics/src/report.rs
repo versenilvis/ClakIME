@@ -416,6 +416,7 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
     };
     out.push_str(&format!("- Uptime bộ đếm Fcitx5: {}\n", uptime_str));
     out.push_str(&format!("- Giao thức kết nối: {}\n", report.telemetry.connected_protocol));
+    out.push_str(&format!("- Chế độ Pacing đang chạy: `{}`\n", report.telemetry.active_pacing_mode));
     out.push_str(&format!(
         "- Tổng thao tác gõ: {} REPLACE, {} FORWARD\n\n",
         report.telemetry.replace_count, report.telemetry.forward_count

@@ -11,14 +11,32 @@
 namespace clak {
 namespace pacing {
 
+namespace {
+bool isAdaptiveMode() {
+    const char* env = utils::clakGetEnv("CLAK_ADAPTIVE");
+    return env && std::string(env) == "1" && !utils::clakGetEnv("CLAK_SIMPLE_BACKOFF");
+}
+
+bool isSimpleBackoffMode() {
+    return !isAdaptiveMode();
+}
+} // namespace
+
 AdaptivePacingEngine::AdaptivePacingEngine(bool enabled)
     : enabled_(enabled) {
-    web_draftjs_.metrics = {16, 8, 10, 40, 4, 20, 0, 0, 0, 0, 8, 30, config::kDefaultUinputHoldUs, 10, 0};
-    terminal_uinput_.metrics = {12, 3, 0, 30, 0, 10, 0, 0, 0, 0, 0, 0, config::kDefaultUinputHoldUs, 0, 0};
-    heavy_app_.metrics = {15, 4, 8, 35, 3, 12, 0, 0, 0, 0, 8, 30, config::kDefaultUinputHoldUs, 8, 0};
-    default_group_.metrics = {8, 2, 4, 30, 2, 10, 0, 0, 0, 0, 8, 30, config::kDefaultUinputHoldUs, 4, 0};
+    if (isSimpleBackoffMode()) {
+        web_draftjs_.metrics = {13, 2, 13, 30, 2, 4, 0, 0, 0, 0, 13, 30, config::kDefaultUinputHoldUs, 13, 0};
+        terminal_uinput_.metrics = {13, 2, 13, 30, 2, 4, 0, 0, 0, 0, 13, 30, config::kDefaultUinputHoldUs, 13, 0};
+        heavy_app_.metrics = {13, 2, 13, 30, 2, 4, 0, 0, 0, 0, 13, 30, config::kDefaultUinputHoldUs, 13, 0};
+        default_group_.metrics = {13, 2, 13, 30, 2, 4, 0, 0, 0, 0, 13, 30, config::kDefaultUinputHoldUs, 13, 0};
+    } else {
+        web_draftjs_.metrics = {16, 8, 10, 40, 4, 20, 0, 0, 0, 0, 8, 30, config::kDefaultUinputHoldUs, 10, 0};
+        terminal_uinput_.metrics = {12, 3, 0, 30, 0, 10, 0, 0, 0, 0, 0, 0, config::kDefaultUinputHoldUs, 0, 0};
+        heavy_app_.metrics = {15, 4, 8, 35, 3, 12, 0, 0, 0, 0, 8, 30, config::kDefaultUinputHoldUs, 8, 0};
+        default_group_.metrics = {8, 2, 4, 30, 2, 10, 0, 0, 0, 0, 8, 30, config::kDefaultUinputHoldUs, 4, 0};
+    }
 
-    const char* env_hold = std::getenv("CLAK_UINPUT_HOLD_US");
+    const char* env_hold = utils::clakGetEnv("CLAK_UINPUT_HOLD_US");
     if (env_hold) {
         try {
             uint32_t h = static_cast<uint32_t>(std::stoul(env_hold));
@@ -29,7 +47,7 @@ AdaptivePacingEngine::AdaptivePacingEngine(bool enabled)
         } catch (...) {}
     }
 
-    const char* env_pinned = std::getenv("CLAK_PINNED_DELAY_MS");
+    const char* env_pinned = utils::clakGetEnv("CLAK_PINNED_DELAY_MS");
     if (env_pinned) {
         try {
             uint32_t p = static_cast<uint32_t>(std::stoul(env_pinned));
@@ -38,6 +56,18 @@ AdaptivePacingEngine::AdaptivePacingEngine(bool enabled)
                 g->metrics.floor_post_ms = p;
                 g->metrics.ceiling_post_ms = p;
                 g->metrics.ssthresh_post_ms = p;
+            }
+        } catch (...) {}
+    }
+
+    const char* env_pinned_gap = utils::clakGetEnv("CLAK_PINNED_GAP_MS");
+    if (env_pinned_gap) {
+        try {
+            uint32_t g_val = static_cast<uint32_t>(std::stoul(env_pinned_gap));
+            for (auto* g : {&web_draftjs_, &terminal_uinput_, &heavy_app_, &default_group_}) {
+                g->metrics.gap_ms = g_val;
+                g->metrics.floor_gap_ms = g_val;
+                g->metrics.ceiling_gap_ms = g_val;
             }
         } catch (...) {}
     }
@@ -81,7 +111,14 @@ const AdaptivePacingEngine::GroupState& AdaptivePacingEngine::getGroup(PacingGro
 
 void AdaptivePacingEngine::configureGroup(PacingGroup group, uint32_t floor_delay_ms, uint32_t floor_gap_ms,
                                          uint32_t ceiling_delay_ms, uint32_t ceiling_gap_ms) {
-    const char* env_pinned = std::getenv("CLAK_PINNED_DELAY_MS");
+    if (isSimpleBackoffMode()) {
+        floor_delay_ms = 13;
+        floor_gap_ms = 2;
+        ceiling_delay_ms = 30;
+        ceiling_gap_ms = 4;
+    }
+
+    const char* env_pinned = utils::clakGetEnv("CLAK_PINNED_DELAY_MS");
     if (env_pinned) {
         try {
             uint32_t p = static_cast<uint32_t>(std::stoul(env_pinned));
@@ -90,13 +127,32 @@ void AdaptivePacingEngine::configureGroup(PacingGroup group, uint32_t floor_dela
         } catch (...) {}
     }
 
+    const char* env_pinned_gap = utils::clakGetEnv("CLAK_PINNED_GAP_MS");
+    if (env_pinned_gap) {
+        try {
+            uint32_t g_val = static_cast<uint32_t>(std::stoul(env_pinned_gap));
+            floor_gap_ms = g_val;
+            ceiling_gap_ms = g_val;
+        } catch (...) {}
+    }
+
     auto& g = getGroup(group);
+    bool was_unconfigured = (g.metrics.ceiling_post_ms == 0);
+    if (const char* env_hold = utils::clakGetEnv("CLAK_UINPUT_HOLD_US")) {
+        try {
+            g.metrics.hold_us = static_cast<uint32_t>(std::stoul(env_hold));
+        } catch (...) {}
+    }
     g.metrics.floor_post_ms = floor_delay_ms;
     g.metrics.floor_gap_ms = floor_gap_ms;
     g.metrics.ceiling_post_ms = ceiling_delay_ms;
     g.metrics.ceiling_gap_ms = ceiling_gap_ms;
+    if (isSimpleBackoffMode()) {
+        g.metrics.pre_delay_ms = 13;
+        g.metrics.post_commit_window_ms = 30;
+    }
 
-    if (g.incident_timestamps_us.empty()) {
+    if (g.incident_timestamps_us.empty() && (!isSimpleBackoffMode() || was_unconfigured || g.metrics.post_delay_ms < floor_delay_ms || g.metrics.post_delay_ms > ceiling_delay_ms)) {
         g.metrics.post_delay_ms = floor_delay_ms;
         g.metrics.gap_ms = floor_gap_ms;
         g.metrics.ssthresh_post_ms = floor_delay_ms;
@@ -149,10 +205,19 @@ void AdaptivePacingEngine::onIncident(PacingGroup group, IncidentType incident, 
     }
     g.incident_timestamps_us.push_back(now_us);
 
+    if (isSimpleBackoffMode()) {
+        g.metrics.post_delay_ms = 30;
+        g.metrics.gap_ms = 4;
+        g.metrics.consecutive_clean_words = 0;
+        utils::clakLog("[PACING_INCIDENT] group=" + std::to_string(static_cast<int>(group)) +
+                       " post_delay=" + std::to_string(g.metrics.post_delay_ms) + "ms simple_backoff=1");
+        return;
+    }
+
     // update ssthresh threshold to current delay + 2ms margin
     uint32_t last_incident_delay = g.metrics.post_delay_ms;
     g.metrics.ssthresh_post_ms = std::min(g.metrics.ceiling_post_ms, last_incident_delay + 2);
-    if (std::getenv("CLAK_DISABLE_SSTHRESH")) {
+    if (utils::clakGetEnv("CLAK_DISABLE_SSTHRESH")) {
         g.metrics.ssthresh_post_ms = g.metrics.floor_post_ms;
     }
 
@@ -168,7 +233,7 @@ void AdaptivePacingEngine::onIncident(PacingGroup group, IncidentType incident, 
 }
 
 void AdaptivePacingEngine::observeTimerDrift(PacingGroup group, uint64_t deadline_us, uint64_t fired_at_us) {
-    if (!enabled_ || fired_at_us <= deadline_us) {
+    if (!enabled_ || fired_at_us <= deadline_us || isSimpleBackoffMode() || utils::clakGetEnv("CLAK_PINNED_DELAY_MS")) {
         return;
     }
     uint64_t drift_us = fired_at_us - deadline_us;
@@ -190,6 +255,19 @@ void AdaptivePacingEngine::onTransactionSuccess(PacingGroup group) {
         g.metrics.drift_compensation_ms -= 1;
     }
     g.metrics.consecutive_clean_words++;
+
+    if (isSimpleBackoffMode()) {
+        if (g.metrics.consecutive_clean_words >= kConservativeDecayWordThreshold) {
+            g.metrics.consecutive_clean_words = 0;
+            if (g.metrics.post_delay_ms > g.metrics.floor_post_ms) {
+                g.metrics.post_delay_ms -= 1;
+            }
+            if (g.metrics.gap_ms > g.metrics.floor_gap_ms) {
+                g.metrics.gap_ms -= 1;
+            }
+        }
+        return;
+    }
 
     // determine if rtt is healthy relative to observed p10 baseline
     // proportional threshold of baseline * 1.5 with 2ms floor for fast systems
@@ -226,7 +304,7 @@ void AdaptivePacingEngine::onTransactionSuccess(PacingGroup group) {
 }
 
 void AdaptivePacingEngine::recordRtt(PacingGroup group, uint64_t rtt_us) {
-    if (!enabled_ || rtt_us == 0) {
+    if (rtt_us == 0) {
         return;
     }
 
@@ -265,17 +343,25 @@ void AdaptivePacingEngine::recordRtt(PacingGroup group, uint64_t rtt_us) {
     }
 
     // dynamic auto pacing based on observed rtt for web and heavy apps
-    if (group == PacingGroup::WebDraftJs || group == PacingGroup::HeavyApp) {
-        if (g.metrics.smoothed_rtt_ms > g.metrics.floor_post_ms) {
-            uint32_t target_post = std::min(g.metrics.ceiling_post_ms, g.metrics.smoothed_rtt_ms);
-            if (target_post > g.metrics.post_delay_ms) {
-                g.metrics.post_delay_ms = target_post;
+    if (enabled_ && !utils::clakGetEnv("CLAK_PINNED_DELAY_MS")) {
+        if (isSimpleBackoffMode()) {
+            if (rtt_ms >= 60 || g.metrics.smoothed_rtt_ms >= 40) {
+                g.metrics.post_delay_ms = 30;
+                g.metrics.gap_ms = 4;
+                g.metrics.consecutive_clean_words = 0;
             }
-        }
-        if (g.metrics.smoothed_rtt_ms >= 20) {
-            g.metrics.commit_delay_ms = std::min(20u, std::max(10u, g.metrics.smoothed_rtt_ms / 2));
-        } else {
-            g.metrics.commit_delay_ms = 0;
+        } else if (group == PacingGroup::WebDraftJs || group == PacingGroup::HeavyApp || rtt_ms >= 60) {
+            if (g.metrics.smoothed_rtt_ms > g.metrics.floor_post_ms) {
+                uint32_t target_post = std::min(g.metrics.ceiling_post_ms, g.metrics.smoothed_rtt_ms);
+                if (target_post > g.metrics.post_delay_ms) {
+                    g.metrics.post_delay_ms = target_post;
+                }
+            }
+            if (g.metrics.smoothed_rtt_ms >= 20) {
+                g.metrics.commit_delay_ms = std::min(20u, std::max(10u, g.metrics.smoothed_rtt_ms / 2));
+            } else {
+                g.metrics.commit_delay_ms = 0;
+            }
         }
     }
 }
@@ -304,12 +390,24 @@ uint32_t AdaptivePacingEngine::commitCompensation(PacingGroup group) const {
 }
 
 uint32_t AdaptivePacingEngine::calculatePreDelay(PacingGroup group, uint64_t last_commit_time_us, uint64_t now_us) const {
-    if (group == PacingGroup::TerminalUinput || last_commit_time_us == 0) {
+    const char* env_pre = utils::clakGetEnv("CLAK_PINNED_PRE_DELAY_MS");
+    if (env_pre) {
+        try {
+            return static_cast<uint32_t>(std::stoul(env_pre));
+        } catch (...) {}
+    }
+    if (last_commit_time_us == 0) {
+        return 0;
+    }
+    if (!isSimpleBackoffMode() && group == PacingGroup::TerminalUinput) {
         return 0;
     }
     const auto& m = getGroup(group).metrics;
     uint64_t window_us = static_cast<uint64_t>(m.post_commit_window_ms) * 1000ULL;
     if (now_us <= last_commit_time_us || (now_us - last_commit_time_us) < window_us) {
+        if (isSimpleBackoffMode()) {
+            return m.post_delay_ms;
+        }
         uint32_t eff_pre = std::max(m.post_delay_ms, m.pre_delay_ms);
         // adapt pre-delay to target application latency under load
         if (m.smoothed_rtt_ms > eff_pre) {

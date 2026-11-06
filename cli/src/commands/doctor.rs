@@ -305,6 +305,7 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
         format!("{}s", uptime_secs)
     };
     println!("  • Uptime daemon: {} | Giao thức: {}", uptime_str, report.telemetry.connected_protocol);
+    println!("  • Chế độ Pacing đang chạy: {}", report.telemetry.active_pacing_mode);
     println!("  • Phân tách tầng xử lý:");
     println!(
         "    - Surrounding (GTK/Qt): {} thao tác (p50: {:.2}ms, p95: {:.2}ms, max: {:.2}ms)",

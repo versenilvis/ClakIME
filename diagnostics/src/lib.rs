@@ -507,13 +507,8 @@ pub fn auto_fix_all(include_permissions: bool) -> AutoFixSummary {
         }
     }
 
-    // 7. Auto-configure hardware-specific pacing profile
-    match apply_pacing_profile(&pre_report.pacing) {
-        Ok(_) => summary.pacing_fixed = true,
-        Err(e) => summary
-            .errors
-            .push(format!("Lỗi lưu cấu hình pacing: {}", e)),
-    }
+    // pacing is no longer written here, a fix pass must not silently change timing
+    // use `clak doctor --tune-pacing` or the GUI button to apply it explicitly
 
     summary
 }
@@ -649,8 +644,11 @@ mod tests {
         }
     }
 
+    static ENV_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn test_apply_pacing_profile() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         let tmp_dir = std::env::temp_dir().join(format!("clak_diag_test_{}", std::process::id()));
         let _ = std::fs::create_dir_all(&tmp_dir);
         let prev_xdg = std::env::var("XDG_CONFIG_HOME");
@@ -689,7 +687,36 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp_dir);
     }
 
-    static ENV_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    #[test]
+    fn test_doctor_never_creates_or_modifies_config_toml() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        let tmp_dir = std::env::temp_dir().join(format!("clak_doctor_ro_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp_dir);
+        let _ = std::fs::create_dir_all(&tmp_dir);
+        let prev_xdg = std::env::var("XDG_CONFIG_HOME");
+        std::env::set_var("XDG_CONFIG_HOME", &tmp_dir);
+
+        let cfg_path = clak_engine::config::config_path();
+        assert!(!cfg_path.exists());
+
+        // running diagnostics must not create config.toml
+        let _report = run_diagnostics();
+        assert!(!cfg_path.exists());
+
+        // if config.toml exists, running diagnostics must not modify its contents
+        let initial = "[pacing]\npreset = \"balanced\"\ndraftjs_delay_ms = 16\n";
+        let _ = std::fs::create_dir_all(cfg_path.parent().unwrap());
+        std::fs::write(&cfg_path, initial).unwrap();
+        let _report2 = run_diagnostics();
+        let after = std::fs::read_to_string(&cfg_path).unwrap();
+        assert_eq!(after, initial);
+
+        match prev_xdg {
+            Ok(v) => std::env::set_var("XDG_CONFIG_HOME", v),
+            Err(_) => std::env::remove_var("XDG_CONFIG_HOME"),
+        }
+        let _ = std::fs::remove_dir_all(&tmp_dir);
+    }
 
     #[test]
     fn test_fix_environment_conflicts() {

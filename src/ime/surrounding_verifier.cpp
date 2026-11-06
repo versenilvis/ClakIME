@@ -81,18 +81,15 @@ void SurroundingVerifier::verify(const fcitx::SurroundingText& surr) {
                                actualWord.find(verify_.preWord) != std::string::npos &&
                                actualWord.find(verify_.added) != std::string::npos &&
                                actualWord.length() > verify_.preWord.length());
-        if (delete_ignored) {
-            is_draftjs_editor_ = true;
+        mismatch_count_++;
+        utils::clakLog("verifySurrounding mismatch #" + std::to_string(mismatch_count_) +
+                       ": expected='" + verify_.expectWord + "' actual='" + actualWord + "'");
+        if (mismatch_count_ >= config::kMismatchThreshold) {
             is_rich_text_editor_ = true;
-            utils::clakLog("verifySurrounding: detected draftjs / react contenteditable editor, switched to uinput");
-        } else {
-            mismatch_count_++;
-            utils::clakLog("verifySurrounding mismatch #" + std::to_string(mismatch_count_) +
-                           ": expected='" + verify_.expectWord + "' actual='" + actualWord + "'");
-            if (mismatch_count_ >= config::kMismatchThreshold) {
-                is_rich_text_editor_ = true;
-                utils::clakLog("verifySurrounding: auto-switched to uinput for this editor");
+            if (delete_ignored) {
+                is_draftjs_editor_ = true;
             }
+            utils::clakLog("verifySurrounding: auto-switched to uinput for this editor after 3 consecutive mismatches");
         }
     }
 }

@@ -275,6 +275,7 @@ pub struct PacingTelemetry {
     pub groups: Vec<PacingGroupSnapshot>,
     pub daemon_uptime_seconds: u64,
     pub connected_protocol: String,
+    pub active_pacing_mode: String,
     pub drift_detected_count: u32,
     pub sentinel_timeout_count: u32,
     pub overflow_count: u32,
@@ -353,45 +354,107 @@ fn detect_connected_protocol() -> String {
     }
 }
 
+fn is_adaptive_mode_active(log_content: &str) -> bool {
+    if std::env::var("CLAK_ADAPTIVE").ok().as_deref() == Some("1")
+        && std::env::var("CLAK_SIMPLE_BACKOFF").is_err()
+    {
+        return true;
+    }
+    for line in log_content.lines().rev() {
+        if let Some(idx) = line.find("mode=") {
+            let sub = &line[idx + 5..];
+            let m: String = sub.chars().take_while(|c| !c.is_whitespace()).collect();
+            if m == "adaptive" {
+                return true;
+            } else if !m.is_empty() {
+                return false;
+            }
+        }
+    }
+    false
+}
+
 fn detect_group_snapshots(log_content: &str) -> Vec<PacingGroupSnapshot> {
-    let mut snapshots = vec![
-        PacingGroupSnapshot {
-            name: "WebDraftJs (X/Twitter/TikTok/DraftJS)".to_string(),
-            current_delay_ms: 16,
-            floor_ms: 10,
-            ceiling_ms: 40,
-            gap_ms: 8,
-            hold_us: 1000,
-            ssthresh_ms: 10,
-        },
-        PacingGroupSnapshot {
-            name: "Terminal (Kitty/Alacritty/Ghostty)".to_string(),
-            current_delay_ms: 12,
-            floor_ms: 0,
-            ceiling_ms: 30,
-            gap_ms: 3,
-            hold_us: 1000,
-            ssthresh_ms: 0,
-        },
-        PacingGroupSnapshot {
-            name: "HeavyApp (WPS/JetBrains/Steam)".to_string(),
-            current_delay_ms: 15,
-            floor_ms: 8,
-            ceiling_ms: 35,
-            gap_ms: 4,
-            hold_us: 1000,
-            ssthresh_ms: 8,
-        },
-        PacingGroupSnapshot {
-            name: "Default (GTK/Qt/Desktop)".to_string(),
-            current_delay_ms: 8,
-            floor_ms: 4,
-            ceiling_ms: 30,
-            gap_ms: 2,
-            hold_us: 1000,
-            ssthresh_ms: 4,
-        },
-    ];
+    let adaptive = is_adaptive_mode_active(log_content);
+    let mut snapshots = if adaptive {
+        vec![
+            PacingGroupSnapshot {
+                name: "WebDraftJs (X/Twitter/TikTok/DraftJS)".to_string(),
+                current_delay_ms: 16,
+                floor_ms: 10,
+                ceiling_ms: 40,
+                gap_ms: 8,
+                hold_us: 1000,
+                ssthresh_ms: 10,
+            },
+            PacingGroupSnapshot {
+                name: "Terminal (Kitty/Alacritty/Ghostty)".to_string(),
+                current_delay_ms: 12,
+                floor_ms: 0,
+                ceiling_ms: 30,
+                gap_ms: 3,
+                hold_us: 1000,
+                ssthresh_ms: 0,
+            },
+            PacingGroupSnapshot {
+                name: "HeavyApp (WPS/JetBrains/Steam)".to_string(),
+                current_delay_ms: 15,
+                floor_ms: 8,
+                ceiling_ms: 35,
+                gap_ms: 4,
+                hold_us: 1000,
+                ssthresh_ms: 8,
+            },
+            PacingGroupSnapshot {
+                name: "Default (GTK/Qt/Desktop)".to_string(),
+                current_delay_ms: 8,
+                floor_ms: 4,
+                ceiling_ms: 30,
+                gap_ms: 2,
+                hold_us: 1000,
+                ssthresh_ms: 4,
+            },
+        ]
+    } else {
+        vec![
+            PacingGroupSnapshot {
+                name: "WebDraftJs (X/Twitter/TikTok/DraftJS)".to_string(),
+                current_delay_ms: 13,
+                floor_ms: 13,
+                ceiling_ms: 30,
+                gap_ms: 2,
+                hold_us: 1000,
+                ssthresh_ms: 13,
+            },
+            PacingGroupSnapshot {
+                name: "Terminal (Kitty/Alacritty/Ghostty)".to_string(),
+                current_delay_ms: 13,
+                floor_ms: 13,
+                ceiling_ms: 30,
+                gap_ms: 2,
+                hold_us: 1000,
+                ssthresh_ms: 13,
+            },
+            PacingGroupSnapshot {
+                name: "HeavyApp (WPS/JetBrains/Steam)".to_string(),
+                current_delay_ms: 13,
+                floor_ms: 13,
+                ceiling_ms: 30,
+                gap_ms: 2,
+                hold_us: 1000,
+                ssthresh_ms: 13,
+            },
+            PacingGroupSnapshot {
+                name: "Default (GTK/Qt/Desktop)".to_string(),
+                current_delay_ms: 13,
+                floor_ms: 13,
+                ceiling_ms: 30,
+                gap_ms: 2,
+                hold_us: 1000,
+                ssthresh_ms: 13,
+            },
+        ]
+    };
 
     for line in log_content.lines() {
         if line.contains("[PACING]") {
@@ -481,6 +544,28 @@ pub fn check_telemetry() -> PacingTelemetry {
     let daemon_uptime_seconds = detect_daemon_uptime_seconds();
     let connected_protocol = detect_connected_protocol();
 
+    let mut active_pacing_mode = if is_adaptive_mode_active(&log_content) {
+        "adaptive (CLAK_ADAPTIVE=1)".to_string()
+    } else {
+        "fixed_13_backoff (mặc định: post 13ms / gap 2ms / pre 13ms, backoff 30ms/4ms)".to_string()
+    };
+    for line in log_content.lines().rev() {
+        if let Some(idx) = line.find("mode=") {
+            let sub = &line[idx + 5..];
+            let m: String = sub.chars().take_while(|c| !c.is_whitespace()).collect();
+            if m == "fixed_13_backoff" {
+                active_pacing_mode = "fixed_13_backoff (mặc định: post 13ms / gap 2ms / pre 13ms, backoff 30ms/4ms)".to_string();
+                break;
+            } else if m == "adaptive" {
+                active_pacing_mode = "adaptive (CLAK_ADAPTIVE=1)".to_string();
+                break;
+            } else if !m.is_empty() {
+                active_pacing_mode = m;
+                break;
+            }
+        }
+    }
+
     PacingTelemetry {
         replace_count: overall.count,
         forward_count: forwards,
@@ -493,6 +578,7 @@ pub fn check_telemetry() -> PacingTelemetry {
         groups,
         daemon_uptime_seconds,
         connected_protocol,
+        active_pacing_mode,
         drift_detected_count: drifts,
         sentinel_timeout_count: timeouts,
         overflow_count: overflows,

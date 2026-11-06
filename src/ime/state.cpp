@@ -53,7 +53,27 @@ void ClakState::syncConfig() {
     }
 }
 
+void ClakState::flushCollisionStats() {
+    if (collision_stats_.total_replaces > 0 || collision_stats_.buffered_key_interruptions > 0 || collision_stats_.batch_absorbed_ops > 0) {
+        utils::clakLog("[COLLISION_STATS] replaces=" + std::to_string(collision_stats_.total_replaces) +
+                       " collisions=" + std::to_string(collision_stats_.total_collisions) +
+                       " missing_rtt=" + std::to_string(collision_stats_.missing_rtt_count) +
+                       " key_interrupts=" + std::to_string(collision_stats_.buffered_key_interruptions) +
+                       " batch_absorbed=" + std::to_string(collision_stats_.batch_absorbed_ops));
+        collision_stats_ = {};
+    }
+}
+
+void ClakState::onDeactivate() {
+    flushCollisionStats();
+    surr_cursor_underflow_count_ = 0;
+    if (!is_deleting_) {
+        verifier_.reset(/*hard_reset=*/true);
+    }
+}
+
 ClakState::~ClakState() {
+    flushCollisionStats();
     if (rust_ctx_) {
         clak_context_free(rust_ctx_);
         rust_ctx_ = nullptr;
@@ -91,12 +111,19 @@ void ClakState::reset(bool force) {
         }
     }
     if (force) {
+        if (collision_stats_.total_replaces > 0) {
+            utils::clakLog("[COLLISION_STATS] replaces=" + std::to_string(collision_stats_.total_replaces) +
+                           " collisions=" + std::to_string(collision_stats_.total_collisions) +
+                           " missing_rtt=" + std::to_string(collision_stats_.missing_rtt_count));
+            collision_stats_ = {};
+        }
         last_autofix_original_.clear();
         last_autofix_converted_chars_ = 0;
         last_autofix_time_us_ = 0;
         last_key_time_us_ = 0;
         last_key_interval_us_ = 0;
     }
+    uncommitted_forward_count_ = 0;
     last_text_len_ = 0;
     if (safety_timer_) {
         safety_timer_.reset();
@@ -310,6 +337,7 @@ void ClakState::doCommitString(const std::string& text) {
 void ClakState::doCommitDirect(const std::string& text) {
     if (text.empty()) return;
     last_commit_time_us_ = fcitx::now(CLOCK_MONOTONIC);
+    uncommitted_forward_count_ = 0;
     if (ic_) {
         ic_->commitString(text);
     }
@@ -389,29 +417,67 @@ void ClakState::arm_safety_timer() {
                 pacing_engine_.observeTimerDrift(pgroup, deadline_us, actual_fired_us);
                 uint64_t incident_now_us = actual_fired_us;
                 if (is_selection_deletion_) {
+                    utils::clakLog("[INCIDENT_TYPE] kind=SelectionTimeout buffered=" + std::to_string(key_buffer_.size()));
                     pacing_engine_.onIncident(pgroup, pacing::IncidentType::SelectionTimeout, incident_now_us);
                 } else if (is_address_bar_fix_) {
+                    utils::clakLog("[INCIDENT_TYPE] kind=AddressBarDelay buffered=" + std::to_string(key_buffer_.size()));
                     pacing_engine_.onIncident(pgroup, pacing::IncidentType::AddressBarDelay, incident_now_us);
                 } else if (!key_buffer_.empty()) {
-                    pacing_engine_.onIncident(pgroup, pacing::IncidentType::KeyInterruption, incident_now_us);
+                    utils::clakLog("[INCIDENT_TYPE] kind=PacingStarvationWithBuffer(was_KeyInterruption) buffered=" + std::to_string(key_buffer_.size()));
+                    pacing_engine_.onIncident(pgroup, pacing::IncidentType::PacingStarvation, incident_now_us);
                 } else {
+                    utils::clakLog("[INCIDENT_TYPE] kind=PacingStarvationIdle buffered=0");
                     pacing_engine_.onIncident(pgroup, pacing::IncidentType::PacingStarvation, incident_now_us);
                 }
                 utils::clakLog("SENTINEL TIMEOUT (" + std::to_string(timeout_us / 1000) + "ms expired): giving up waiting, only " +
                                std::to_string(current_backspace_count_) + "/" + std::to_string(expected_backspaces_) +
                                 " BS returned! force committing '" + pending_commit_string_ + "' app=" + app +
                                " site='" + site + "'");
-                if (expected_backspaces_ > current_backspace_count_) {
-                    in_flight_sentinel_count_ = expected_backspaces_ - current_backspace_count_;
+                size_t emitted = uinput::UinputTool::instance().cancel_pending();
+                size_t expected_in_flight = (emitted > 0) ? emitted : expected_backspaces_;
+                if (expected_in_flight > current_backspace_count_) {
+                    in_flight_sentinel_count_ = expected_in_flight - current_backspace_count_;
                     sentinel_grace_until_us_ = fcitx::now(CLOCK_MONOTONIC) + 500000;
                 }
                 is_deleting_ = false;
                 is_address_bar_fix_ = false;
                 is_selection_deletion_ = false;
                 expected_backspaces_ = 0;
-                std::string to_commit = pending_commit_string_;
+                current_backspace_count_ = 0;
+                if (surr_lag_timer_) {
+                    surr_lag_timer_.reset();
+                }
+                is_surr_lag_replaying_ = false;
+
+                std::string flush_str = pending_commit_string_;
                 pending_commit_string_.clear();
-                replayBufferedKeys(to_commit);
+                auto pending = key_buffer_.take_keys();
+                for (const auto& k : pending) {
+                    bool has_ctrl_alt = k.states().test(fcitx::KeyState::Ctrl) ||
+                                        k.states().test(fcitx::KeyState::Alt) ||
+                                        k.states().test(fcitx::KeyState::Super);
+                    std::string str = fcitx::Key::keySymToUTF8(k.sym());
+                    if (!has_ctrl_alt && !str.empty() && k.sym() < 0xff00) {
+                        flush_str += str;
+                    } else if (k.sym() == FcitxKey_BackSpace && !flush_str.empty()) {
+                        utils::popUtf8Chars(flush_str, 1);
+                    } else {
+                        if (!flush_str.empty()) {
+                            doCommitDirect(flush_str);
+                            flush_str.clear();
+                        }
+                        if (ic_) {
+                            ic_->forwardKey(k);
+                        }
+                    }
+                }
+                if (!flush_str.empty()) {
+                    doCommitDirect(flush_str);
+                }
+                verifier_.clearPending();
+                if (rust_ctx_) {
+                    clak_context_reset(rust_ctx_);
+                }
                 uinput::UinputTool::instance().consume_sentinel_emit_time_us();
                 logCsv(0, "TIMEOUT");
                 logLatency(op_group_, op_start_us_, "REPLACE_TIMEOUT");
@@ -452,7 +518,7 @@ void ClakState::finishUinputDeletion(uint64_t rtt_us) {
     pacing_engine_.onTransactionSuccess(pgroup);
     auto pm = pacing_engine_.metrics(pgroup);
     uint32_t active_post_delay = pm.post_delay_ms;
-    const char* env_fixed_delay = std::getenv("CLAK_FIXED_DELAY_MS");
+    const char* env_fixed_delay = utils::clakGetEnv("CLAK_FIXED_DELAY_MS");
     if (env_fixed_delay) {
         try { active_post_delay = std::stoul(env_fixed_delay); } catch (...) {}
     }
@@ -535,6 +601,15 @@ void ClakState::replayBufferedKeys(const std::string& initial_batch) {
                     ic_->forwardKey(k);
                 }
             }
+        } else if (surr_lag_timer_ && !is_surr_lag_replaying_) {
+            if (!batch_commit_.empty()) {
+                doCommitDirect(batch_commit_);
+                batch_commit_.clear();
+            }
+            for (size_t j = i + 1; j < pending.size(); ++j) {
+                key_buffer_.push(pending[j]);
+            }
+            break;
         }
     }
 
@@ -749,6 +824,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                 op_start_us_ = 0;
                 return true;
             }
+            uncommitted_forward_count_++;
             logLatency(classifyGroup(app, site, false, false), op_start_us_, "FORWARD", "forwardKey");
             op_start_us_ = 0;
             return false;
@@ -779,22 +855,24 @@ bool ClakState::handleKey(const fcitx::Key& key) {
         case CLAK_ACTION_REPLACE_SURROUNDING: {
             size_t real_bs = action.delete_count;
 
-            if (is_replaying_) {
+            if (is_replaying_ && !utils::clakGetEnv("CLAK_DISABLE_BATCH_ABSORB")) {
                 size_t avail = utils::utf8CharCount(batch_commit_);
                 if (avail >= real_bs) {
                     utils::popUtf8Chars(batch_commit_, real_bs);
                     if (action.commit_str && action.commit_str[0] != '\0') {
                         batch_commit_ += action.commit_str;
                     }
+                    collision_stats_.batch_absorbed_ops++;
                     utils::clakLog("handleKey: absorbed " + std::to_string(real_bs) +
                                    " deletions in batch_commit (batch='" + batch_commit_ + "')");
                     logLatency(classifyGroup(app, site, false, false), op_start_us_, "BATCH_ABSORB");
                     op_start_us_ = 0;
                     last_text_len_ = 0;
                     return true;
-                } else {
+                } else if (avail > 0) {
                     utils::popUtf8Chars(batch_commit_, avail);
                     real_bs -= avail;
+                    collision_stats_.batch_absorbed_ops++;
                     utils::clakLog("handleKey: partially absorbed " + std::to_string(avail) +
                                    " deletions in batch_commit, remaining " + std::to_string(real_bs) + " to send to OS");
                 }
@@ -808,10 +886,17 @@ bool ClakState::handleKey(const fcitx::Key& key) {
             if (real_bs > 0 && surr.isValid() && surr.cursor() < real_bs) {
                 if (!config::isVSCodeApp(app) && !currentProfile()->preventsUinput()) {
                     use_surrounding = false;
-                    verifier_.setDraftJsEditor(true);
-                    verifier_.setRichTextEditor(true);
+                    surr_cursor_underflow_count_++;
+                    if (surr_cursor_underflow_count_ >= 3) {
+                        verifier_.setRichTextEditor(true);
+                        if (isBrowser()) {
+                            verifier_.setDraftJsEditor(true);
+                        }
+                    }
                     is_draftjs = isDraftJsEditor();
                 }
+            } else if (real_bs > 0 && surr.isValid() && surr.cursor() >= real_bs) {
+                surr_cursor_underflow_count_ = 0;
             }
 
             if (currentProfile()->erasesWithCommittedDel() && real_bs > 0) {
@@ -844,8 +929,8 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                 const ClakConfig* cfg = engine_ ? engine_->config() : nullptr;
                 bool adaptive_enabled = cfg ? clak_config_get_adaptive_pacing(cfg) : true;
 
-                const char* env_fixed_delay = std::getenv("CLAK_FIXED_DELAY_MS");
-                const char* env_fixed_gap = std::getenv("CLAK_FIXED_GAP_MS");
+                const char* env_fixed_delay = utils::clakGetEnv("CLAK_FIXED_DELAY_MS");
+                const char* env_fixed_gap = utils::clakGetEnv("CLAK_FIXED_GAP_MS");
                 bool fixed_override = (env_fixed_delay != nullptr);
                 if (fixed_override) {
                     adaptive_enabled = false;
@@ -866,6 +951,8 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                         draft_delay, draft_gap, draft_ceiling, draft_gap_ceiling);
                     pacing_engine_.configureGroup(pacing::PacingGroup::HeavyApp,
                         clak_config_get_heavy_app_delay_ms(cfg), clak_config_get_heavy_app_gap_ms(cfg), 35, 12);
+                    pacing_engine_.configureGroup(pacing::PacingGroup::Default,
+                        8, 2, 30, 10);
                 }
 
                 if (fixed_override) {
@@ -879,6 +966,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                     pacing.post_delay_ms = f_delay;
                     pacing.gap_ms = f_gap;
                     pacing.hold_us = base_pacing.hold_us;
+                    pacing_engine_.configureGroup(pgroup, f_delay, f_gap, f_delay, f_gap);
                 } else if (is_address_bar || has_autofill_selection) {
                     pacing = {config::kAddressBarPostDelayMs, 2};
                 } else if (adaptive_enabled) {
@@ -904,7 +992,33 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                 }
                 uint32_t pre_delay = pacing_engine_.calculatePreDelay(pgroup, last_commit_time_us_, now_us);
 
-                std::string pacing_mode = fixed_override ? "fixed" : (adaptive_enabled ? "adaptive" : "profile");
+                collision_stats_.total_replaces++;
+                auto pmetrics = pacing_engine_.metrics(pgroup);
+                uint64_t elapsed_us = (last_commit_time_us_ > 0 && now_us >= last_commit_time_us_) ? (now_us - last_commit_time_us_) : UINT64_MAX;
+                bool has_rtt = (pmetrics.smoothed_rtt_ms > 0);
+                if (!has_rtt) {
+                    collision_stats_.missing_rtt_count++;
+                }
+                uint64_t effective_rtt_window_us = has_rtt ? (static_cast<uint64_t>(pmetrics.smoothed_rtt_ms) * 2000UL) : 50000UL;
+                uint64_t dynamic_window_us = std::max<uint64_t>(static_cast<uint64_t>(pmetrics.post_commit_window_ms) * 1000UL, effective_rtt_window_us);
+                if (real_bs > uncommitted_forward_count_ && elapsed_us < dynamic_window_us) {
+                    collision_stats_.total_collisions++;
+                }
+                if (real_bs <= uncommitted_forward_count_) {
+                    uncommitted_forward_count_ -= real_bs;
+                } else {
+                    uncommitted_forward_count_ = 0;
+                }
+                if (action.commit_str && action.commit_str[0] != '\0') {
+                    uncommitted_forward_count_ += utils::utf8CharCount(action.commit_str);
+                }
+
+                bool is_adaptive_env = (utils::clakGetEnv("CLAK_ADAPTIVE") &&
+                                        std::string(utils::clakGetEnv("CLAK_ADAPTIVE")) == "1" &&
+                                        !utils::clakGetEnv("CLAK_SIMPLE_BACKOFF"));
+                std::string pacing_mode = fixed_override ? "fixed" :
+                                          (!is_adaptive_env ? "fixed_13_backoff" :
+                                          (adaptive_enabled ? "adaptive" : "profile"));
                 utils::clakLog("uinput waiting for sentinel: expected=" + std::to_string(bs_to_send) +
                                " (real=" + std::to_string(real_bs) + (has_autofill_selection ? " + 1 autofill" : "") +
                                " + 1 sentinel) mode=" + pacing_mode + " post_delay=" + std::to_string(pacing.post_delay_ms) +
@@ -914,6 +1028,15 @@ bool ClakState::handleKey(const fcitx::Key& key) {
 
                 if (uinput::UinputTool::instance().send_backspace(bs_to_send, pacing.post_delay_ms, pre_delay, pacing.gap_ms, pacing.hold_us)) {
                     repeat_handler_.cancel();
+                    if (utils::clakGetEnv("CLAK_DISABLE_SENTINEL_GATE")) {
+                        in_flight_sentinel_count_ = 1;
+                        sentinel_grace_until_us_ = fcitx::now(CLOCK_MONOTONIC) + 500000;
+                        if (action.commit_str && action.commit_str[0] != '\0') {
+                            doCommitString(action.commit_str);
+                        }
+                        last_text_len_ = 0;
+                        return true;
+                    }
                     is_deleting_ = true;
                     expected_backspaces_ = bs_to_send;
                     current_backspace_count_ = 0;
@@ -1334,6 +1457,7 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
 
     if (is_deleting_ || (surr_lag_timer_ && !is_surr_lag_replaying_)) {
         repeat_handler_.cancel();
+        collision_stats_.buffered_key_interruptions++;
         if (!key_buffer_.push(key)) {
             // flush queued keys first to preserve strict order on buffer overflow
             auto pending = key_buffer_.take_keys();

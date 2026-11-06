@@ -56,6 +56,8 @@ public:
   bool isRepeating() const { return repeat_handler_.isRepeating(); }
   fcitx::Key heldKey() const { return repeat_handler_.heldKey(); }
   void cancelRepeat() { repeat_handler_.cancel(); }
+  void flushCollisionStats();
+  void onDeactivate();
   void setEnableRepeatForMock(bool enable) { repeat_handler_.setEnableRepeatForMock(enable); }
   apps::AppProfile* currentProfile();
   pacing::AdaptivePacingEngine& pacingEngine() { return pacing_engine_; }
@@ -78,6 +80,17 @@ private:
   ClakContext* rust_ctx_{nullptr};
   uint64_t applied_config_version_{0};
   uint64_t last_commit_time_us_{0};
+  size_t uncommitted_forward_count_{0};
+
+  struct CollisionStats {
+    uint32_t total_replaces{0};
+    uint32_t total_collisions{0};
+    uint32_t missing_rtt_count{0};
+    uint32_t buffered_key_interruptions{0};
+    uint32_t batch_absorbed_ops{0};
+  } collision_stats_;
+
+  uint32_t surr_cursor_underflow_count_{0};
 
   bool is_deleting_{false};
   bool is_address_bar_fix_{false};

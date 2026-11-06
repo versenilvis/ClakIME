@@ -1899,14 +1899,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::thread::sleep(std::time::Duration::from_millis(500));
             let _ = slint::invoke_from_event_loop(move || {
                 if let Some(w) = win_async.upgrade() {
-                    let cfg = clak_engine::config::ClakConfig::load();
-                    w.set_pacing_preset_index(3);
-                    w.set_draftjs_delay_ms(cfg.pacing.draftjs_delay_ms as i32);
-                    w.set_draftjs_gap_ms(cfg.pacing.draftjs_gap_ms as i32);
-                    w.set_terminal_delay_ms(cfg.pacing.terminal_delay_ms as i32);
-                    w.set_terminal_gap_ms(cfg.pacing.terminal_gap_ms as i32);
-                    w.set_heavy_app_delay_ms(cfg.pacing.heavy_app_delay_ms as i32);
-                    w.set_heavy_app_gap_ms(cfg.pacing.heavy_app_gap_ms as i32);
                     w.set_is_fixing(false);
                     w.invoke_doctor_scan_requested();
                 }

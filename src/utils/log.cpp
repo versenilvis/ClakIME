@@ -6,6 +6,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <unordered_map>
+#include <fstream>
 
 namespace clak {
 namespace utils {
@@ -14,12 +16,49 @@ constexpr off_t kMaxLogSizeBytes = 2 * 1024 * 1024;
 static bool s_log_enabled = false;
 static bool s_checked_env = false;
 
+const char* clakGetEnv(const char* key) {
+    static std::unordered_map<std::string, std::string> s_test_env;
+    static long s_last_mtime_sec = -1;
+    static long s_last_mtime_nsec = -1;
+    static bool s_file_present = false;
+
+    struct stat st{};
+    if (lstat("/tmp/clak_test_env.conf", &st) == 0 && S_ISREG(st.st_mode) && st.st_uid == getuid()) {
+        if (!s_file_present || st.st_mtim.tv_sec != s_last_mtime_sec || st.st_mtim.tv_nsec != s_last_mtime_nsec) {
+            s_file_present = true;
+            s_last_mtime_sec = st.st_mtim.tv_sec;
+            s_last_mtime_nsec = st.st_mtim.tv_nsec;
+            s_test_env.clear();
+            std::ifstream ifs("/tmp/clak_test_env.conf");
+            std::string line;
+            while (std::getline(ifs, line)) {
+                auto eq = line.find('=');
+                if (eq != std::string::npos) {
+                    s_test_env[line.substr(0, eq)] = line.substr(eq + 1);
+                }
+            }
+        }
+        auto it = s_test_env.find(key);
+        if (it != s_test_env.end()) {
+            return it->second.c_str();
+        }
+        return nullptr;
+    } else if (s_file_present) {
+        s_file_present = false;
+        s_test_env.clear();
+    }
+    return std::getenv(key);
+}
+
 void setLogEnabled(bool enabled) {
     s_log_enabled = enabled;
     s_checked_env = true;
 }
 
 bool isLogEnabled() {
+    if (const char* t_env = clakGetEnv("CLAK_LOG")) {
+        return (std::string(t_env) != "0" && std::string(t_env) != "false" && std::string(t_env) != "off");
+    }
     if (!s_checked_env) {
         s_checked_env = true;
         const char* env = getenv("CLAK_LOG");

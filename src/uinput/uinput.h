@@ -33,6 +33,12 @@ public:
         return sentinel_emit_time_us_.exchange(0, std::memory_order_acq_rel);
     }
 
+    size_t cancel_pending() noexcept {
+        uint64_t id = active_batch_id_.load(std::memory_order_acquire);
+        cancelled_batch_id_.store(id, std::memory_order_release);
+        return emitted_in_batch_.exchange(0, std::memory_order_acq_rel);
+    }
+
     void setMockHandler(BackspaceHook handler) {
         mock_handler_ = [h = std::move(handler)](size_t c, uint32_t p, uint32_t pr, uint32_t g, uint32_t) {
             return h ? h(c, p, pr, g) : true;
@@ -56,6 +62,9 @@ private:
     int direct_fd_{-1};
     std::mutex uinput_mutex_;
     std::atomic<uint64_t> sentinel_emit_time_us_{0};
+    std::atomic<uint64_t> active_batch_id_{0};
+    std::atomic<uint64_t> cancelled_batch_id_{0};
+    std::atomic<size_t> emitted_in_batch_{0};
     void* xcb_lib_{nullptr};
     void* xtest_lib_{nullptr};
     void* xcb_conn_{nullptr};

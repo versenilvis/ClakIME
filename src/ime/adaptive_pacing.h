@@ -70,6 +70,14 @@ public:
 
     // classify app and site into pacing group
     static PacingGroup classify(const std::string& app, const std::string& site, bool is_autofill, bool is_draftjs = false, bool is_terminal = false);
+    static const char* groupName(PacingGroup group) {
+        switch (group) {
+            case PacingGroup::WebDraftJs: return "WebDraftJs";
+            case PacingGroup::TerminalUinput: return "TerminalUinput";
+            case PacingGroup::HeavyApp: return "HeavyApp";
+            case PacingGroup::Default: default: return "Default";
+        }
+    }
 
     // constants
     static constexpr uint64_t kSlidingWindowUs = 10000000ULL; // 10 seconds
