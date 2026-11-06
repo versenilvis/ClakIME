@@ -298,14 +298,25 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
     println!("\n[11/11] Zero-Keystroke Telemetry & Trạng Thái Pacing:");
     let uptime_secs = report.telemetry.daemon_uptime_seconds;
     let uptime_str = if uptime_secs >= 3600 {
-        format!("{} giờ {} phút ({}s)", uptime_secs / 3600, (uptime_secs % 3600) / 60, uptime_secs)
+        format!(
+            "{} giờ {} phút ({}s)",
+            uptime_secs / 3600,
+            (uptime_secs % 3600) / 60,
+            uptime_secs
+        )
     } else if uptime_secs >= 60 {
         format!("{} phút ({}s)", uptime_secs / 60, uptime_secs)
     } else {
         format!("{}s", uptime_secs)
     };
-    println!("  • Uptime daemon: {} | Giao thức: {}", uptime_str, report.telemetry.connected_protocol);
-    println!("  • Chế độ Pacing đang chạy: {}", report.telemetry.active_pacing_mode);
+    println!(
+        "  • Uptime daemon: {} | Giao thức: {}",
+        uptime_str, report.telemetry.connected_protocol
+    );
+    println!(
+        "  • Chế độ Pacing đang chạy: {}",
+        report.telemetry.active_pacing_mode
+    );
     println!("  • Phân tách tầng xử lý:");
     println!(
         "    - Surrounding (GTK/Qt): {} thao tác (p50: {:.2}ms, p95: {:.2}ms, max: {:.2}ms)",
@@ -321,15 +332,25 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
         report.telemetry.uinput_stats.p95_latency_ms,
         report.telemetry.uinput_stats.max_latency_ms
     );
-    println!("    - Forward (Phím trực tiếp): {} thao tác", report.telemetry.forward_count);
+    println!(
+        "    - Forward (Phím trực tiếp): {} thao tác",
+        report.telemetry.forward_count
+    );
     println!("  • Snapshot 4 nhóm Pacing Profile:");
     for g in &report.telemetry.groups {
         println!(
             "    - {}: delay {}ms (floor {}ms, ceiling {}ms, gap {}ms, hold {}µs, ssthresh {}ms)",
-            g.name, g.current_delay_ms, g.floor_ms, g.ceiling_ms, g.gap_ms, g.hold_us, g.ssthresh_ms
+            g.name,
+            g.current_delay_ms,
+            g.floor_ms,
+            g.ceiling_ms,
+            g.gap_ms,
+            g.hold_us,
+            g.ssthresh_ms
         );
     }
-    println!("  • Sự cố bất thường: {} drift, {} timeouts, {} overflows, {} mismatches",
+    println!(
+        "  • Sự cố bất thường: {} drift, {} timeouts, {} overflows, {} mismatches",
         report.telemetry.drift_detected_count,
         report.telemetry.sentinel_timeout_count,
         report.telemetry.overflow_count,

@@ -40,7 +40,12 @@ pub fn sanitize_privacy(text: &str) -> String {
     }
 
     if let Ok(user) = std::env::var("USER") {
-        if !user.is_empty() && user.len() >= 3 && user != "root" && user != "arch" && user != "linux" {
+        if !user.is_empty()
+            && user.len() >= 3
+            && user != "root"
+            && user != "arch"
+            && user != "linux"
+        {
             out = out.replace(&format!("/{}", user), "/~");
             out = out.replace(&format!("u:{}", user), "u:$USER");
             out = out.replace(&format!("\"{}\"", user), "\"$USER\"");
@@ -79,7 +84,10 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
         "- Session: {} (Desktop: {})\n",
         report.system.session_type, report.system.desktop_environment
     ));
-    out.push_str(&format!("- Pacing env_key: `{}`\n\n", report.system.env_key));
+    out.push_str(&format!(
+        "- Pacing env_key: `{}`\n\n",
+        report.system.env_key
+    ));
 
     out.push_str("## 2. Quyền Hạn & Thiết Bị\n");
     out.push_str(&format!(
@@ -153,7 +161,10 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
     out.push_str(&format!(
         "- File cấu hình: {}\n",
         if report.config.config_file_exists {
-            format!("Tồn tại (`{}`)", sanitize_path(&report.config.config_path.display().to_string()))
+            format!(
+                "Tồn tại (`{}`)",
+                sanitize_path(&report.config.config_path.display().to_string())
+            )
         } else {
             "Chưa tạo file riêng (dùng mặc định)".to_string()
         }
@@ -408,15 +419,26 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
     out.push_str("## 11. Thống Kê Pacing & Bộ Đếm Sự Kiện (Zero-Keystroke Telemetry)\n");
     let uptime_secs = report.telemetry.daemon_uptime_seconds;
     let uptime_str = if uptime_secs >= 3600 {
-        format!("{} giờ {} phút ({}s)", uptime_secs / 3600, (uptime_secs % 3600) / 60, uptime_secs)
+        format!(
+            "{} giờ {} phút ({}s)",
+            uptime_secs / 3600,
+            (uptime_secs % 3600) / 60,
+            uptime_secs
+        )
     } else if uptime_secs >= 60 {
         format!("{} phút ({}s)", uptime_secs / 60, uptime_secs)
     } else {
         format!("{}s", uptime_secs)
     };
     out.push_str(&format!("- Uptime bộ đếm Fcitx5: {}\n", uptime_str));
-    out.push_str(&format!("- Giao thức kết nối: {}\n", report.telemetry.connected_protocol));
-    out.push_str(&format!("- Chế độ Pacing đang chạy: `{}`\n", report.telemetry.active_pacing_mode));
+    out.push_str(&format!(
+        "- Giao thức kết nối: {}\n",
+        report.telemetry.connected_protocol
+    ));
+    out.push_str(&format!(
+        "- Chế độ Pacing đang chạy: `{}`\n",
+        report.telemetry.active_pacing_mode
+    ));
     out.push_str(&format!(
         "- Tổng thao tác gõ: {} REPLACE, {} FORWARD\n\n",
         report.telemetry.replace_count, report.telemetry.forward_count
@@ -456,16 +478,34 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
     for g in &report.telemetry.groups {
         out.push_str(&format!(
             "| {} | {} ms | {} ms | {} ms | {} ms | {} µs | {} ms |\n",
-            g.name, g.current_delay_ms, g.floor_ms, g.ceiling_ms, g.gap_ms, g.hold_us, g.ssthresh_ms
+            g.name,
+            g.current_delay_ms,
+            g.floor_ms,
+            g.ceiling_ms,
+            g.gap_ms,
+            g.hold_us,
+            g.ssthresh_ms
         ));
     }
     out.push('\n');
 
     out.push_str("- Bộ đếm sự kiện bất thường (Incidents):\n");
-    out.push_str(&format!("  * Lệch đồng hồ (Event loop drift): {}\n", report.telemetry.drift_detected_count));
-    out.push_str(&format!("  * Sentinel Timeouts: {}\n", report.telemetry.sentinel_timeout_count));
-    out.push_str(&format!("  * Tràn hàng đợi (Buffer overflows): {}\n", report.telemetry.overflow_count));
-    out.push_str(&format!("  * Lệch Surrounding Text: {}\n", report.telemetry.surrounding_mismatch_count));
+    out.push_str(&format!(
+        "  * Lệch đồng hồ (Event loop drift): {}\n",
+        report.telemetry.drift_detected_count
+    ));
+    out.push_str(&format!(
+        "  * Sentinel Timeouts: {}\n",
+        report.telemetry.sentinel_timeout_count
+    ));
+    out.push_str(&format!(
+        "  * Tràn hàng đợi (Buffer overflows): {}\n",
+        report.telemetry.overflow_count
+    ));
+    out.push_str(&format!(
+        "  * Lệch Surrounding Text: {}\n",
+        report.telemetry.surrounding_mismatch_count
+    ));
     out.push_str("- Bảo mật quyền riêng tư: 100% không ghi ký tự hoặc nội dung văn bản.\n\n");
 
     out.push_str("> [!TIP] Hướng dẫn dành cho Tester KWin / GNOME:\n");

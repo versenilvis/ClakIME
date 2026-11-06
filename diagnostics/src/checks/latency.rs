@@ -316,7 +316,10 @@ fn detect_daemon_uptime_seconds() -> u64 {
                 if let Ok(content) = fs::read(&cmdline_path) {
                     if let Some(first_null) = content.iter().position(|&b| b == 0) {
                         let arg0 = String::from_utf8_lossy(&content[..first_null]);
-                        if std::path::Path::new(&*arg0).file_name().is_some_and(|n| n == "fcitx5") {
+                        if std::path::Path::new(&*arg0)
+                            .file_name()
+                            .is_some_and(|n| n == "fcitx5")
+                        {
                             if let Ok(meta) = fs::metadata(format!("/proc/{}", pid)) {
                                 if let Ok(mod_time) = meta.modified() {
                                     if let Ok(elapsed) = mod_time.elapsed() {
@@ -334,10 +337,14 @@ fn detect_daemon_uptime_seconds() -> u64 {
 }
 
 fn detect_connected_protocol() -> String {
-    let session = std::env::var("XDG_SESSION_TYPE").unwrap_or_default().to_lowercase();
+    let session = std::env::var("XDG_SESSION_TYPE")
+        .unwrap_or_default()
+        .to_lowercase();
     let has_wayland = std::env::var("WAYLAND_DISPLAY").is_ok();
     if session == "wayland" || has_wayland {
-        let comp = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().to_lowercase();
+        let comp = std::env::var("XDG_CURRENT_DESKTOP")
+            .unwrap_or_default()
+            .to_lowercase();
         if comp.contains("kde") {
             "Wayland (KWin text-input-v3 / virtual-keyboard-v1)".to_string()
         } else if comp.contains("gnome") {
@@ -554,7 +561,9 @@ pub fn check_telemetry() -> PacingTelemetry {
             let sub = &line[idx + 5..];
             let m: String = sub.chars().take_while(|c| !c.is_whitespace()).collect();
             if m == "fixed_13_backoff" {
-                active_pacing_mode = "fixed_13_backoff (mặc định: post 13ms / gap 2ms / pre 13ms, backoff 30ms/4ms)".to_string();
+                active_pacing_mode =
+                    "fixed_13_backoff (mặc định: post 13ms / gap 2ms / pre 13ms, backoff 30ms/4ms)"
+                        .to_string();
                 break;
             } else if m == "adaptive" {
                 active_pacing_mode = "adaptive (CLAK_ADAPTIVE=1)".to_string();

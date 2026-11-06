@@ -408,7 +408,7 @@ uint32_t AdaptivePacingEngine::calculatePreDelay(PacingGroup group, uint64_t las
         if (isSimpleBackoffMode()) {
             return m.post_delay_ms;
         }
-        uint32_t eff_pre = std::max(m.post_delay_ms, m.pre_delay_ms);
+        uint32_t eff_pre = std::max(16u, m.pre_delay_ms);
         // adapt pre-delay to target application latency under load
         if (m.smoothed_rtt_ms > eff_pre) {
             eff_pre = std::min(m.ceiling_post_ms, std::max(eff_pre, m.smoothed_rtt_ms / 2));

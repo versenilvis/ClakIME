@@ -137,7 +137,10 @@ fn detect_env_key() -> String {
     let fcitx5_ver = detect_fcitx5_version();
     let clak_ver = clak_engine::VERSION;
 
-    format!("{}:{}:fcitx5:{}:clak:{}", comp, comp_ver, fcitx5_ver, clak_ver)
+    format!(
+        "{}:{}:fcitx5:{}:clak:{}",
+        comp, comp_ver, fcitx5_ver, clak_ver
+    )
 }
 
 pub fn check_system() -> SystemInfo {
