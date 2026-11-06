@@ -2,6 +2,54 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.8.0](https://github.com/versenilvis/ClakIME/releases/tag/v0.8.0) - 2026-11-06
+
+### Bug fixes
+
+- Stabilize address bar pacing delay and prevent spurious autofill backspaces ([794a4d](https://github.com/versenilvis/ClakIME/commit/794a4d2248b4edbfcd7c346fe3bb6f4359f1a7b0))
+- Route claude.ai and ai web editors through uinput with draftjs pacing ([c520f5](https://github.com/versenilvis/ClakIME/commit/c520f5d50754b0d3c73cbb8fedffb5b25e7a8017))
+- Allow word seeding and re-toning after backspace ([9935ce](https://github.com/versenilvis/ClakIME/commit/9935ce94e9d70a976b02794a58dd16b0b5bf785b))
+- Treat only search bar as draftjs and keep chat composer on surrounding text ([a64a5a](https://github.com/versenilvis/ClakIME/commit/a64a5afc08354b2fdefebcf9368be9a6b06dc423))
+- Preserve unwind strategy to ensure catch_unwind protects fcitx5 daemon ([a9cdd9](https://github.com/versenilvis/ClakIME/commit/a9cdd972d3d9eee2cb959c7565cd4b512b5b68ff))
+- Clamp selection bounds on surrounding text and add ci panic guard ([b83f21](https://github.com/versenilvis/ClakIME/commit/b83f214e693d6fa68d90f32a8501556a62a8f94d))
+- Flush replay batch before uinput backspaces and expand buffer capacity ([83fa00](https://github.com/versenilvis/ClakIME/commit/83fa00bd9a4865e9c7670f05841ec7ab060fd5ea))
+- Restrict to_base_ascii matching with temporal and cursor boundary guards ([a430d1](https://github.com/versenilvis/ClakIME/commit/a430d12059efa25cb34f64fff28b622d79852567))
+- Make key hold duration configurable and enforce 1ms hold for wayland compositors ([3372b4](https://github.com/versenilvis/ClakIME/commit/3372b45634e71706542243e46001b5484e4173e8))
+- Absorb rapid backspaces in memory during replay ([549e9a](https://github.com/versenilvis/ClakIME/commit/549e9ab46cc00fd3f8ee36c5cdce84ae8f4762ff))
+- Guard rich text editor fallback with browser check ([5333e9](https://github.com/versenilvis/ClakIME/commit/5333e9c6d1a94f157937a36c68a5de8918492267))
+- Flush queued keys in fifo order on buffer overflow ([b8f246](https://github.com/versenilvis/ClakIME/commit/b8f246a0e4280ebf656dd793567329f4fa6169e9))
+- Use stable compositor commit prefix in env_key and expose in diagnostics ([d4c805](https://github.com/versenilvis/ClakIME/commit/d4c80524e0a3699e98fda57a2adcc581702d65dc))
+- Enforce hold_us in paced uinput and scale pre_delay with rtt ([ac6005](https://github.com/versenilvis/ClakIME/commit/ac6005bc30840e1da3e90afd66db4e2ca6338034))
+
+### Documentation
+
+- Document thread safety and enable strip in release packaging ([f399df](https://github.com/versenilvis/ClakIME/commit/f399df6f0a9fa49df3185c2189c6ce92abdf0288))
+
+### Features
+
+- Add firefox address bar autocomplete heuristic and messenger settle pacing ([10e5eb](https://github.com/versenilvis/ClakIME/commit/10e5eb493dd5fb4bcebb7b23b84a6fca0f3210c3))
+- Add uncommit word resurrection on backspace after trailing space ([154d1f](https://github.com/versenilvis/ClakIME/commit/154d1ffa28b3d279033d288acac7603506e7ba3d))
+- Add X11 window hierarchy traversal for app resolution ([1261e1](https://github.com/versenilvis/ClakIME/commit/1261e16b102b84c12eb211edaa20041305beb7b0))
+- Support per-app mode rules in engine and runtime dispatch ([4a25a5](https://github.com/versenilvis/ClakIME/commit/4a25a5b7c8062902fa888cf4951dba35a565e6cf))
+- Update advanced settings to configure per-app modes ([e21f04](https://github.com/versenilvis/ClakIME/commit/e21f0447a81f683c425485b0eba5a31bb79e907c))
+- Warn on GTK_IM_MODULE=fcitx in wayland session ([d87f34](https://github.com/versenilvis/ClakIME/commit/d87f34d38ce424163dc8529006331023a38fd19a))
+- Parameterize pacing constants and add fixed delay env overrides ([747d9e](https://github.com/versenilvis/ClakIME/commit/747d9ee6c5abbec5623e29760eaffded53d22682))
+- Persist learned clean floor with environment fingerprint and 7-day ttl ([ce56fd](https://github.com/versenilvis/ClakIME/commit/ce56fddc9746be88af0a10079984e23ba2a59175))
+- Add human readable env_key and zero keystroke pacing telemetry ([0e6794](https://github.com/versenilvis/ClakIME/commit/0e67946c767c95eb875e652e2f461fb9fa627358))
+- Accelerate decay when rtt is low and generalize rtt auto pacing ([152d43](https://github.com/versenilvis/ClakIME/commit/152d43608f73bd31d34e116e469faa6adcadb7fb))
+- Implement tcp-style ssthresh decay and dynamic baseline rtt ([c4a66e](https://github.com/versenilvis/ClakIME/commit/c4a66e55c06b7660c8efa182fc5cf3d8936c02c2))
+- Enrich telemetry with 3-tier stats, pacing snapshot and sanitize privacy ([ecc6f6](https://github.com/versenilvis/ClakIME/commit/ecc6f6bcd76418c803847f06ae090865dcc67db9))
+- Fix fixed baseline parity, isolate ssthresh and sanitize doctor telemetry ([512795](https://github.com/versenilvis/ClakIME/commit/512795354dc0d5376fc6188c51ba18ae4c956c5d))
+- Make fixed_13_backoff default, fix sentinel timeout recovery and WebDraftJs threshold ([9b9fac](https://github.com/versenilvis/ClakIME/commit/9b9fac3caee4d5ef5c006c8f2fed42df7f4d2aff))
+
+### Performance
+
+- Eliminate heap allocations in surrounding text processing ([e98cd6](https://github.com/versenilvis/ClakIME/commit/e98cd673a5025a4fe0caf334eed3a9175292946e))
+
+### Refactors
+
+- Make adaptive engine strictly in-memory without disk persistence ([a5fee4](https://github.com/versenilvis/ClakIME/commit/a5fee45184ec74e3b8b9b8ca99bed61e07aba7a6))
+
 ## [v0.7.8](https://github.com/versenilvis/ClakIME/releases/tag/v0.7.8) - 2026-11-03
 
 ### Bug fixes
