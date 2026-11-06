@@ -31,9 +31,8 @@
               src = pkgs.lib.cleanSource ./.;
 
               cargoDeps = pkgs.rustPlatform.importCargoLock {
-                lockFile = ./engine/Cargo.lock;
+                lockFile = ./Cargo.lock;
               };
-              cargoRoot = "engine";
 
               nativeBuildInputs = with pkgs; [
                 cmake

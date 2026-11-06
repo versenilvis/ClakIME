@@ -25,10 +25,10 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      - name: Install mold linker
+      - name: Install system dependencies
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y mold clang
+          sudo apt-get install -y libfontconfig1-dev
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -95,7 +95,7 @@ jobs:
             image: archlinux:latest
             setup: |
               pacman -Syu --noconfirm --needed \
-                base-devel cmake ninja extra-cmake-modules fcitx5 libinput rustup git nodejs gtest
+                base-devel cmake ninja extra-cmake-modules fcitx5 libinput rustup git nodejs gtest fontconfig
               rustup default stable
               rustup show
             cmake_args: "-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr"
