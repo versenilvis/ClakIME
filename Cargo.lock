@@ -688,7 +688,7 @@ dependencies = [
 
 [[package]]
 name = "clak-engine"
-version = "0.7.8"
+version = "0.8.0"
 dependencies = [
  "criterion",
  "libc",
@@ -699,7 +699,7 @@ dependencies = [
 
 [[package]]
 name = "clak-gui"
-version = "0.7.8"
+version = "0.8.0"
 dependencies = [
  "arboard",
  "chrono",
