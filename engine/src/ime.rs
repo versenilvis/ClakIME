@@ -180,6 +180,8 @@ impl ClakContext {
                                 matched = true;
                             }
                         }
+                    } else {
+                        matched = true;
                     }
 
                     if matched {
@@ -1319,7 +1321,7 @@ mod tests {
     }
 
     #[test]
-    fn test_uncommit_not_resumed_without_surrounding_text() {
+    fn test_uncommit_resumed_without_surrounding_text() {
         let mut ctx = ClakContext::new(Method::Telex);
 
         for ch in "toan".chars() {
@@ -1328,11 +1330,16 @@ mod tests {
         ctx.process_key(0x20, " ", false, None, 0, 0);
         assert!(ctx.uncommit_candidate.is_some());
 
-        // backspace in terminal without surrounding text must not resume candidate
+        // backspace in terminal without surrounding text resumes candidate for re-toning
         let act = ctx.process_key(0xff08, "", false, None, 0, 0);
         assert_eq!(act.action_type, ACTION_FORWARD);
-        assert_eq!(ctx.last_composed, "");
-        assert_eq!(ctx.raw_buffer, "");
+        assert_eq!(ctx.last_composed, "toan");
+        assert_eq!(ctx.raw_buffer, "toan");
+
+        // typing tone key applies to resumed word
+        let act = ctx.process_key('s' as u32, "s", false, None, 0, 0);
+        assert_eq!(act.action_type, ACTION_REPLACE);
+        assert_eq!(ctx.last_composed, "toán");
     }
 
     #[test]
