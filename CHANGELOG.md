@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.8.1](https://github.com/versenilvis/ClakIME/releases/tag/v0.8.1) - 2026-11-07
+
+### Bug fixes
+
+- English words ([87b9da](https://github.com/versenilvis/ClakIME/commit/87b9daf045696a1aecae8448e8d5f15c581c33c4))
+
 ## [v0.8.0](https://github.com/versenilvis/ClakIME/releases/tag/v0.8.0) - 2026-11-06
 
 ### Bug fixes
