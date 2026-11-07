@@ -180,8 +180,6 @@ impl ClakContext {
                                 matched = true;
                             }
                         }
-                    } else {
-                        matched = true;
                     }
 
                     if matched {
@@ -376,6 +374,7 @@ impl ClakContext {
                     let del_str = self.last_composed.clone();
                     let mut commit_text = replacement;
                     commit_text.push_str(key_str);
+                    self.uncommit_candidate = None;
                     self.reset();
                     self.just_deleted = false;
                     self.stale_surr = None;
@@ -388,6 +387,7 @@ impl ClakContext {
                 if let Some(text) = surrounding_text {
                     let chars: Vec<char> = text.chars().collect();
                     if cursor > 0 && cursor <= chars.len() && chars[cursor - 1] == ' ' {
+                        self.uncommit_candidate = None;
                         self.reset();
                         self.just_deleted = false;
                         self.stale_surr = None;
@@ -413,6 +413,7 @@ impl ClakContext {
                     orig_text.push_str(key_str);
                     let mut commit_text = corrected;
                     commit_text.push_str(key_str);
+                    self.uncommit_candidate = None;
                     self.reset();
                     self.just_deleted = false;
                     self.stale_surr = None;
@@ -437,6 +438,7 @@ impl ClakContext {
                 let del_str = self.last_composed.clone();
                 let mut commit_text = self.raw_buffer.clone();
                 commit_text.push_str(key_str);
+                self.uncommit_candidate = None;
                 self.reset();
                 self.just_deleted = false;
                 self.stale_surr = None;
@@ -1314,5 +1316,36 @@ mod tests {
         let act = ctx.process_key('1' as u32, "1", false, Some("toan"), 4, 4);
         assert_eq!(act.action_type, ACTION_REPLACE);
         assert_eq!(ctx.last_composed, "toán");
+    }
+
+    #[test]
+    fn test_uncommit_not_resumed_without_surrounding_text() {
+        let mut ctx = ClakContext::new(Method::Telex);
+
+        for ch in "toan".chars() {
+            ctx.process_key(ch as u32, &ch.to_string(), false, None, 0, 0);
+        }
+        ctx.process_key(0x20, " ", false, None, 0, 0);
+        assert!(ctx.uncommit_candidate.is_some());
+
+        // backspace in terminal without surrounding text must not resume candidate
+        let act = ctx.process_key(0xff08, "", false, None, 0, 0);
+        assert_eq!(act.action_type, ACTION_FORWARD);
+        assert_eq!(ctx.last_composed, "");
+        assert_eq!(ctx.raw_buffer, "");
+    }
+
+    #[test]
+    fn test_uncommit_cleared_on_auto_restore_stop_coda() {
+        let mut ctx = ClakContext::new(Method::Telex);
+
+        for ch in "ddaattat".chars() {
+            ctx.process_key(ch as u32, &ch.to_string(), false, None, 0, 0);
+        }
+        // space triggers auto-restore due to invalid stop coda
+        let act = ctx.process_key(0x20, " ", false, None, 0, 0);
+        assert_eq!(act.action_type, ACTION_REPLACE);
+        assert!(ctx.uncommit_candidate.is_none());
+        assert_eq!(ctx.raw_buffer, "");
     }
 }

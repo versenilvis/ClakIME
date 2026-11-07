@@ -69,6 +69,11 @@ void ClakState::onDeactivate() {
     surr_cursor_underflow_count_ = 0;
     if (!is_deleting_) {
         verifier_.reset(/*hard_reset=*/true);
+        bool is_terminal = (ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal)) ||
+                           config::isTerminalApp(appKey());
+        if (is_terminal) {
+            resetHard();
+        }
     }
 }
 

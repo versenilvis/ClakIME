@@ -53,6 +53,10 @@ moc_*.cpp
 .clangd/
 .cache/clangd/
 
+# --- Python ---
+__pycache__/
+*.pyc
+
 # --- OS ---
 .DS_Store
 Thumbs.db

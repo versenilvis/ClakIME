@@ -1067,6 +1067,7 @@ mod tests {
         assert_eq!(e.transform("docker"), "docker");
 
         let e = eng(true, true);
+        assert_eq!(e.transform("ins"), "ín");
         assert_eq!(e.transform("boss"), "boss");
         assert_eq!(e.transform("bosss"), "boss");
         assert_eq!(e.transform("mess"), "mess");

@@ -16,7 +16,7 @@ bool isVteTerminalApp(const std::string& app) {
         "gnome-terminal", "gnome-terminal-server",
         "x-terminal-emulator", "x-terminal-emul",
         "tilix", "terminator", "guake", "xfce4-terminal", "mate-terminal",
-        "terminal"
+        "terminal", "ghostty"
     };
     for (const auto& t : vte_terms) {
         if (app.find(t) != std::string::npos) return true;
