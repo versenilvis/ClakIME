@@ -111,6 +111,13 @@ impl ClakCore {
         self.user_bases.clear();
     }
 
+    pub fn is_exact_dict_word(&self, word: &str) -> bool {
+        let w = word
+            .trim_start_matches(|c: char| c.is_ascii_digit())
+            .to_lowercase();
+        self.user_words.contains(&w) || dict().binary_search(&w.as_str()).is_ok()
+    }
+
     fn dict_known(&self, word: &str) -> bool {
         let word = word.trim_start_matches(|c: char| c.is_ascii_digit());
         if word.is_empty() {
@@ -156,8 +163,13 @@ impl ClakCore {
             Method::TeipVni => engine::convert_teip_vni(input, self.modern, self.short_w),
             Method::Viqr => engine::convert_viqr(input),
         };
+        let is_en = crate::english_dict::is_english(input);
         let known = if self.dict {
-            self.dict_known(&composed.to_lowercase())
+            if is_en {
+                self.is_exact_dict_word(&composed)
+            } else {
+                self.dict_known(&composed.to_lowercase())
+            }
         } else {
             Self::is_valid(&composed)
         };
@@ -285,17 +297,23 @@ pub(crate) fn should_auto_restore(input: &str, composed: &str, known_vn: bool) -
         return false;
     }
 
-    // trailing doubled tone modifiers that swallowed a character are intentional un-toning
-    if ends_with_doubled_tone_modifier(input) && input.len() > composed.len() {
-        return false;
+    let is_en = crate::english_dict::is_english(input);
+
+    // trailing doubled tone modifiers that actually swallowed one of the modifier characters are intentional un-toning
+    if !is_en && ends_with_doubled_tone_modifier(input) {
+        let lower_in = input.to_ascii_lowercase();
+        let lower_comp = composed.to_ascii_lowercase();
+        let mod_suffix = &lower_in[lower_in.len() - 2..];
+        if !lower_comp.ends_with(mod_suffix) && input.len() > composed.len() {
+            return false;
+        }
     }
 
     // un-toning resolved to a valid english word while raw is not valid english
-    if crate::english_dict::is_english(composed) && !crate::english_dict::is_english(input) {
+    if crate::english_dict::is_english(composed) && !is_en {
         return false;
     }
 
-    let is_en = crate::english_dict::is_english(input);
     let swallowed_char =
         (!has_consecutive_modifiers(input) || is_en) && input.len() > composed.len();
 
@@ -994,21 +1012,25 @@ mod tests {
 
     #[test]
     fn test_doubled_modifier_english_words_and_un_toning() {
-        // trailing doubled tone modifiers are intentional un-toning actions
+        // valid english words restore cleanly, un-toned non-english words keep tone stripped
         let e = eng(true, false);
-        assert_eq!(e.transform("boss"), "bos");
+        assert_eq!(e.transform("boss"), "boss");
         assert_eq!(e.transform("bosss"), "boss");
-        assert_eq!(e.transform("pass"), "pas");
+        assert_eq!(e.transform("pass"), "pass");
         assert_eq!(e.transform("passs"), "pass");
         assert_eq!(e.transform("class"), "class");
-        assert_eq!(e.transform("less"), "les");
+        assert_eq!(e.transform("less"), "less");
         assert_eq!(e.transform("lesss"), "less");
-        assert_eq!(e.transform("mess"), "mes");
+        assert_eq!(e.transform("mess"), "mess");
         assert_eq!(e.transform("messs"), "mess");
-        assert_eq!(e.transform("err"), "er");
+        assert_eq!(e.transform("err"), "err");
         assert_eq!(e.transform("errr"), "err");
+        assert_eq!(e.transform("coss"), "cos");
+        assert_eq!(e.transform("toanss"), "toans");
+        assert_eq!(e.transform("nhass"), "nhas");
 
         // intervocalic doubled modifiers in english words
+        assert_eq!(e.transform("showoff"), "showoff");
         assert_eq!(e.transform("error"), "error");
         assert_eq!(e.transform("sorry"), "sorry");
         assert_eq!(e.transform("tomorrow"), "tomorrow");
@@ -1045,10 +1067,11 @@ mod tests {
         assert_eq!(e.transform("docker"), "docker");
 
         let e = eng(true, true);
-        assert_eq!(e.transform("boss"), "bos");
+        assert_eq!(e.transform("boss"), "boss");
         assert_eq!(e.transform("bosss"), "boss");
-        assert_eq!(e.transform("mess"), "mes");
+        assert_eq!(e.transform("mess"), "mess");
         assert_eq!(e.transform("messs"), "mess");
+        assert_eq!(e.transform("coss"), "cos");
         assert_eq!(e.transform("error"), "error");
         assert_eq!(e.transform("mixx"), "mix");
     }

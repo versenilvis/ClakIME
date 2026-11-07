@@ -48,13 +48,85 @@ fn telex_tone_not_lost_on_consonant_gap() {
 }
 #[test]
 fn telex_words() {
+    assert_eq!(t("chaof"), "chào");
+    assert_eq!(t("vieejt"), "việt");
+    assert_eq!(t("tieengs"), "tiếng");
+    assert_eq!(t("quas"), "quá");
+    assert_eq!(t("gias"), "giá");
     assert_eq!(t("xin"), "xin");
     assert_eq!(t("tooi"), "tôi");
     assert_eq!(t("laf"), "là");
     assert_eq!(t("cos"), "có");
     assert_eq!(t("khoong"), "không");
-    assert_eq!(t("tieengs"), "tiếng");
     assert_eq!(t("Vieetj"), "Việt");
+}
+
+#[test]
+fn telex_english_robustness() {
+    let mut engine = clak_engine::ClakCore::new(clak_engine::Method::Telex);
+    engine.set_auto_restore(true);
+    engine.set_dict(true);
+
+    let sample = [
+        "root",
+        "boot",
+        "shoot",
+        "zoom",
+        "keep",
+        "meet",
+        "deep",
+        "draw",
+        "hawk",
+        "raw",
+        "saw",
+        "law",
+        "boss",
+        "loss",
+        "cross",
+        "pass",
+        "mass",
+        "less",
+        "mess",
+        "guess",
+        "miss",
+        "kiss",
+        "off",
+        "staff",
+        "cliff",
+        "stuff",
+        "buff",
+        "cuff",
+        "puff",
+        "tariff",
+        "sheriff",
+        "showoff",
+        "playoff",
+        "cutoff",
+        "kickoff",
+        "payoff",
+        "turnoff",
+        "dropoff",
+        "layoff",
+        "password",
+        "messages",
+        "official",
+        "offers",
+        "issues",
+        "effects",
+        "currently",
+        "commit",
+        "branch",
+        "checkout",
+        "rebase",
+        "pull",
+        "daemon",
+        "socket",
+        "buffer",
+    ];
+
+    for word in sample {
+        assert_eq!(engine.transform(word), word, "failed on {}", word);
+    }
 }
 #[test]
 fn telex_uow() {
@@ -104,6 +176,10 @@ fn telex_english() {
     assert_eq!(t("detej"), "dệt");
     assert_eq!(convert_telex_auto_restore("detect", true, false), "detect");
     assert_eq!(convert_telex_auto_restore("detec", true, false), "detec");
+    assert_eq!(
+        convert_telex_auto_restore("showoff", true, false),
+        "showoff"
+    );
     assert_eq!(t("delete"), "delete");
     assert_eq!(t("hotel"), "hotel");
     assert_eq!(t("metal"), "metal");
