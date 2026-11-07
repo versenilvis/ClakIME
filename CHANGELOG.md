@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.8.2](https://github.com/versenilvis/ClakIME/releases/tag/v0.8.2) - 2026-11-07
+
+### Bug fixes
+
+- Support ghostty with committed deletion and fix terminal candidate uncommit ([7c390c](https://github.com/versenilvis/ClakIME/commit/7c390c14b2ed01bab634738e21747ff67c4f18f5))
+
 ## [v0.8.1](https://github.com/versenilvis/ClakIME/releases/tag/v0.8.1) - 2026-11-07
 
 ### Bug fixes
