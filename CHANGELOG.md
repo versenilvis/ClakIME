@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.8.3](https://github.com/versenilvis/ClakIME/releases/tag/v0.8.3) - 2026-11-07
+
+### Bug fixes
+
+- Allow uncommit word resumption without surrounding text in terminals ([c4e7e8](https://github.com/versenilvis/ClakIME/commit/c4e7e88bb361b327d77b6df2f4471815ddedd4ef))
+
 ## [v0.8.2](https://github.com/versenilvis/ClakIME/releases/tag/v0.8.2) - 2026-11-07
 
 ### Bug fixes
