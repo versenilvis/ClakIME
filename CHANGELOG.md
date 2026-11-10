@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.8.4](https://github.com/versenilvis/ClakIME/releases/tag/v0.8.4) - 2026-11-10
+
+### Features
+
+- Add auto_restore_english option for doubled tone modifiers ([93c5bc](https://github.com/versenilvis/ClakIME/commit/93c5bc1ddb0e877300915f849ed9df517b22b1f9))
+
 ## [v0.8.3](https://github.com/versenilvis/ClakIME/releases/tag/v0.8.3) - 2026-11-07
 
 ### Bug fixes
