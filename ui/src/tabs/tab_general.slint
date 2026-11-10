@@ -18,6 +18,7 @@ export component TabGeneral inherits VerticalLayout {
     in-out property <bool> shift_autofix: true;
     in-out property <bool> spelling_enabled: true;
     in-out property <bool> auto_restore: true;
+    in-out property <bool> auto_restore_english: false;
     in-out property <bool> modern_tone: false;
     in-out property <string> playground_input: "";
     in property <bool> is-wide: false;
@@ -155,6 +156,14 @@ export component TabGeneral inherits VerticalLayout {
         subtitle: "Trả về chuỗi gốc khi từ không hợp lệ";
         is-wide: root.is-wide;
         checked <=> root.auto_restore;
+        toggled => { root.changed(); }
+    }
+
+    SettingItem {
+        title: "Tự động sửa từ tiếng Anh";
+        subtitle: "Tự khôi phục từ tiếng Anh có phím lặp (vd: miss, boss, pass)";
+        is-wide: root.is-wide;
+        checked <=> root.auto_restore_english;
         toggled => { root.changed(); }
     }
 

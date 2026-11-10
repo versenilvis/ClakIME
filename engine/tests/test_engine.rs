@@ -65,6 +65,7 @@ fn telex_words() {
 fn telex_english_robustness() {
     let mut engine = clak_engine::ClakCore::new(clak_engine::Method::Telex);
     engine.set_auto_restore(true);
+    engine.set_auto_restore_english(true);
     engine.set_dict(true);
 
     let sample = [
@@ -127,6 +128,16 @@ fn telex_english_robustness() {
     for word in sample {
         assert_eq!(engine.transform(word), word, "failed on {}", word);
     }
+
+    // when auto_restore_english is off (default), trailing doubled tone modifiers un-tone instead of expanding
+    engine.set_auto_restore_english(false);
+    assert_eq!(engine.transform("miss"), "mis");
+    assert_eq!(engine.transform("misst"), "mist");
+    assert_eq!(engine.transform("misss"), "miss");
+    assert_eq!(engine.transform("boss"), "bos");
+    assert_eq!(engine.transform("pass"), "pas");
+    assert_eq!(engine.transform("showoff"), "showoff");
+    assert_eq!(engine.transform("password"), "password");
 }
 #[test]
 fn telex_uow() {

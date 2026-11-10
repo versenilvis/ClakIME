@@ -1117,6 +1117,7 @@ fn save_config(
 
     cfg_to_save.spelling.enabled = window.get_spelling_enabled();
     cfg_to_save.spelling.auto_restore = window.get_auto_restore();
+    cfg_to_save.spelling.auto_restore_english = window.get_auto_restore_english();
     cfg_to_save.spelling.modern_tone = window.get_modern_tone();
     cfg_to_save.spelling.autocorrect = window.get_autocorrect();
 
@@ -1194,6 +1195,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     main_window.set_spelling_enabled(cfg.spelling.enabled);
     main_window.set_auto_restore(cfg.spelling.auto_restore);
+    main_window.set_auto_restore_english(cfg.spelling.auto_restore_english);
     main_window.set_modern_tone(cfg.spelling.modern_tone);
     main_window.set_autocorrect(cfg.spelling.autocorrect);
 
@@ -1599,6 +1601,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         window.set_bracket_brackets(default_cfg.general.bracket_brackets);
         window.set_spelling_enabled(default_cfg.spelling.enabled);
         window.set_auto_restore(default_cfg.spelling.auto_restore);
+        window.set_auto_restore_english(default_cfg.spelling.auto_restore_english);
         window.set_modern_tone(default_cfg.spelling.modern_tone);
         window.set_autocorrect(default_cfg.spelling.autocorrect);
         window.set_double_space_period(default_cfg.typing.double_space_period);

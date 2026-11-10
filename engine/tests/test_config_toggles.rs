@@ -126,6 +126,29 @@ fn test_toggle_auto_restore() {
 }
 
 #[test]
+fn test_toggle_auto_restore_english() {
+    let mut cfg_off = ClakConfig::default();
+    cfg_off.spelling.auto_restore = true;
+    cfg_off.spelling.auto_restore_english = false;
+
+    let mut ctx_off = ClakContext::new(Method::Telex);
+    ctx_off.apply_config(&cfg_off);
+    type_text(&mut ctx_off, "miss");
+    assert_eq!(ctx_off.last_composed, "mis");
+    type_text(&mut ctx_off, "t");
+    assert_eq!(ctx_off.last_composed, "mist");
+
+    let mut cfg_on = ClakConfig::default();
+    cfg_on.spelling.auto_restore = true;
+    cfg_on.spelling.auto_restore_english = true;
+
+    let mut ctx_on = ClakContext::new(Method::Telex);
+    ctx_on.apply_config(&cfg_on);
+    type_text(&mut ctx_on, "miss");
+    assert_eq!(ctx_on.last_composed, "miss");
+}
+
+#[test]
 fn test_toggle_auto_capitalize() {
     let mut cfg_on = ClakConfig::default();
     cfg_on.typing.auto_capitalize = true;

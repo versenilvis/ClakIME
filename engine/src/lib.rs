@@ -49,6 +49,7 @@ pub struct ClakCore {
     modern: bool,
     short_w: bool,
     auto_restore: bool,
+    auto_restore_english: bool,
     dict: bool,
     user_words: HashSet<String>,
     user_bases: Vec<String>,
@@ -63,6 +64,7 @@ impl ClakCore {
             modern: true,
             short_w: false,
             auto_restore: false,
+            auto_restore_english: false,
             dict: false,
             user_words: HashSet::new(),
             user_bases: Vec::new(),
@@ -92,6 +94,12 @@ impl ClakCore {
     }
     pub fn auto_restore(&self) -> bool {
         self.auto_restore
+    }
+    pub fn set_auto_restore_english(&mut self, v: bool) {
+        self.auto_restore_english = v;
+    }
+    pub fn auto_restore_english(&self) -> bool {
+        self.auto_restore_english
     }
     pub fn set_dict(&mut self, v: bool) {
         self.dict = v;
@@ -173,7 +181,9 @@ impl ClakCore {
         } else {
             Self::is_valid(&composed)
         };
-        if self.auto_restore && should_auto_restore(input, &composed, known) {
+        if self.auto_restore
+            && should_auto_restore(input, &composed, known, self.auto_restore_english)
+        {
             input.to_string()
         } else {
             composed
@@ -285,7 +295,12 @@ pub(crate) fn ends_with_doubled_tone_modifier(s: &str) -> bool {
         || lower.ends_with("jj")
 }
 
-pub(crate) fn should_auto_restore(input: &str, composed: &str, known_vn: bool) -> bool {
+pub(crate) fn should_auto_restore(
+    input: &str,
+    composed: &str,
+    known_vn: bool,
+    auto_restore_english: bool,
+) -> bool {
     if composed == input {
         return false;
     }
@@ -300,7 +315,7 @@ pub(crate) fn should_auto_restore(input: &str, composed: &str, known_vn: bool) -
     let is_en = crate::english_dict::is_english(input);
 
     // trailing doubled tone modifiers that actually swallowed one of the modifier characters are intentional un-toning
-    if !is_en && ends_with_doubled_tone_modifier(input) {
+    if (!is_en || !auto_restore_english) && ends_with_doubled_tone_modifier(input) {
         let lower_in = input.to_ascii_lowercase();
         let lower_comp = composed.to_ascii_lowercase();
         let mod_suffix = &lower_in[lower_in.len() - 2..];
@@ -431,6 +446,15 @@ pub unsafe extern "C" fn clak_core_set_auto_restore(e: *mut ClakCore, v: i32) {
     if !e.is_null() {
         unsafe {
             (*e).set_auto_restore(v != 0);
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_core_set_auto_restore_english(e: *mut ClakCore, v: i32) {
+    if !e.is_null() {
+        unsafe {
+            (*e).set_auto_restore_english(v != 0);
         }
     }
 }
@@ -887,6 +911,26 @@ pub unsafe extern "C" fn clak_config_set_auto_restore(cfg: *mut config::ClakConf
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_config_get_auto_restore_english(
+    cfg: *const config::ClakConfig,
+) -> bool {
+    if cfg.is_null() {
+        return false;
+    }
+    (*cfg).spelling.auto_restore_english
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_config_set_auto_restore_english(
+    cfg: *mut config::ClakConfig,
+    v: bool,
+) {
+    if !cfg.is_null() {
+        unsafe { (*cfg).spelling.auto_restore_english = v };
+    }
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn clak_config_set_spelling(cfg: *mut config::ClakConfig, v: bool) {
     if !cfg.is_null() {
         unsafe { (*cfg).spelling.enabled = v };
@@ -1012,22 +1056,46 @@ mod tests {
 
     #[test]
     fn test_doubled_modifier_english_words_and_un_toning() {
-        // valid english words restore cleanly, un-toned non-english words keep tone stripped
+        // default mode (auto_restore_english = false): doubled trailing modifier strips tone
         let e = eng(true, false);
-        assert_eq!(e.transform("boss"), "boss");
+        assert_eq!(e.transform("mis"), "mí");
+        assert_eq!(e.transform("miss"), "mis");
+        assert_eq!(e.transform("misst"), "mist");
+        assert_eq!(e.transform("misss"), "miss");
+        assert_eq!(e.transform("missst"), "misst");
+        assert_eq!(e.transform("boss"), "bos");
         assert_eq!(e.transform("bosss"), "boss");
-        assert_eq!(e.transform("pass"), "pass");
+        assert_eq!(e.transform("pass"), "pas");
+        assert_eq!(e.transform("passt"), "past");
         assert_eq!(e.transform("passs"), "pass");
         assert_eq!(e.transform("class"), "class");
-        assert_eq!(e.transform("less"), "less");
+        assert_eq!(e.transform("less"), "les");
+        assert_eq!(e.transform("lesst"), "lest");
         assert_eq!(e.transform("lesss"), "less");
-        assert_eq!(e.transform("mess"), "mess");
+        assert_eq!(e.transform("mess"), "mes");
         assert_eq!(e.transform("messs"), "mess");
-        assert_eq!(e.transform("err"), "err");
+        assert_eq!(e.transform("err"), "er");
         assert_eq!(e.transform("errr"), "err");
         assert_eq!(e.transform("coss"), "cos");
         assert_eq!(e.transform("toanss"), "toans");
         assert_eq!(e.transform("nhass"), "nhas");
+
+        // when auto_restore_english is enabled: doubled trailing modifier restores english word directly
+        let mut e_en = eng(true, false);
+        e_en.set_auto_restore_english(true);
+        assert_eq!(e_en.transform("miss"), "miss");
+        assert_eq!(e_en.transform("boss"), "boss");
+        assert_eq!(e_en.transform("bosss"), "boss");
+        assert_eq!(e_en.transform("pass"), "pass");
+        assert_eq!(e_en.transform("passs"), "pass");
+        assert_eq!(e_en.transform("class"), "class");
+        assert_eq!(e_en.transform("less"), "less");
+        assert_eq!(e_en.transform("lesss"), "less");
+        assert_eq!(e_en.transform("mess"), "mess");
+        assert_eq!(e_en.transform("messs"), "mess");
+        assert_eq!(e_en.transform("err"), "err");
+        assert_eq!(e_en.transform("errr"), "err");
+        assert_eq!(e_en.transform("coss"), "cos");
 
         // intervocalic doubled modifiers in english words
         assert_eq!(e.transform("showoff"), "showoff");
@@ -1068,13 +1136,22 @@ mod tests {
 
         let e = eng(true, true);
         assert_eq!(e.transform("ins"), "ín");
-        assert_eq!(e.transform("boss"), "boss");
+        assert_eq!(e.transform("miss"), "mis");
+        assert_eq!(e.transform("misst"), "mist");
+        assert_eq!(e.transform("misss"), "miss");
+        assert_eq!(e.transform("boss"), "bos");
         assert_eq!(e.transform("bosss"), "boss");
-        assert_eq!(e.transform("mess"), "mess");
+        assert_eq!(e.transform("mess"), "mes");
         assert_eq!(e.transform("messs"), "mess");
         assert_eq!(e.transform("coss"), "cos");
         assert_eq!(e.transform("error"), "error");
         assert_eq!(e.transform("mixx"), "mix");
+
+        let mut e_dict_en = eng(true, true);
+        e_dict_en.set_auto_restore_english(true);
+        assert_eq!(e_dict_en.transform("miss"), "miss");
+        assert_eq!(e_dict_en.transform("boss"), "boss");
+        assert_eq!(e_dict_en.transform("mess"), "mess");
     }
 
     #[test]

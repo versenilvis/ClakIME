@@ -296,7 +296,7 @@ pub fn convert_telex(input: &str, modern: bool, short_w: bool) -> String {
 pub fn convert_telex_auto_restore(input: &str, modern: bool, short_w: bool) -> String {
     let composed = convert_telex_impl(input, modern, short_w);
     let known = crate::spelling::is_valid_cvc(&composed);
-    if crate::should_auto_restore(input, &composed, known) {
+    if crate::should_auto_restore(input, &composed, known, false) {
         input.to_string()
     } else {
         composed
