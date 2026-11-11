@@ -2,6 +2,34 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.9.0](https://github.com/versenilvis/ClakIME/releases/tag/v0.9.0) - 2026-11-11
+
+### Bug fixes
+
+- Harden forwardkey backspace fallback with keycode 22 and delayed commit ([2a06bd](https://github.com/versenilvis/ClakIME/commit/2a06bdc0a590367de9c1435ad1f19457bb0690fa))
+- Detect url autofill shape, preserve delete_ignored streak, and guard send_select shift ([887ca1](https://github.com/versenilvis/ClakIME/commit/887ca1767f847735df53eb01412d016aeaa4cff7))
+- Keep xterm.js on uinput and detect kde konsole case-insensitively ([c31d74](https://github.com/versenilvis/ClakIME/commit/c31d745dbb2f50489035f5fac9bd768130a937c2))
+- Keep clak registered across fcitx5 reloads and test runs ([31f588](https://github.com/versenilvis/ClakIME/commit/31f5881a9286ce481fafdf4db07dcb65d85a80ae))
+- Preserve plain u in uơ decomposition and clear toned vowel on VNI tone removal ([7b03a5](https://github.com/versenilvis/ClakIME/commit/7b03a51bb6f6a1e067210864a163a3ce0a083e4d))
+- Make fcitx5 readiness check compatible with 5.0.14 and verify shutdown exit ([030fd7](https://github.com/versenilvis/ClakIME/commit/030fd78dd0c2adf9bb6ee208c7bc10a27cd617e2))
+- Require established url evidence for address-bar autofill detection ([d143b3](https://github.com/versenilvis/ClakIME/commit/d143b35c2e849bb2caa861be13bf6516b6a4c6e8))
+- Finalize deferred fallback on key buffer overflow and guard stale timers ([061e4b](https://github.com/versenilvis/ClakIME/commit/061e4b976fd12f13831f66cac5d026c1c0522858))
+- Guard replacement-path url-shape check with app mode and meta site ([a62de1](https://github.com/versenilvis/ClakIME/commit/a62de16c31f05627722c8219aba99b9b872b1e8c))
+- Represent inaccessible keyboard as unknown shift state and guard send_select ([fce01e](https://github.com/versenilvis/ClakIME/commit/fce01e3f1b0827f481c8fa7dc9f5ced4f01aa704))
+- Prevent command injection via USER in fix_input_permissions ([c211a1](https://github.com/versenilvis/ClakIME/commit/c211a1a3b2a2c6406e7d197ea90f16747e23bf6c))
+- Drop excessive event node ACLs to prevent input sniffing ([f91d27](https://github.com/versenilvis/ClakIME/commit/f91d27fed3b7ae779df2a7d4faea3933467ab54d))
+- Prevent untrusted script and binary execution from CWD ([e4d2dc](https://github.com/versenilvis/ClakIME/commit/e4d2dcabc0e4fab1e96058f7445e71f9566a7f32))
+- Bypass IME and disable logging on password fields ([469637](https://github.com/versenilvis/ClakIME/commit/469637512a7834fa679ecc5e3460297a61b88f1d))
+
+### Features
+
+- Support vni word reseeding and mid-word editing ([6c9c95](https://github.com/versenilvis/ClakIME/commit/6c9c9527c76ae6d37169f5c117dbe9c5d1ffdda1))
+
+### Refactors
+
+- Delegate replacement-path url-shape check to guarded currentProfile ([a45458](https://github.com/versenilvis/ClakIME/commit/a45458efba0ec50e1bb56a4e3b7f65b51e9c07aa))
+- Unify state into rust engine ([ba400b](https://github.com/versenilvis/ClakIME/commit/ba400b7c3e5a12e7ff884d2f91b34b0dccb5bbc5))
+
 ## [v0.8.4](https://github.com/versenilvis/ClakIME/releases/tag/v0.8.4) - 2026-11-10
 
 ### Features
