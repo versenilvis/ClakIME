@@ -8,18 +8,20 @@ pub fn execute(args: Vec<String>) {
     let repo_root = current_exe
         .parent()
         .and_then(|p| p.parent())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."));
+        .map(PathBuf::from);
 
-    let search_paths = [
-        repo_root.join("build/cargo-target/release/clak-gui"),
-        repo_root.join("ui/target/release/clak-gui"),
-        repo_root.join("build/ui-target/release/clak-gui"),
-        repo_root.join("ui/target/debug/clak-gui"),
-        PathBuf::from("build/cargo-target/release/clak-gui"),
-        PathBuf::from("ui/target/release/clak-gui"),
-        PathBuf::from("clak-gui"),
-    ];
+    let mut search_paths = Vec::new();
+    if let Some(ref root) = repo_root {
+        search_paths.push(root.join("build/cargo-target/release/clak-gui"));
+        search_paths.push(root.join("ui/target/release/clak-gui"));
+        search_paths.push(root.join("build/ui-target/release/clak-gui"));
+        search_paths.push(root.join("ui/target/debug/clak-gui"));
+    }
+    if let Ok(home) = env::var("HOME") {
+        search_paths.push(PathBuf::from(home).join(".local/bin/clak-gui"));
+    }
+    search_paths.push(PathBuf::from("/usr/local/bin/clak-gui"));
+    search_paths.push(PathBuf::from("/usr/bin/clak-gui"));
 
     for candidate in &search_paths {
         if candidate.exists() {
@@ -28,22 +30,21 @@ pub fn execute(args: Vec<String>) {
         }
     }
 
-    // fallback to cargo run
-    let manifest = repo_root.join("ui/Cargo.toml");
-    let manifest_path = if manifest.exists() {
-        manifest
-    } else {
-        PathBuf::from("ui/Cargo.toml")
-    };
-
-    println!("Không tìm thấy binary clak-gui biên dịch sẵn, khởi chạy qua cargo...");
-    let _ = Command::new("cargo")
-        .arg("run")
-        .arg("--manifest-path")
-        .arg(manifest_path)
-        .arg("--release")
-        .args(args)
-        .status();
+    // fallback to cargo run if inside repo root
+    let manifest_path = repo_root.as_ref().map(|r| r.join("ui/Cargo.toml"));
+    if let Some(manifest) = manifest_path {
+        if manifest.exists() {
+            println!("Không tìm thấy binary clak-gui biên dịch sẵn, khởi chạy qua cargo...");
+            let _ = Command::new("cargo")
+                .arg("run")
+                .arg("--manifest-path")
+                .arg(manifest)
+                .arg("--release")
+                .args(args)
+                .status();
+            return;
+        }
+    }
 }
 
 fn exec_binary(bin: &Path, args: &[String]) {

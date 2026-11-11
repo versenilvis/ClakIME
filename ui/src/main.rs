@@ -1683,7 +1683,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .unwrap_or(false)
             });
 
-            let script_cmd = "if [ -f scripts/update.sh ]; then bash scripts/update.sh; elif [ -f \"$HOME/.local/share/clak/update.sh\" ]; then bash \"$HOME/.local/share/clak/update.sh\"; else curl -fsSL https://raw.githubusercontent.com/versenilvis/ClakIME/main/scripts/update.sh | bash; fi; echo ''; read -p 'Nhấn Enter để đóng...' dummy";
+            let script_cmd = "if [ -f \"$HOME/.local/share/clak/update.sh\" ]; then bash \"$HOME/.local/share/clak/update.sh\"; else curl -fsSL https://raw.githubusercontent.com/versenilvis/ClakIME/main/scripts/update.sh | bash; fi; echo ''; read -p 'Nhấn Enter để đóng...' dummy";
 
             let res = if let Some(&term_cmd) = term {
                 let mut cmd = std::process::Command::new(term_cmd);
@@ -1752,7 +1752,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap_or(false)
         });
 
-        let script_cmd = "if [ -f scripts/uninstall.sh ]; then bash scripts/uninstall.sh; elif [ -f \"$HOME/.local/share/clak/uninstall.sh\" ]; then bash \"$HOME/.local/share/clak/uninstall.sh\"; else curl -fsSL https://raw.githubusercontent.com/versenilvis/ClakIME/main/scripts/uninstall.sh | bash; fi; echo ''; read -p 'Nhấn Enter để đóng...' dummy";
+        let script_cmd = "if [ -f \"$HOME/.local/share/clak/uninstall.sh\" ]; then bash \"$HOME/.local/share/clak/uninstall.sh\"; else curl -fsSL https://raw.githubusercontent.com/versenilvis/ClakIME/main/scripts/uninstall.sh | bash; fi; echo ''; read -p 'Nhấn Enter để đóng...' dummy";
 
         if let Some(&term_cmd) = term {
             let mut cmd = std::process::Command::new(term_cmd);
