@@ -1178,9 +1178,39 @@ fn test_surrounding_text_multibyte_and_clamped_boundary_slicing() {
 #[test]
 fn test_decompose_to_vni_roundtrip() {
     use clak_engine::{decompose_to_vni, ClakCore};
-    let core = ClakCore::new(Method::Vni);
-    for w in ["tiến", "người", "được", "đường", "Đặc", "hỏi", "quả", "ươ"] {
-        assert_eq!(core.transform(&decompose_to_vni(w)), w, "word {w}");
+    for method in [Method::Vni, Method::TeipVni] {
+        let core = ClakCore::new(method);
+        for w in [
+            "tiến",
+            "người",
+            "được",
+            "đường",
+            "Đặc",
+            "hỏi",
+            "quả",
+            "ươ",
+            "thuở",
+            "thưở",
+            "huơ",
+            "hươ",
+            "quơ",
+            "THUỞ",
+            "HUƠ",
+        ] {
+            assert_eq!(core.transform(&decompose_to_vni(w)), w, "word {w}");
+        }
+    }
+    assert_ne!(decompose_to_vni("thuở"), decompose_to_vni("thưở"));
+    assert_ne!(decompose_to_vni("huơ"), decompose_to_vni("hươ"));
+
+    // editing a seeded uơ word keeps plain u intact across both VNI methods
+    for method in [Method::Vni, Method::TeipVni] {
+        let mut ctx = ClakContext::new(method);
+        let act = ctx.process_key(b'0' as u32, "0", false, Some("thuở"), 4, 4);
+        assert_eq!(act.action_type, ACTION_REPLACE);
+        let commit = unsafe { CStr::from_ptr(act.commit_str).to_str().unwrap() };
+        assert_eq!(commit, "ơ");
+        assert_eq!(act.delete_count, 1);
     }
 }
 

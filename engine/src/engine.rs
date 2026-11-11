@@ -264,6 +264,40 @@ fn reposition_tone_after_hook(ls: &mut [Letter], modern: bool) {
     }
 }
 
+fn clear_vowel_tone(ls: &mut [Letter]) -> bool {
+    let mut cleared = false;
+    for lt in ls.iter_mut() {
+        if lt.is_vowel && lt.tone != 0 {
+            lt.tone = 0;
+            cleared = true;
+        }
+    }
+    cleared
+}
+
+fn apply_vni_horn(ls: &mut [Letter]) -> bool {
+    let Some(vi) = last_vowel_index(ls) else {
+        return false;
+    };
+    if !matches!(ls[vi].c, 'o' | 'u') || ls[vi].horn_toggled {
+        return false;
+    }
+    if ls[vi].variant == 2 {
+        ls[vi].variant = 0;
+        ls[vi].horn_toggled = true;
+        if ls[vi].c == 'o' && vi > 0 && ls[vi - 1].c == 'u' && ls[vi - 1].variant == 2 {
+            ls[vi - 1].variant = 0;
+            ls[vi - 1].horn_toggled = true;
+        }
+    } else {
+        ls[vi].variant = 2;
+        if ls[vi].c == 'o' && vi > 0 && ls[vi - 1].c == 'u' && !ls[vi - 1].horn_toggled {
+            ls[vi - 1].variant = 2;
+        }
+    }
+    true
+}
+
 fn telex_tone(c: char) -> Option<u8> {
     match c.to_ascii_lowercase() {
         's' => Some(2),
@@ -580,14 +614,8 @@ pub fn convert_teip_vni(input: &str, modern: bool, short_w: bool) -> String {
                     }
                 }
                 '7' => {
-                    if let Some(vi) = last_vowel_index(&ls) {
-                        if matches!(ls[vi].c, 'o' | 'u') {
-                            ls[vi].variant = 2;
-                            if ls[vi].c == 'o' && vi > 0 && ls[vi - 1].c == 'u' {
-                                ls[vi - 1].variant = 2;
-                            }
-                            continue;
-                        }
+                    if apply_vni_horn(&mut ls) {
+                        continue;
                     }
                 }
                 '8' => {
@@ -608,11 +636,8 @@ pub fn convert_teip_vni(input: &str, modern: bool, short_w: bool) -> String {
                     continue;
                 }
                 '0' => {
-                    if let Some(vi) = tone_vowel_index(&ls, modern) {
-                        if ls[vi].tone != 0 {
-                            ls[vi].tone = 0;
-                            continue;
-                        }
+                    if clear_vowel_tone(&mut ls) {
+                        continue;
                     }
                 }
                 _ => {} // digits 1-5 already handled by vni_tone above
@@ -746,13 +771,8 @@ pub fn convert_teip_vni(input: &str, modern: bool, short_w: bool) -> String {
                 }
             }
         }
-        if lc == 'z' {
-            if let Some(vi) = tone_vowel_index(&ls, modern) {
-                if ls[vi].tone != 0 {
-                    ls[vi].tone = 0;
-                    continue;
-                }
-            }
+        if lc == 'z' && clear_vowel_tone(&mut ls) {
+            continue;
         }
 
         ls.push(Letter::new(ch, upper));
@@ -951,14 +971,8 @@ pub fn convert_vni(input: &str, modern: bool, _short_w: bool) -> String {
                 }
             }
             '7' => {
-                if let Some(vi) = last_vowel_index(&ls) {
-                    if matches!(ls[vi].c, 'o' | 'u') {
-                        ls[vi].variant = 2;
-                        if ls[vi].c == 'o' && vi > 0 && ls[vi - 1].c == 'u' {
-                            ls[vi - 1].variant = 2;
-                        }
-                        continue;
-                    }
+                if apply_vni_horn(&mut ls) {
+                    continue;
                 }
             }
             '8' => {
@@ -979,11 +993,8 @@ pub fn convert_vni(input: &str, modern: bool, _short_w: bool) -> String {
                 continue;
             }
             '0' => {
-                if let Some(vi) = tone_vowel_index(&ls, modern) {
-                    if ls[vi].tone != 0 {
-                        ls[vi].tone = 0;
-                        continue;
-                    }
+                if clear_vowel_tone(&mut ls) {
+                    continue;
                 }
             }
             _ => {}

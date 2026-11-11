@@ -1039,11 +1039,13 @@ fn is_modifier_for_method(method: Method, key_ch: char) -> bool {
 pub fn decompose_to_vni(word: &str) -> String {
     let mut result = String::with_capacity(word.len() + 4);
     let mut trailing_tone: Option<char> = None;
+    let mut prev_plain_u = false;
 
     for ch in word.chars() {
         let (base, tone) = decompose_char_to_telex(ch);
         if base.is_empty() {
             result.push(ch);
+            prev_plain_u = matches!(ch, 'u' | 'U');
             continue;
         }
         let mut chars = base.chars();
@@ -1055,12 +1057,17 @@ pub fn decompose_to_vni(word: &str) -> String {
             "dd" => Some('9'),
             _ => None,
         };
+        if prev_plain_u && base.eq_ignore_ascii_case("ow") {
+            // toggle hook off on plain u so the o marker leaves u unhooked
+            result.push_str("77");
+        }
         result.push(first);
         if let Some(m) = marker {
             result.push(m);
         } else {
             result.extend(chars);
         }
+        prev_plain_u = base.eq_ignore_ascii_case("u");
         if let Some(t) = tone {
             trailing_tone = Some(match t {
                 's' => '1',

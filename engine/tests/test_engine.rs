@@ -367,6 +367,17 @@ fn vni_marks_traditional() {
     assert_eq!(vt("o7"), "ơ");
     assert_eq!(vt("u7"), "ư");
     assert_eq!(vt("uo7"), "ươ");
+    assert_eq!(vt("u7o7"), "ươ");
+    assert_eq!(vt("thuo73"), "thưở");
+    assert_eq!(vt("thu7o73"), "thưở");
+    assert_eq!(vt("huo7"), "hươ");
+    assert_eq!(vt("hu77o7"), "huơ");
+    assert_eq!(vt("thu77o73"), "thuở");
+    assert_eq!(vt("THU77O73"), "THUỞ");
+    assert_eq!(vt("u77"), "u");
+    assert_eq!(vt("u777"), "u7");
+    assert_eq!(vt("o77"), "o");
+    assert_eq!(vt("uo77"), "uo");
 }
 #[test]
 fn vni_words_traditional() {
@@ -374,6 +385,29 @@ fn vni_words_traditional() {
     assert_eq!(vt("tie61ng"), "tiếng");
     assert_eq!(vt("qua1"), "quá");
     assert_eq!(vt("gia1"), "giá");
+}
+#[test]
+fn vni_early_tone_removal() {
+    // coda shifts tone_vowel_index away from the vowel carrying early tone
+    assert_eq!(vt("to1an0"), "toan");
+    assert_eq!(vt("hoa1n0"), "hoan");
+    assert_eq!(vt("ti1e6n0"), "tiên");
+    assert_eq!(vt("qu1an0"), "quan");
+    assert_eq!(convert_vni("to1an0", true, true), "toan");
+    assert_eq!(vt("ba1k0"), "bak");
+    assert_eq!(vt("to1ak0"), "toak");
+
+    // pre-coda modifier or modern rule shifts target before coda arrives
+    assert_eq!(vt("ti1e60"), "tiê");
+    assert_eq!(vt("to1a60"), "toâ");
+    assert_eq!(vt("tu1o70"), "tươ");
+    assert_eq!(vt("gi1a0"), "gia");
+    assert_eq!(convert_vni("ho1a0", true, true), "hoa");
+
+    // literal 0 remains when no vowel carries tone
+    assert_eq!(vt("a0"), "a0");
+    assert_eq!(vt("to1an00"), "toan0");
+    assert_eq!(vt("win10"), "win10");
 }
 
 // ── Tone replacement tests ─────────────────────────────────────
@@ -574,6 +608,17 @@ fn teipvni_vni_marks() {
     assert_eq!(tv("o7"), "ơ");
     assert_eq!(tv("u7"), "ư");
     assert_eq!(tv("uo7"), "ươ");
+    assert_eq!(tv("u7o7"), "ươ");
+    assert_eq!(tv("thuo73"), "thưở");
+    assert_eq!(tv("thu7o73"), "thưở");
+    assert_eq!(tv("huo7"), "hươ");
+    assert_eq!(tv("hu77o7"), "huơ");
+    assert_eq!(tv("thu77o73"), "thuở");
+    assert_eq!(tv("THU77O73"), "THUỞ");
+    assert_eq!(tv("u77"), "u");
+    assert_eq!(tv("u777"), "u7");
+    assert_eq!(tv("o77"), "o");
+    assert_eq!(tv("uo77"), "uo");
     assert_eq!(tv("d9"), "đ");
 }
 #[test]
@@ -590,6 +635,39 @@ fn teipvni_mixed() {
     assert_eq!(tv("vie6t"), "viêt"); // VNI circumflex + Telex
     assert_eq!(tv("vie6ts"), "viết"); // VNI circumflex + Telex tone
     assert_eq!(tv("tie6ngs"), "tiếng");
+}
+#[test]
+fn teipvni_early_tone_removal() {
+    // pre-coda cases with both vni 0 and telex z
+    assert_eq!(tv("ti1e60"), "tiê");
+    assert_eq!(tv("ti1e6z"), "tiê");
+    assert_eq!(tv("tie1e0"), "tiê");
+    assert_eq!(tv("tiseez"), "tiê");
+    assert_eq!(tv("to1a60"), "toâ");
+    assert_eq!(tv("tu1o70"), "tươ");
+    assert_eq!(tv("tu1o7z"), "tươ");
+    assert_eq!(convert_teip_vni("ho1a0", true, true), "hoa");
+    assert_eq!(convert_teip_vni("ho1az", true, true), "hoa");
+
+    // coda and partial/invalid coda cases
+    assert_eq!(tv("to1an0"), "toan");
+    assert_eq!(tv("hoa1n0"), "hoan");
+    assert_eq!(tv("ti1e6n0"), "tiên");
+    assert_eq!(tv("ti1enz"), "tien");
+    assert_eq!(tv("ba1k0"), "bak");
+    assert_eq!(tv("ba1kz"), "bak");
+    assert_eq!(tv("to1ak0"), "toak");
+    assert_eq!(tv("to1akz"), "toak");
+
+    // literal 0/z remains when no vowel carries tone
+    assert_eq!(tv("0"), "0");
+    assert_eq!(tv("z"), "z");
+    assert_eq!(tv("a0"), "a0");
+    assert_eq!(tv("ja10"), "ja10");
+    assert_eq!(tv("ti1e600"), "tiê0");
+    assert_eq!(tv("ti1e6zz"), "tiêz");
+    assert_eq!(convert_teip_vni("win10", false, false), "win10");
+    assert_eq!(tv("win10"), "ưin");
 }
 
 // ── VIQR tests ──────────────────────────────────────────────────
