@@ -37,6 +37,21 @@ restart:
     profile_dir="${XDG_CONFIG_HOME:-$HOME/.config}/fcitx5"
     profile_file="${profile_dir}/profile"
 
+    fcitx5_is_ready() {
+        if ! command -v fcitx5-remote >/dev/null 2>&1; then
+            return 1
+        fi
+        if fcitx5-remote --check >/dev/null 2>&1; then
+            return 0
+        fi
+        # fallback for fcitx5 < 5.1.8 where --check is unrecognized (declared minimum is 5.0.14)
+        if pgrep -u "$(id -u)" -x fcitx5 >/dev/null 2>&1; then
+            fcitx5-remote >/dev/null 2>&1
+        else
+            return 1
+        fi
+    }
+
     # detect if systemd user unit manages fcitx5
     systemd_unit=""
     for u in fcitx5.service app-org.fcitx.Fcitx5.service app-org.fcitx.Fcitx5@autostart.service; do
@@ -49,7 +64,7 @@ restart:
     # stop running daemon first so exiting instance never overwrites profile after we check it
     if [ -n "${systemd_unit}" ]; then
         systemctl --user stop "${systemd_unit}" || true
-    elif command -v fcitx5-remote >/dev/null 2>&1 && fcitx5-remote --check >/dev/null 2>&1; then
+    elif fcitx5_is_ready; then
         fcitx5-remote -e >/dev/null 2>&1 || true
     fi
     for _ in $(seq 1 25); do
@@ -58,6 +73,25 @@ restart:
         fi
         sleep 0.1
     done
+
+    # verify daemon exited; retry shutdown or return error before modifying profile
+    if pgrep -u "$(id -u)" -x fcitx5 >/dev/null 2>&1; then
+        if [ -n "${systemd_unit}" ]; then
+            systemctl --user kill --signal=SIGTERM "${systemd_unit}" || true
+        elif command -v pkill >/dev/null 2>&1; then
+            pkill -u "$(id -u)" -x fcitx5 2>/dev/null || true
+        fi
+        for _ in $(seq 1 15); do
+            if ! pgrep -u "$(id -u)" -x fcitx5 >/dev/null 2>&1; then
+                break
+            fi
+            sleep 0.1
+        done
+        if pgrep -u "$(id -u)" -x fcitx5 >/dev/null 2>&1; then
+            echo "error: failed to stop existing fcitx5 daemon before reloading profile" >&2
+            exit 1
+        fi
+    fi
 
     # restore clak entry in profile if dropped by a prior reload
     mkdir -p "${profile_dir}"
@@ -106,10 +140,10 @@ restart:
     if [ -n "${systemd_unit}" ]; then
         systemctl --user start "${systemd_unit}"
     else
-        fcitx5 -d </dev/null >/dev/null 2>&1
+        fcitx5 -r -d </dev/null >/dev/null 2>&1
     fi
     for _ in $(seq 1 30); do
-        if command -v fcitx5-remote >/dev/null 2>&1 && fcitx5-remote --check >/dev/null 2>&1; then
+        if fcitx5_is_ready; then
             break
         fi
         sleep 0.1
