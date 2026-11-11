@@ -1578,6 +1578,21 @@ TEST_F(RegressionCorpusTest, test_regression_firefox_address_bar_url_shape_witho
     EXPECT_FALSE(state.isAutofillCertain(ic.surroundingText()));
 }
 
+TEST_F(RegressionCorpusTest, test_regression_browser_meta_site_does_not_set_address_bar_on_url_shape) {
+    platform::setMockActiveWindow(platform::WindowInfo{"google-chrome", "Instagram - Google Chrome", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "google-chrome");
+    ime::ClakState state(engine_.get(), &ic);
+
+    // surrounding text looks like a url autofill, but active site is meta site (instagram.com)
+    ic.setSurrounding("ddos.com", 1, 8);
+    EXPECT_NE(state.currentProfile()->name(), "address-bar");
+    EXPECT_EQ(state.currentProfile()->name(), "Meta-SurroundingText");
+
+    // typing char must not classify as address-bar or send autofill backspaces
+    ic.typeChar('d', &state);
+    EXPECT_NE(state.currentProfile()->name(), "address-bar");
+}
+
 TEST_F(RegressionCorpusTest, test_regression_verifier_preserves_saw_delete_ignored_across_streak) {
     platform::setMockActiveWindow(platform::WindowInfo{"google-chrome", "Notes - random-site.org", 1234});
     MockInputContext ic(instance_->inputContextManager(), "google-chrome");
