@@ -31,6 +31,7 @@ protected:
 
     void TearDown() override {
         uinput::UinputTool::instance().clearMockHandler();
+        uinput::UinputTool::instance().clearMockShiftStateHook();
         platform::clearMockActiveWindow();
         engine_.reset();
         instance_.reset();
@@ -1537,6 +1538,77 @@ TEST_F(RegressionCorpusTest, test_regression_fixed_delay_env_override_locks_paci
 
     unsetenv("CLAK_FIXED_DELAY_MS");
     unsetenv("CLAK_FIXED_GAP_MS");
+}
+
+TEST_F(RegressionCorpusTest, test_regression_firefox_address_bar_url_shape_without_url_cap) {
+    platform::setMockActiveWindow(platform::WindowInfo{"firefox", "GitHub - Mozilla Firefox", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "firefox");
+    // explicitly omit CapabilityFlag::Url to cover forks or builds that skip it
+    ime::ClakState state(engine_.get(), &ic);
+
+    size_t uinput_bs_sent = 0;
+    uinput::UinputTool::instance().setMockHandler([&](size_t count, uint32_t, uint32_t, uint32_t) {
+        uinput_bs_sent = count;
+        return true;
+    });
+
+    ic.setSurrounding("", 0, 0);
+    ic.typeChar('d', &state);
+
+    ic.setSurrounding("ddos.com", 1, 8);
+    EXPECT_TRUE(ime::ClakState::looksLikeUrlAutofill(ic.surroundingText()));
+    EXPECT_EQ(state.currentProfile()->name(), "address-bar");
+    EXPECT_TRUE(state.isAutofillCertain(ic.surroundingText()));
+
+    ic.typeChar('d', &state);
+    EXPECT_EQ(uinput_bs_sent, 3u);
+
+    // prose or plain word selections must not trigger URL shape detection
+    ic.setSurrounding("hello world", 1, 11);
+    EXPECT_FALSE(ime::ClakState::looksLikeUrlAutofill(ic.surroundingText()));
+    ic.setSurrounding("word", 1, 4);
+    EXPECT_FALSE(ime::ClakState::looksLikeUrlAutofill(ic.surroundingText()));
+}
+
+TEST_F(RegressionCorpusTest, test_regression_verifier_preserves_saw_delete_ignored_across_streak) {
+    platform::setMockActiveWindow(platform::WindowInfo{"google-chrome", "Notes - random-site.org", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "google-chrome");
+    auto* state = ic.propertyFor(&engine_->factory());
+
+    // mismatch 1 shows ignored delete ("dđ"), mismatches 2-3 show generic corruption
+    ic.setSurrounding("", 0, 0);
+    ic.typeChar('d', state);
+    ic.setSurrounding("d", 1, 1);
+    ic.typeChar('d', state);
+    ic.setSurrounding("dđ", 2, 2);
+    ic.typeChar(' ', state);
+    EXPECT_FALSE(state->isDraftJsEditor());
+
+    ic.setSurrounding("", 0, 0);
+    ic.typeChar('d', state);
+    ic.setSurrounding("d", 1, 1);
+    ic.typeChar('d', state);
+    ic.setSurrounding("stale", 5, 5);
+    ic.typeChar(' ', state);
+    EXPECT_FALSE(state->isDraftJsEditor());
+
+    ic.setSurrounding("", 0, 0);
+    ic.typeChar('d', state);
+    ic.setSurrounding("d", 1, 1);
+    ic.typeChar('d', state);
+    ic.setSurrounding("stale", 5, 5);
+    ic.typeChar(' ', state);
+
+    EXPECT_TRUE(state->isRichTextEditor());
+    EXPECT_TRUE(state->isDraftJsEditor());
+}
+
+TEST_F(RegressionCorpusTest, test_regression_send_select_aborts_when_physical_shift_pressed) {
+    auto& tool = uinput::UinputTool::instance();
+    tool.setMockShiftStateHook([]() { return true; });
+    EXPECT_TRUE(tool.isPhysicalShiftPressed());
+    EXPECT_FALSE(tool.send_select(3));
+    tool.clearMockShiftStateHook();
 }
 
 } // namespace test

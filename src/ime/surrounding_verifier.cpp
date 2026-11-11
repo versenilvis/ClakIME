@@ -11,6 +11,7 @@ void SurroundingVerifier::reset(bool hard_reset) {
     verify_.pending = false;
     if (hard_reset) {
         mismatch_count_ = 0;
+        saw_delete_ignored_ = false;
         is_canvas_editor_ = false;
         is_rich_text_editor_ = false;
         is_draftjs_editor_ = false;
@@ -71,6 +72,7 @@ void SurroundingVerifier::verify(const fcitx::SurroundingText& surr) {
 
     if (actualWord == verify_.expectWord) {
         mismatch_count_ = 0;
+        saw_delete_ignored_ = false;
     } else if (actualWord == verify_.preWord) {
         // Asynchronous Wayland roundtrip: the client application has not yet processed
         // the in-flight deleteSurroundingText/commitString. This is normal IPC latency,
@@ -81,12 +83,15 @@ void SurroundingVerifier::verify(const fcitx::SurroundingText& surr) {
                                actualWord.find(verify_.preWord) != std::string::npos &&
                                actualWord.find(verify_.added) != std::string::npos &&
                                actualWord.length() > verify_.preWord.length());
+        if (delete_ignored) {
+            saw_delete_ignored_ = true;
+        }
         mismatch_count_++;
         utils::clakLog("verifySurrounding mismatch #" + std::to_string(mismatch_count_) +
                        ": expected='" + verify_.expectWord + "' actual='" + actualWord + "'");
         if (mismatch_count_ >= config::kMismatchThreshold) {
             is_rich_text_editor_ = true;
-            if (delete_ignored) {
+            if (delete_ignored || saw_delete_ignored_) {
                 is_draftjs_editor_ = true;
             }
             utils::clakLog("verifySurrounding: auto-switched to uinput for this editor after 3 consecutive mismatches");

@@ -3,6 +3,7 @@
 #include <sys/ioctl.h>
 #include <linux/uinput.h>
 #include <fcntl.h>
+#include <dirent.h>
 #include <unistd.h>
 #include <cstring>
 #include <cerrno>
@@ -460,7 +461,54 @@ bool UinputTool::send_select_xtest(size_t count) {
     return true;
 }
 
+bool UinputTool::isPhysicalShiftPressed() const {
+    if (mock_shift_hook_) {
+        return mock_shift_hook_();
+    }
+    DIR* dir = opendir("/dev/input");
+    if (!dir) return false;
+
+    bool pressed = false;
+    struct dirent* ent;
+    constexpr size_t kKeyBytes = (KEY_MAX / 8) + 1;
+    while ((ent = readdir(dir)) != nullptr) {
+        if (strncmp(ent->d_name, "event", 5) != 0) continue;
+        std::string path = std::string("/dev/input/") + ent->d_name;
+        int fd = open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+        if (fd < 0) continue;
+
+        char dev_name[128]{};
+        if (ioctl(fd, EVIOCGNAME(sizeof(dev_name)), dev_name) >= 0 &&
+            strstr(dev_name, "Clak-Uinput") != nullptr) {
+            close(fd);
+            continue;
+        }
+
+        unsigned char key_cap[kKeyBytes]{};
+        auto has_bit = [](const unsigned char* bits, size_t code) {
+            return (bits[code / 8] & (1u << (code % 8))) != 0;
+        };
+        if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(key_cap)), key_cap) >= 0 &&
+            (has_bit(key_cap, KEY_LEFTSHIFT) || has_bit(key_cap, KEY_RIGHTSHIFT))) {
+            unsigned char key_state[kKeyBytes]{};
+            if (ioctl(fd, EVIOCGKEY(sizeof(key_state)), key_state) >= 0 &&
+                (has_bit(key_state, KEY_LEFTSHIFT) || has_bit(key_state, KEY_RIGHTSHIFT))) {
+                pressed = true;
+                close(fd);
+                break;
+            }
+        }
+        close(fd);
+    }
+    closedir(dir);
+    return pressed;
+}
+
 bool UinputTool::send_select(size_t count) {
+    if (isPhysicalShiftPressed()) {
+        utils::clakLog("send_select aborted: physical shift key currently pressed");
+        return false;
+    }
     if (direct_fd_ < 0) {
         init_direct_uinput();
     }

@@ -35,6 +35,7 @@ public:
   void syncConfig();
   bool shouldUseUinput(bool use_surrounding, uint32_t action_type, const fcitx::SurroundingText& surr);
   bool isAutofillCertain(const fcitx::SurroundingText& surr);
+  static bool looksLikeUrlAutofill(const fcitx::SurroundingText& surr);
 
   bool isDeleting() const { return is_deleting_; }
   bool isSelectionDeletion() const { return is_selection_deletion_; }

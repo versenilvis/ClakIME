@@ -48,6 +48,7 @@ public:
 private:
   PendingVerify verify_;
   int mismatch_count_{0};
+  bool saw_delete_ignored_{false};
   bool is_canvas_editor_{false};
   bool is_rich_text_editor_{false};
   bool is_draftjs_editor_{false};

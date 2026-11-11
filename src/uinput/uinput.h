@@ -28,6 +28,7 @@ public:
 
     bool send_backspace(size_t count, uint32_t post_delay_ms = 0, uint32_t pre_delay_ms = 0, uint32_t gap_ms = 0, uint32_t hold_us = config::kDefaultUinputHoldUs);
     bool send_select(size_t count);
+    bool isPhysicalShiftPressed() const;
 
     uint64_t consume_sentinel_emit_time_us() noexcept {
         return sentinel_emit_time_us_.exchange(0, std::memory_order_acq_rel);
@@ -46,6 +47,8 @@ public:
     }
     void setMockHandler(BackspaceHookWithHold handler) { mock_handler_ = std::move(handler); }
     void clearMockHandler() { mock_handler_ = nullptr; }
+    void setMockShiftStateHook(std::function<bool()> hook) { mock_shift_hook_ = std::move(hook); }
+    void clearMockShiftStateHook() { mock_shift_hook_ = nullptr; }
 
 private:
     UinputTool();
@@ -70,6 +73,7 @@ private:
     void* xcb_conn_{nullptr};
     std::mutex xtest_mutex_;
     BackspaceHookWithHold mock_handler_{nullptr};
+    std::function<bool()> mock_shift_hook_{nullptr};
 };
 
 } // namespace uinput

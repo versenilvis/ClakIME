@@ -257,19 +257,48 @@ bool ClakState::isDraftJsEditor() const {
     return verifier_.isDraftJsEditor(site);
 }
 
+bool ClakState::looksLikeUrlAutofill(const fcitx::SurroundingText& surr) {
+    if (!surr.isValid()) return false;
+    const std::string& text = surr.text();
+    if (text.empty()) return false;
+
+    unsigned int cursor = surr.cursor();
+    unsigned int anchor = surr.anchor();
+    if (cursor == anchor) return false;
+
+    unsigned int sel_start = std::min(anchor, cursor);
+    unsigned int sel_end = std::max(anchor, cursor);
+    if (sel_start == 0 || sel_end != text.size()) return false;
+
+    bool has_dot = false;
+    bool has_scheme = (text.find(":/") != std::string::npos);
+    bool has_localhost = (text.find("localhost") != std::string::npos);
+    for (size_t i = 0; i < text.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(text[i]);
+        // url bar autofill contains printable ascii without whitespace
+        if (c < 0x21 || c > 0x7e) return false;
+        if (c == '.' && i > 0 && i + 1 < text.size()) {
+            has_dot = true;
+        }
+    }
+    return has_dot || has_scheme || has_localhost;
+}
+
 apps::AppProfile* ClakState::currentProfile() {
     std::string app = appKey();
     std::string site = activeSite();
-    bool has_url_cap = ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Url);
-    bool is_browser = apps::isBrowserApp(app);
-    bool is_url_site = is_browser && (site == "New Tab" || site == "about:blank" || site == "address-bar");
-    bool is_address_bar = has_url_cap || is_url_site;
-    bool is_draftjs = isDraftJsEditor();
-    bool is_terminal = ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal);
     int app_mode = 0;
     if (engine_ && engine_->config()) {
         app_mode = clak_config_get_app_mode(engine_->config(), app.c_str());
     }
+    bool has_url_cap = ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Url);
+    bool is_browser = apps::isBrowserApp(app);
+    bool is_url_site = is_browser && (site == "New Tab" || site == "about:blank" || site == "address-bar");
+    bool is_url_shape = is_browser && app_mode == 0 && !apps::isMetaSite(site) && !apps::isMetaSite(app) &&
+                        ic_ && looksLikeUrlAutofill(ic_->surroundingText());
+    bool is_address_bar = has_url_cap || is_url_site || is_url_shape;
+    bool is_draftjs = isDraftJsEditor();
+    bool is_terminal = ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal);
 
     if (!profile_ || profile_app_ != app || profile_site_ != site ||
         profile_autofill_ != is_address_bar || profile_draftjs_ != is_draftjs ||
@@ -941,7 +970,8 @@ bool ClakState::handleKey(const fcitx::Key& key) {
 
             bool is_address_bar = (currentProfile() && currentProfile()->name() == "address-bar") ||
                                   (ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Url)) ||
-                                  (isBrowser() && (site == "New Tab" || site == "about:blank" || site == "address-bar"));
+                                  (isBrowser() && (site == "New Tab" || site == "about:blank" || site == "address-bar" ||
+                                                   looksLikeUrlAutofill(surr)));
             bool has_autofill_selection = (action.action_type == CLAK_ACTION_ADDRESS_BAR_FIX) ||
                                           (isAutofillCertain(surr));
             if (real_bs > 0 && surr.isValid() && surr.cursor() < real_bs) {
