@@ -76,34 +76,60 @@ pub fn check_permissions() -> PermissionChecks {
     }
 }
 
-pub fn fix_input_permissions() -> Result<(), String> {
-    let user = std::env::var("USER").map_err(|e| e.to_string())?;
-    if user.is_empty() {
-        return Err("Không xác định được biến USER".to_string());
+fn get_current_username() -> Result<String, String> {
+    unsafe {
+        let uid = libc::getuid();
+        let pwd = libc::getpwuid(uid);
+        if pwd.is_null() || (*pwd).pw_name.is_null() {
+            return Err("không xác định được username từ UID".to_string());
+        }
+        let c_str = std::ffi::CStr::from_ptr((*pwd).pw_name);
+        let name = c_str.to_string_lossy().into_owned();
+        validate_username(&name)?;
+        Ok(name)
     }
+}
 
-    let script = format!(
-        r#"mkdir -p /etc/udev/rules.d /etc/modules-load.d && \
+pub fn validate_username(name: &str) -> Result<(), String> {
+    if name.is_empty() || name.len() > 32 {
+        return Err("username rỗng hoặc vượt quá 32 ký tự".to_string());
+    }
+    let mut chars = name.chars();
+    let first = chars.next().unwrap();
+    if !first.is_ascii_lowercase() && first != '_' {
+        return Err("ký tự đầu username không hợp lệ".to_string());
+    }
+    for c in chars {
+        if !c.is_ascii_lowercase() && !c.is_ascii_digit() && c != '_' && c != '-' && c != '.' && c != '$' {
+            return Err("username chứa ký tự không an toàn".to_string());
+        }
+    }
+    Ok(())
+}
+
+pub fn fix_input_permissions() -> Result<(), String> {
+    let user = get_current_username()?;
+
+    let script = r#"mkdir -p /etc/udev/rules.d /etc/modules-load.d && \
 printf '%s\n' 'KERNEL=="uinput", SUBSYSTEM=="misc", OPTIONS+="static_node=uinput", MODE="0660", GROUP="input", TAG+="uaccess"' \
-'SUBSYSTEM=="input", ENV{{ID_INPUT_MOUSE}}=="1", TAG+="uaccess"' \
-'SUBSYSTEM=="input", ENV{{ID_INPUT_TOUCHPAD}}=="1", TAG+="uaccess"' > /etc/udev/rules.d/99-uinput.rules && \
+'SUBSYSTEM=="input", ENV{ID_INPUT_MOUSE}=="1", TAG+="uaccess"' \
+'SUBSYSTEM=="input", ENV{ID_INPUT_TOUCHPAD}=="1", TAG+="uaccess"' > /etc/udev/rules.d/99-uinput.rules && \
 echo 'uinput' > /etc/modules-load.d/uinput.conf && \
 modprobe uinput 2>/dev/null || true; \
 udevadm control --reload-rules 2>/dev/null || true; \
 udevadm trigger --name-match=uinput 2>/dev/null || udevadm trigger /dev/uinput 2>/dev/null || true; \
 udevadm trigger --subsystem-match=input 2>/dev/null || true; \
-usermod -aG input "{user}" 2>/dev/null || true; \
-if command -v setfacl >/dev/null 2>&1; then \
-  setfacl -m "u:{user}:rw" /dev/uinput 2>/dev/null || true; \
+target_user="$1"; \
+[ -n "$target_user" ] && usermod -aG input "$target_user" 2>/dev/null || true; \
+if command -v setfacl >/dev/null 2>&1 && [ -n "$target_user" ]; then \
+  setfacl -m "u:$target_user:rw" /dev/uinput 2>/dev/null || true; \
   for ev in /dev/input/event*; do \
-    [ -e "$ev" ] && setfacl -m "u:{user}:rw" "$ev" 2>/dev/null || true; \
+    [ -e "$ev" ] && setfacl -m "u:$target_user:rw" "$ev" 2>/dev/null || true; \
   done; \
-fi"#,
-        user = user
-    );
+fi"#;
 
     let pkexec_status = std::process::Command::new("pkexec")
-        .args(["sh", "-c", &script])
+        .args(["sh", "-c", script, "--", &user])
         .status();
 
     if let Ok(status) = pkexec_status {
@@ -113,7 +139,7 @@ fi"#,
     }
 
     let sudo_status = std::process::Command::new("sudo")
-        .args(["sh", "-c", &script])
+        .args(["sh", "-c", script, "--", &user])
         .status();
 
     if let Ok(status) = sudo_status {
@@ -122,5 +148,27 @@ fi"#,
         }
     }
 
-    Err("Không thể cấp quyền: cần quyền quản trị root qua pkexec hoặc sudo".to_string())
+    Err("không thể cấp quyền: cần quyền quản trị root qua pkexec hoặc sudo".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_username() {
+        assert!(validate_username("verse").is_ok());
+        assert!(validate_username("_clak").is_ok());
+        assert!(validate_username("user-123").is_ok());
+        assert!(validate_username("").is_err());
+        assert!(validate_username("user;rm -rf /").is_err());
+        assert!(validate_username("user\"").is_err());
+        assert!(validate_username("user$").is_ok());
+    }
+
+    #[test]
+    fn test_get_current_username() {
+        let name = get_current_username();
+        assert!(name.is_ok());
+    }
 }
