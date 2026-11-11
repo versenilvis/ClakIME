@@ -100,7 +100,13 @@ pub fn validate_username(name: &str) -> Result<(), String> {
         return Err("ký tự đầu username không hợp lệ".to_string());
     }
     for c in chars {
-        if !c.is_ascii_lowercase() && !c.is_ascii_digit() && c != '_' && c != '-' && c != '.' && c != '$' {
+        if !c.is_ascii_lowercase()
+            && !c.is_ascii_digit()
+            && c != '_'
+            && c != '-'
+            && c != '.'
+            && c != '$'
+        {
             return Err("username chứa ký tự không an toàn".to_string());
         }
     }

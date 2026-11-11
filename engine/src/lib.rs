@@ -1074,7 +1074,7 @@ pub unsafe extern "C" fn clak_session_pending_commit(
     if let Some(s) = unsafe { session.as_ref() } {
         s.pending_commit_c_str()
     } else {
-        b"\0".as_ptr() as *const c_char
+        c"".as_ptr()
     }
 }
 

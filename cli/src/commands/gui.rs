@@ -42,7 +42,6 @@ pub fn execute(args: Vec<String>) {
                 .arg("--release")
                 .args(args)
                 .status();
-            return;
         }
     }
 }

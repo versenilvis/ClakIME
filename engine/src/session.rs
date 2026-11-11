@@ -276,6 +276,7 @@ impl ClakSession {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn process_key(
         &mut self,
         sym: u32,
@@ -345,9 +346,9 @@ impl ClakSession {
         }
 
         // 2. normal key processing via ClakContext
-        let action = self
-            .ctx
-            .process_key(sym, key_str, has_ctrl_alt, surrounding_text, cursor, anchor);
+        let action =
+            self.ctx
+                .process_key(sym, key_str, has_ctrl_alt, surrounding_text, cursor, anchor);
 
         match action.action_type {
             crate::ime::ACTION_FORWARD => {
@@ -525,10 +526,7 @@ impl ClakSession {
         self.prepare_command_list()
     }
 
-    pub fn switch_to_forward_fallback(
-        &mut self,
-        delay_us: u64,
-    ) -> ClakSessionCommandList {
+    pub fn switch_to_forward_fallback(&mut self, delay_us: u64) -> ClakSessionCommandList {
         self.commands_buf.clear();
         self.text_storage.clear();
         self.last_autofix_delete = CString::default();
@@ -625,14 +623,9 @@ impl ClakSession {
         self.state = SessionState::Replaying;
 
         for key in keys {
-            let action = self.ctx.process_key(
-                key.sym,
-                &key.key_str,
-                key.has_ctrl_alt,
-                None,
-                0,
-                0,
-            );
+            let action = self
+                .ctx
+                .process_key(key.sym, &key.key_str, key.has_ctrl_alt, None, 0, 0);
 
             let commit_str = if !action.commit_str.is_null() {
                 unsafe { std::ffi::CStr::from_ptr(action.commit_str) }
@@ -850,10 +843,7 @@ mod tests {
         );
         assert_eq!(list.count, 2);
         unsafe {
-            assert_eq!(
-                (*list.commands.add(0)).cmd_type,
-                CMD_EMIT_UINPUT_BACKSPACE
-            );
+            assert_eq!((*list.commands.add(0)).cmd_type, CMD_EMIT_UINPUT_BACKSPACE);
             assert_eq!((*list.commands.add(0)).count, 2); // 1 real + 1 sentinel
             assert_eq!((*list.commands.add(1)).cmd_type, CMD_START_TIMER);
             assert_eq!((*list.commands.add(1)).timer_id, TIMER_SAFETY);
