@@ -32,7 +32,99 @@ install:
 # restart fcitx5 daemon
 [group("dev")]
 restart:
-    fcitx5 -r -d
+    #!/usr/bin/env bash
+    set -euo pipefail
+    profile_dir="${XDG_CONFIG_HOME:-$HOME/.config}/fcitx5"
+    profile_file="${profile_dir}/profile"
+
+    # detect if systemd user unit manages fcitx5
+    systemd_unit=""
+    for u in fcitx5.service app-org.fcitx.Fcitx5.service app-org.fcitx.Fcitx5@autostart.service; do
+        if command -v systemctl >/dev/null 2>&1 && systemctl --user is-active --quiet "${u}" 2>/dev/null; then
+            systemd_unit="${u}"
+            break
+        fi
+    done
+
+    # stop running daemon first so exiting instance never overwrites profile after we check it
+    if [ -n "${systemd_unit}" ]; then
+        systemctl --user stop "${systemd_unit}" || true
+    elif command -v fcitx5-remote >/dev/null 2>&1 && fcitx5-remote --check >/dev/null 2>&1; then
+        fcitx5-remote -e >/dev/null 2>&1 || true
+    fi
+    for _ in $(seq 1 25); do
+        if ! pgrep -u "$(id -u)" -x fcitx5 >/dev/null 2>&1; then
+            break
+        fi
+        sleep 0.1
+    done
+
+    # restore clak entry in profile if dropped by a prior reload
+    mkdir -p "${profile_dir}"
+    if [ ! -f "${profile_file}" ]; then
+        cat <<'EOF' > "${profile_file}"
+    [Groups/0]
+    Name=Default
+    Default Layout=us
+    DefaultIM=clak
+
+    [Groups/0/Items/0]
+    Name=clak
+    Layout=
+
+    [Groups/0/Items/1]
+    Name=keyboard-us
+    Layout=
+
+    [GroupOrder]
+    0=Default
+    EOF
+    elif ! grep -q '^Name=clak$' "${profile_file}"; then
+        item_count=$(grep -c '^\[Groups/0/Items/[0-9]\+\]$' "${profile_file}" 2>/dev/null || true)
+        item_count="${item_count:-0}"
+        tmp_profile=$(mktemp "${profile_dir}/.profile.tmp.XXXXXX")
+        awk -v idx="${item_count}" '
+            /^\[Groups\/[1-9]|^\[GroupOrder\]/ && !inserted {
+                print "[Groups/0/Items/" idx "]"
+                print "Name=clak"
+                print "Layout="
+                print ""
+                inserted=1
+            }
+            { print }
+            END {
+                if (!inserted) {
+                    print ""
+                    print "[Groups/0/Items/" idx "]"
+                    print "Name=clak"
+                    print "Layout="
+                }
+            }
+        ' "${profile_file}" > "${tmp_profile}" && mv -f "${tmp_profile}" "${profile_file}"
+    fi
+
+    if [ -n "${systemd_unit}" ]; then
+        systemctl --user start "${systemd_unit}"
+    else
+        fcitx5 -d </dev/null >/dev/null 2>&1
+    fi
+    for _ in $(seq 1 30); do
+        if command -v fcitx5-remote >/dev/null 2>&1 && fcitx5-remote --check >/dev/null 2>&1; then
+            break
+        fi
+        sleep 0.1
+    done
+
+    # re-add via dbus controller if active group still lacks clak
+    if command -v busctl >/dev/null 2>&1; then
+        group=$(busctl --user call org.fcitx.Fcitx5 /controller org.fcitx.Fcitx.Controller1 CurrentInputMethodGroup 2>/dev/null | sed -n 's/.*"\([^"]*\)".*/\1/p' || true)
+        group="${group:-Default}"
+        info=$(busctl --user call org.fcitx.Fcitx5 /controller org.fcitx.Fcitx.Controller1 InputMethodGroupInfo s "${group}" 2>/dev/null || true)
+        if [ -n "${info}" ] && [[ "${info}" != *'"clak"'* ]] && [ -x "$HOME/.local/bin/clak" ]; then
+            "$HOME/.local/bin/clak" doctor --fix >/dev/null 2>&1 || true
+        fi
+    fi
+    fcitx5-remote -s clak >/dev/null 2>&1 || true
 
 # clean build artifacts
 [group("dev")]

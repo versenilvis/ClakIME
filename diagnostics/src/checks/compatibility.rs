@@ -327,13 +327,58 @@ pub fn restart_fcitx5_daemon() -> bool {
         }
     }
 
-    // ensure clak is active input method
+    // ensure clak stays in active group and becomes active input method
     if success {
         std::thread::sleep(std::time::Duration::from_millis(200));
+        let group = get_active_im_group();
+        let has_clak = Command::new("busctl")
+            .args([
+                "--user",
+                "call",
+                "org.fcitx.Fcitx5",
+                "/controller",
+                "org.fcitx.Fcitx.Controller1",
+                "InputMethodGroupInfo",
+                "s",
+                &group,
+            ])
+            .output()
+            .ok()
+            .is_some_and(|out| {
+                out.status.success() && String::from_utf8_lossy(&out.stdout).contains("\"clak\"")
+            });
+        if !has_clak {
+            let _ = setup_profile_via_dbus();
+        }
         let _ = Command::new("fcitx5-remote").args(["-s", "clak"]).status();
     }
 
     success
+}
+
+pub fn update_addon_library_line(content: &str, base_lib: &str) -> Option<String> {
+    let target = format!("Library={}", base_lib);
+    let mut changed = false;
+    let lines: Vec<String> = content
+        .lines()
+        .map(|line| {
+            if line.trim_start().starts_with("Library=") && line.trim() != target {
+                changed = true;
+                target.clone()
+            } else {
+                line.to_string()
+            }
+        })
+        .collect();
+    if changed {
+        let mut out = lines.join("\n");
+        if content.ends_with('\n') {
+            out.push('\n');
+        }
+        Some(out)
+    } else {
+        None
+    }
 }
 
 // automatically insert clak into fcitx5 profile, fix ubuntu paths, and reload daemon
@@ -383,14 +428,13 @@ pub fn fix_fcitx5_profile() -> Result<(), String> {
             let _ = std::os::unix::fs::symlink(&lib_so, &multiarch_so);
         }
 
-        // Dam bao addon/clak.conf tro den duong dan tuyet doi neu la user install
+        // dam bao addon/clak.conf tro den duong dan tuyet doi on dinh thay cho build dir
         let user_addon_conf = PathBuf::from(&home).join(".local/share/fcitx5/addon/clak.conf");
         if user_addon_conf.exists() {
             if let Ok(c) = fs::read_to_string(&user_addon_conf) {
                 let lib_path_str = lib_so.to_string_lossy();
                 let base_lib = lib_path_str.trim_end_matches(".so");
-                if c.contains("Library=libclak") || !c.contains(base_lib) {
-                    let updated = c.replace("Library=libclak", &format!("Library={}", base_lib));
+                if let Some(updated) = update_addon_library_line(&c, base_lib) {
                     let _ = fs::write(&user_addon_conf, updated);
                 }
             }

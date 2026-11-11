@@ -258,7 +258,7 @@ configure_file(
 
 file(GENERATE
     OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/clak-local.conf"
-    CONTENT "[Addon]\nName=Clak\nName[vi]=Bộ gõ tiếng Việt Clak\nComment=Fast and stable Vietnamese input method for Fcitx5\nCategory=InputMethod\nVersion=${PROJECT_VERSION}\nEnabled=True\nIcon=org.fcitx.Fcitx5.clak\nLibrary=${CMAKE_CURRENT_BINARY_DIR}/libclak\nType=SharedLibrary\nOnDemand=True\nConfigurable=True\n[Dependencies]\n0=core:5.0.14\n"
+    CONTENT "[Addon]\nName=Clak\nName[vi]=Bộ gõ tiếng Việt Clak\nComment=Fast and stable Vietnamese input method for Fcitx5\nCategory=InputMethod\nVersion=${PROJECT_VERSION}\nEnabled=True\nIcon=org.fcitx.Fcitx5.clak\nLibrary=$ENV{HOME}/.local/lib/fcitx5/libclak\nType=SharedLibrary\nOnDemand=True\nConfigurable=True\n[Dependencies]\n0=core:5.0.14\n"
 )
 
 install(TARGETS clak DESTINATION "${FCITX_INSTALL_ADDONDIR}")
@@ -276,13 +276,19 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/data/99-uinput-clak.rules" DESTINATIO
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/data/uinput-clak.conf" DESTINATION "lib/modules-load.d")
 
 add_custom_target(install-user
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$ENV{HOME}/.local/lib/fcitx5"
     COMMAND ${CMAKE_COMMAND} -E make_directory "$ENV{HOME}/.local/share/fcitx5/addon"
     COMMAND ${CMAKE_COMMAND} -E make_directory "$ENV{HOME}/.local/share/fcitx5/inputmethod"
-    COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_BINARY_DIR}/clak-local.conf" "$ENV{HOME}/.local/share/fcitx5/addon/clak.conf"
-    COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/data/clak.conf" "$ENV{HOME}/.local/share/fcitx5/inputmethod/clak.conf"
+    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:clak>" "$ENV{HOME}/.local/lib/fcitx5/libclak.so.tmp"
+    COMMAND ${CMAKE_COMMAND} -E rename "$ENV{HOME}/.local/lib/fcitx5/libclak.so.tmp" "$ENV{HOME}/.local/lib/fcitx5/libclak.so"
+    COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_BINARY_DIR}/clak-local.conf" "$ENV{HOME}/.local/share/fcitx5/addon/clak.conf.tmp"
+    COMMAND ${CMAKE_COMMAND} -E rename "$ENV{HOME}/.local/share/fcitx5/addon/clak.conf.tmp" "$ENV{HOME}/.local/share/fcitx5/addon/clak.conf"
+    COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/data/clak.conf" "$ENV{HOME}/.local/share/fcitx5/inputmethod/clak.conf.tmp"
+    COMMAND ${CMAKE_COMMAND} -E rename "$ENV{HOME}/.local/share/fcitx5/inputmethod/clak.conf.tmp" "$ENV{HOME}/.local/share/fcitx5/inputmethod/clak.conf"
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/data/icons/hicolor" "$ENV{HOME}/.local/share/icons/hicolor"
-    COMMAND gtk-update-icon-cache -f -t "$ENV{HOME}/.local/share/icons/hicolor" || true
+    COMMAND sh -c "gtk-update-icon-cache -f -t \"$ENV{HOME}/.local/share/icons/hicolor\" || true"
     DEPENDS clak
+    VERBATIM
 )
 if(TARGET clak_gui_build)
     add_custom_command(TARGET install-user POST_BUILD

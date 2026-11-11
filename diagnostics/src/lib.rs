@@ -627,8 +627,18 @@ mod tests {
 
     #[test]
     fn test_restart_fcitx5_daemon_functionality() {
-        // skip in ci or headless environments without fcitx5 binary
-        if std::env::var("CI").is_ok() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        let updated = checks::compatibility::update_addon_library_line(
+            "[Addon]\nLibrary=/home/dev/build/libclak\nType=SharedLibrary\n",
+            "/home/dev/.local/lib/fcitx5/libclak",
+        );
+        assert_eq!(
+            updated.as_deref(),
+            Some("[Addon]\nLibrary=/home/dev/.local/lib/fcitx5/libclak\nType=SharedLibrary\n")
+        );
+
+        // only restart live desktop daemon when explicitly opted in so cargo test never replaces active session config
+        if std::env::var("CLAK_TEST_LIVE_DAEMON").is_err() || std::env::var("CI").is_ok() {
             return;
         }
         if std::process::Command::new("fcitx5")
