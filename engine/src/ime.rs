@@ -92,6 +92,10 @@ impl ClakContext {
         }
     }
 
+    pub fn is_composing(&self) -> bool {
+        !self.last_composed.is_empty() || !self.raw_buffer.is_empty()
+    }
+
     pub fn apply_config(&mut self, cfg: &crate::config::ClakConfig) {
         let m = match cfg.general.method.as_str() {
             "vni" => Method::Vni,

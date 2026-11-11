@@ -6,6 +6,7 @@ pub mod engine;
 pub mod english_dict;
 pub mod ime;
 pub mod learned_typos;
+pub mod session;
 pub mod spelling;
 pub mod tables;
 pub mod vseq;
@@ -14,6 +15,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub use config::*;
 pub use ime::*;
+pub use session::*;
 
 use std::collections::HashSet;
 use std::ffi::{CStr, CString};
@@ -984,6 +986,228 @@ pub unsafe extern "C" fn clak_config_get_switch_shortcut(
         (*cfg).shortcuts.switch_method.as_str()
     };
     CString::new(sc).unwrap_or_default().into_raw()
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_session_new(method: i32) -> *mut session::ClakSession {
+    let m = match method {
+        1 => Method::Vni,
+        2 => Method::Viqr,
+        3 => Method::TeipVni,
+        _ => Method::Telex,
+    };
+    Box::into_raw(Box::new(session::ClakSession::new(m)))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_session_free(session: *mut session::ClakSession) {
+    if !session.is_null() {
+        unsafe {
+            drop(Box::from_raw(session));
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_session_reset(session: *mut session::ClakSession, force: bool) {
+    if let Some(s) = unsafe { session.as_mut() } {
+        s.reset(force);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_session_apply_config(
+    session: *mut session::ClakSession,
+    cfg: *const config::ClakConfig,
+) {
+    if let (Some(s), Some(c)) = (unsafe { session.as_mut() }, unsafe { cfg.as_ref() }) {
+        s.apply_config(c);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_session_is_deleting(session: *const session::ClakSession) -> bool {
+    if let Some(s) = unsafe { session.as_ref() } {
+        s.is_deleting()
+    } else {
+        false
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_session_buffered_keys_count(
+    session: *const session::ClakSession,
+) -> usize {
+    if let Some(s) = unsafe { session.as_ref() } {
+        s.buffered_keys_count()
+    } else {
+        0
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_session_expected_backspaces(
+    session: *const session::ClakSession,
+) -> usize {
+    if let Some(s) = unsafe { session.as_ref() } {
+        s.expected_backspaces()
+    } else {
+        0
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_session_current_backspace_count(
+    session: *const session::ClakSession,
+) -> usize {
+    if let Some(s) = unsafe { session.as_ref() } {
+        s.current_backspace_count()
+    } else {
+        0
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_session_pending_commit(
+    session: *const session::ClakSession,
+) -> *const c_char {
+    if let Some(s) = unsafe { session.as_ref() } {
+        s.pending_commit_c_str()
+    } else {
+        b"\0".as_ptr() as *const c_char
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_session_process_key(
+    session: *mut session::ClakSession,
+    sym: u32,
+    key_str: *const c_char,
+    has_ctrl_alt: bool,
+    surrounding_text: *const c_char,
+    cursor: usize,
+    anchor: usize,
+    deletion_mode: i32,
+    autofill_extra: u32,
+    uinput_post_delay_ms: u32,
+    uinput_pre_delay_ms: u32,
+    uinput_gap_ms: u32,
+    uinput_hold_us: u32,
+    safety_timeout_us: u64,
+    timestamp_us: u64,
+) -> session::ClakSessionCommandList {
+    if let Some(s) = unsafe { session.as_mut() } {
+        let k_str = if key_str.is_null() {
+            ""
+        } else {
+            unsafe { CStr::from_ptr(key_str) }.to_str().unwrap_or("")
+        };
+        let s_text = if surrounding_text.is_null() {
+            None
+        } else {
+            unsafe { CStr::from_ptr(surrounding_text) }.to_str().ok()
+        };
+        s.process_key(
+            sym,
+            k_str,
+            has_ctrl_alt,
+            s_text,
+            cursor,
+            anchor,
+            deletion_mode,
+            autofill_extra,
+            uinput_post_delay_ms,
+            uinput_pre_delay_ms,
+            uinput_gap_ms,
+            uinput_hold_us,
+            safety_timeout_us,
+            timestamp_us,
+        )
+    } else {
+        session::ClakSessionCommandList {
+            count: 0,
+            commands: std::ptr::null(),
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_session_switch_to_forward_fallback(
+    session: *mut session::ClakSession,
+    delay_us: u64,
+) -> session::ClakSessionCommandList {
+    if let Some(s) = unsafe { session.as_mut() } {
+        s.switch_to_forward_fallback(delay_us)
+    } else {
+        session::ClakSessionCommandList {
+            count: 0,
+            commands: std::ptr::null(),
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_session_last_autofix_delete(
+    session: *const session::ClakSession,
+) -> *const std::os::raw::c_char {
+    if let Some(s) = unsafe { session.as_ref() } {
+        s.last_autofix_delete()
+    } else {
+        std::ptr::null()
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_session_last_autofix_commit(
+    session: *const session::ClakSession,
+) -> *const std::os::raw::c_char {
+    if let Some(s) = unsafe { session.as_ref() } {
+        s.last_autofix_commit()
+    } else {
+        std::ptr::null()
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_session_on_backspace_received(
+    session: *mut session::ClakSession,
+) -> bool {
+    if let Some(s) = unsafe { session.as_mut() } {
+        s.on_backspace_received()
+    } else {
+        false
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_session_on_sentinel_received(
+    session: *mut session::ClakSession,
+    timestamp_us: u64,
+) -> session::ClakSessionCommandList {
+    if let Some(s) = unsafe { session.as_mut() } {
+        s.on_sentinel_received(timestamp_us)
+    } else {
+        session::ClakSessionCommandList {
+            count: 0,
+            commands: std::ptr::null(),
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_session_on_timer_fired(
+    session: *mut session::ClakSession,
+    timer_id: u32,
+    timestamp_us: u64,
+) -> session::ClakSessionCommandList {
+    if let Some(s) = unsafe { session.as_mut() } {
+        s.on_timer_fired(timer_id, timestamp_us)
+    } else {
+        session::ClakSessionCommandList {
+            count: 0,
+            commands: std::ptr::null(),
+        }
+    }
 }
 
 #[cfg(test)]

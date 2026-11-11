@@ -122,6 +122,92 @@ ClakAction   clak_process_key(ClakContext *ctx,
 
 bool         clak_observe_retype(const char *old_raw, const char *new_word);
 
+typedef void ClakSession;
+
+#define CLAK_CMD_FORWARD_KEY             0
+#define CLAK_CMD_COMMIT_STRING           1
+#define CLAK_CMD_DELETE_SURROUNDING      2
+#define CLAK_CMD_EMIT_UINPUT_BACKSPACE   3
+#define CLAK_CMD_START_TIMER             4
+#define CLAK_CMD_CANCEL_TIMER            5
+#define CLAK_CMD_FORWARD_BACKSPACE       6
+#define CLAK_CMD_START_CUSTOM_DELETION   7
+
+#define CLAK_DELETION_SURROUNDING        0
+#define CLAK_DELETION_UINPUT             1
+#define CLAK_DELETION_CUSTOM             2
+#define CLAK_DELETION_FORWARD_BS         3
+#define CLAK_DELETION_COMMITTED_DEL      4
+
+#define CLAK_TIMER_SAFETY    1
+#define CLAK_TIMER_COMMIT    2
+#define CLAK_TIMER_SURR_LAG  3
+
+typedef struct {
+    int32_t     cmd_type;
+    uint32_t    sym;
+    const char *text;
+    int32_t     offset;
+    uint32_t    count;
+    uint32_t    post_delay_ms;
+    uint32_t    pre_delay_ms;
+    uint32_t    gap_ms;
+    uint32_t    hold_us;
+    uint32_t    timer_id;
+    uint64_t    delay_us;
+} ClakSessionCommand;
+
+typedef struct {
+    size_t count;
+    const ClakSessionCommand *commands;
+} ClakSessionCommandList;
+
+ClakSession *clak_session_new(int32_t method);
+void         clak_session_free(ClakSession *session);
+void         clak_session_reset(ClakSession *session, bool force);
+void         clak_session_apply_config(ClakSession *session, const ClakConfig *cfg);
+
+bool         clak_session_is_deleting(const ClakSession *session);
+size_t       clak_session_buffered_keys_count(const ClakSession *session);
+size_t       clak_session_expected_backspaces(const ClakSession *session);
+size_t       clak_session_current_backspace_count(const ClakSession *session);
+const char  *clak_session_pending_commit(const ClakSession *session);
+const char  *clak_session_last_autofix_delete(const ClakSession *session);
+const char  *clak_session_last_autofix_commit(const ClakSession *session);
+
+ClakSessionCommandList clak_session_process_key(
+    ClakSession *session,
+    uint32_t key_sym,
+    const char *key_str,
+    bool has_ctrl_alt,
+    const char *surrounding_text,
+    size_t cursor,
+    size_t anchor,
+    int32_t deletion_mode,
+    uint32_t autofill_extra,
+    uint32_t uinput_post_delay_ms,
+    uint32_t uinput_pre_delay_ms,
+    uint32_t uinput_gap_ms,
+    uint32_t uinput_hold_us,
+    uint64_t safety_timeout_us,
+    uint64_t timestamp_us);
+
+ClakSessionCommandList clak_session_switch_to_forward_fallback(
+    ClakSession *session,
+    uint64_t delay_us);
+
+bool clak_session_on_backspace_received(
+    ClakSession *session);
+
+ClakSessionCommandList clak_session_on_sentinel_received(
+    ClakSession *session,
+    uint64_t timestamp_us);
+
+ClakSessionCommandList clak_session_on_timer_fired(
+    ClakSession *session,
+    uint32_t timer_id,
+    uint64_t timestamp_us);
+
 #ifdef __cplusplus
 }
 #endif

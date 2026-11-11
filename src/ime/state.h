@@ -37,20 +37,28 @@ public:
   bool isAutofillCertain(const fcitx::SurroundingText& surr);
   static bool looksLikeUrlAutofill(const fcitx::SurroundingText& surr);
 
-  bool isDeleting() const { return is_deleting_; }
+  bool isDeleting() const { return rust_session_ ? clak_session_is_deleting(rust_session_) : false; }
   bool isSelectionDeletion() const { return is_selection_deletion_; }
   uint64_t safetyTimerTime() const { return safety_timer_ ? safety_timer_->time() : 0; }
   bool isRichTextEditor() const { return verifier_.isRichTextEditor(); }
   bool isDraftJsEditor() const;
   int mismatchCount() const { return verifier_.mismatchCount(); }
-  size_t expectedBackspaces() const { return expected_backspaces_; }
-  size_t bufferedKeysCount() const { return key_buffer_.size(); }
-  size_t currentBackspaceCount() const { return current_backspace_count_; }
+  size_t expectedBackspaces() const { return rust_session_ ? clak_session_expected_backspaces(rust_session_) : 0; }
+  size_t bufferedKeysCount() const {
+    size_t count = rust_session_ ? clak_session_buffered_keys_count(rust_session_) : 0;
+    count += key_buffer_.size();
+    return count;
+  }
+  size_t currentBackspaceCount() const { return rust_session_ ? clak_session_current_backspace_count(rust_session_) : 0; }
   bool allRealBackspacesReceived() const {
-    return is_deleting_ && expected_backspaces_ > 0 && current_backspace_count_ >= (expected_backspaces_ - 1);
+    size_t exp = expectedBackspaces();
+    return isDeleting() && exp > 0 && currentBackspaceCount() >= (exp - 1);
   }
   void finishUinputDeletion(uint64_t rtt_us = 0);
-  const std::string& pendingCommitString() const { return pending_commit_string_; }
+  std::string pendingCommitString() const {
+    const char* s = rust_session_ ? clak_session_pending_commit(rust_session_) : "";
+    return s ? s : "";
+  }
   uint64_t adaptiveExtraWaitUs() const { return adaptive_extra_us_; }
   void observeTransactionLatency(uint64_t elapsed_us);
   void onRepeatTimer() { repeat_handler_.onTimer(); }
@@ -65,7 +73,8 @@ public:
   const pacing::AdaptivePacingEngine& pacingEngine() const { return pacing_engine_; }
 
 private:
-  void arm_safety_timer();
+  void executeSessionCommands(const ClakSessionCommandList& list);
+  void handleSafetyTimeout();
   bool handleKey(const fcitx::Key& key);
   bool triggerShiftAutoFix();
   void replayBufferedKeys(const std::string& initial_batch = "");
@@ -80,7 +89,7 @@ private:
 
   ClakEngine* engine_;
   fcitx::InputContext* ic_;
-  ClakContext* rust_ctx_{nullptr};
+  ClakSession* rust_session_{nullptr};
   uint64_t applied_config_version_{0};
   uint64_t last_commit_time_us_{0};
   size_t uncommitted_forward_count_{0};
@@ -95,13 +104,10 @@ private:
 
   uint32_t surr_cursor_underflow_count_{0};
 
-  bool is_deleting_{false};
   bool is_address_bar_fix_{false};
   bool is_selection_deletion_{false};
   uint64_t adaptive_extra_us_{0};
   uint32_t stable_transactions_count_{0};
-  size_t expected_backspaces_{0};
-  size_t current_backspace_count_{0};
   size_t in_flight_sentinel_count_{0};
   uint64_t sentinel_grace_until_us_{0};
   size_t last_text_len_{0};
@@ -114,9 +120,6 @@ private:
   uint64_t op_start_us_{0};
   std::string op_group_;
 
-  std::string pending_commit_string_;
-  std::string batch_commit_;
-  bool is_replaying_{false};
   std::unique_ptr<fcitx::EventSourceTime> safety_timer_;
   std::unique_ptr<fcitx::EventSourceTime> commit_timer_;
   std::unique_ptr<fcitx::EventSourceTime> retired_commit_timer_;
