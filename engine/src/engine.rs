@@ -608,7 +608,12 @@ pub fn convert_teip_vni(input: &str, modern: bool, short_w: bool) -> String {
                     continue;
                 }
                 '0' => {
-                    continue;
+                    if let Some(vi) = tone_vowel_index(&ls, modern) {
+                        if ls[vi].tone != 0 {
+                            ls[vi].tone = 0;
+                            continue;
+                        }
+                    }
                 }
                 _ => {} // digits 1-5 already handled by vni_tone above
             }
@@ -974,7 +979,12 @@ pub fn convert_vni(input: &str, modern: bool, _short_w: bool) -> String {
                 continue;
             }
             '0' => {
-                continue;
+                if let Some(vi) = tone_vowel_index(&ls, modern) {
+                    if ls[vi].tone != 0 {
+                        ls[vi].tone = 0;
+                        continue;
+                    }
+                }
             }
             _ => {}
         }

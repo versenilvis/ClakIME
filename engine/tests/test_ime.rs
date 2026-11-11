@@ -1174,3 +1174,71 @@ fn test_surrounding_text_multibyte_and_clamped_boundary_slicing() {
     let a5 = ctx5.process_key(b's' as u32, "s", false, Some(den_text), den_len, den_len);
     assert_eq!(a5.action_type, ACTION_FORWARD);
 }
+
+#[test]
+fn test_decompose_to_vni_roundtrip() {
+    use clak_engine::{decompose_to_vni, ClakCore};
+    let core = ClakCore::new(Method::Vni);
+    for w in ["tiến", "người", "được", "đường", "Đặc", "hỏi", "quả", "ươ"] {
+        assert_eq!(core.transform(&decompose_to_vni(w)), w, "word {w}");
+    }
+}
+
+#[test]
+fn test_vni_backspace_reseeds_with_vni_keys() {
+    let mut ctx = ClakContext::new(Method::Vni);
+    let act = ctx.process_key(0xff08, "", false, Some("tiếng"), 5, 5);
+    assert_eq!(act.action_type, ACTION_FORWARD);
+    // "tiến" left, user retypes tone 5 -> "tiện"
+    let act = ctx.process_key(b'5' as u32, "5", false, Some("tiến"), 4, 4);
+    assert_eq!(act.action_type, ACTION_REPLACE);
+    let commit = unsafe { CStr::from_ptr(act.commit_str).to_str().unwrap() };
+    assert_eq!(commit, "ện");
+    assert_eq!(act.delete_count, 2);
+}
+
+#[test]
+fn test_vni_click_seed_at_word_end() {
+    let mut ctx = ClakContext::new(Method::Vni);
+    let act = ctx.process_key(b'2' as u32, "2", false, Some("xin chao"), 8, 8);
+    assert_eq!(act.action_type, ACTION_REPLACE);
+    let commit = unsafe { CStr::from_ptr(act.commit_str).to_str().unwrap() };
+    assert_eq!(commit, "ào");
+}
+
+#[test]
+fn test_seed_mid_word_uses_left_part_only() {
+    let mut ctx = ClakContext::new(Method::Telex);
+    // "tiến" with cursor after "tiế", user types j -> "tiệ" left of "n"
+    let act = ctx.process_key(b'j' as u32, "j", false, Some("tiến"), 3, 3);
+    assert_eq!(act.action_type, ACTION_REPLACE);
+    let commit = unsafe { CStr::from_ptr(act.commit_str).to_str().unwrap() };
+    assert_eq!(commit, "ệ");
+    assert_eq!(act.delete_count, 1);
+}
+
+#[test]
+fn test_vni_and_telex_uppercase_and_tone_remove_seed() {
+    use clak_engine::{decompose_to_vni, ClakCore};
+    let core = ClakCore::new(Method::Vni);
+    for w in ["ĐƯỢC", "TIẾNG", "QUỐC", "HỎI"] {
+        assert_eq!(core.transform(&decompose_to_vni(w)), w, "word {w}");
+    }
+
+    let mut vni_ctx = ClakContext::new(Method::Vni);
+    let act = vni_ctx.process_key(b'0' as u32, "0", false, Some("toán"), 4, 4);
+    assert_eq!(act.action_type, ACTION_REPLACE);
+    let commit = unsafe { CStr::from_ptr(act.commit_str).to_str().unwrap() };
+    assert_eq!(commit, "an");
+
+    let mut telex_ctx = ClakContext::new(Method::Telex);
+    let act = telex_ctx.process_key(b'z' as u32, "z", false, Some("tiếng"), 5, 5);
+    assert_eq!(act.action_type, ACTION_REPLACE);
+    let commit = unsafe { CStr::from_ptr(act.commit_str).to_str().unwrap() };
+    assert_eq!(commit, "êng");
+
+    // do not reseed into an identifier separator on the right
+    let mut ident_ctx = ClakContext::new(Method::Telex);
+    let act = ident_ctx.process_key(b's' as u32, "s", false, Some("tien_bien"), 4, 4);
+    assert_eq!(act.action_type, ACTION_FORWARD);
+}

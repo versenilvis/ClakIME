@@ -230,7 +230,7 @@ impl ClakContext {
                 let mut chars: Vec<char> = self.last_composed.chars().collect();
                 chars.pop();
                 let remaining: String = chars.into_iter().collect();
-                self.raw_buffer = decompose_to_telex(&remaining);
+                self.raw_buffer = decompose_to_raw(&remaining, self.engine.method());
                 self.last_composed = remaining;
                 if let Some(text) = surrounding_text {
                     self.last_surr = Some((text.to_string(), cursor));
@@ -568,7 +568,7 @@ impl ClakContext {
                     before_cur
                 };
                 if !word.is_empty() {
-                    let word_telex = decompose_to_telex(word);
+                    let word_telex = decompose_to_raw(word, self.engine.method());
                     if self.raw_buffer.starts_with(&word_telex) || self.raw_buffer.starts_with(word)
                     {
                         matches_last = true;
@@ -615,24 +615,28 @@ impl ClakContext {
                 }
             }
 
-            // word seeding from surrounding text only when cursor is at word end
-            let is_at_word_end = cur_byte == text.len()
-                || text[cur_byte..]
-                    .chars()
+            // word seeding from surrounding text, the part left of the cursor is what gets recomposed
+            let is_seed_key = is_modifier_for_method(self.engine.method(), key_ch);
+            let mut after_chars = text[cur_byte..].chars();
+            let right_is_ident_sep = match after_chars.next() {
+                Some('_') | Some('/') => true,
+                Some('.') => after_chars
                     .next()
-                    .map(|c| is_word_break(c as u32))
-                    .unwrap_or(true);
-            let is_telex_mod = matches!(
-                key_ch.to_ascii_lowercase(),
-                'a' | 'e' | 'o' | 'd' | 'w' | 's' | 'f' | 'r' | 'x' | 'j'
-            );
+                    .map(|c| !c.is_whitespace())
+                    .unwrap_or(false),
+                Some('-') => after_chars
+                    .next()
+                    .map(|c| c.is_alphabetic())
+                    .unwrap_or(false),
+                _ => false,
+            };
             if !is_stale
                 && !has_autocomplete
                 && cursor == anchor
                 && self.last_composed.is_empty()
                 && cur_byte > 0
-                && is_telex_mod
-                && is_at_word_end
+                && is_seed_key
+                && !right_is_ident_sep
             {
                 let old_word = if let Some(last_break_pos) =
                     before_cur.rfind(|c: char| is_word_break(c as u32))
@@ -647,7 +651,7 @@ impl ClakContext {
                     before_cur
                 };
                 if !old_word.is_empty() && old_word.chars().all(|c| c.is_alphabetic()) {
-                    self.raw_buffer = decompose_to_telex(old_word);
+                    self.raw_buffer = decompose_to_raw(old_word, self.engine.method());
                     self.last_composed = old_word.to_string();
                 }
             }
@@ -1016,6 +1020,70 @@ pub fn decompose_to_telex(word: &str) -> String {
     }
 
     result
+}
+
+fn is_modifier_for_method(method: Method, key_ch: char) -> bool {
+    let lower = key_ch.to_ascii_lowercase();
+    let telex = matches!(
+        lower,
+        'a' | 'e' | 'o' | 'd' | 'w' | 's' | 'f' | 'r' | 'x' | 'j' | 'z'
+    );
+    match method {
+        Method::Telex => telex,
+        Method::Vni => lower.is_ascii_digit(),
+        Method::TeipVni => telex || lower.is_ascii_digit(),
+        Method::Viqr => false,
+    }
+}
+
+pub fn decompose_to_vni(word: &str) -> String {
+    let mut result = String::with_capacity(word.len() + 4);
+    let mut trailing_tone: Option<char> = None;
+
+    for ch in word.chars() {
+        let (base, tone) = decompose_char_to_telex(ch);
+        if base.is_empty() {
+            result.push(ch);
+            continue;
+        }
+        let mut chars = base.chars();
+        let first = chars.next().unwrap_or(ch);
+        let marker = match base.to_ascii_lowercase().as_str() {
+            "aa" | "ee" | "oo" => Some('6'),
+            "ow" | "uw" => Some('7'),
+            "aw" => Some('8'),
+            "dd" => Some('9'),
+            _ => None,
+        };
+        result.push(first);
+        if let Some(m) = marker {
+            result.push(m);
+        } else {
+            result.extend(chars);
+        }
+        if let Some(t) = tone {
+            trailing_tone = Some(match t {
+                's' => '1',
+                'f' => '2',
+                'r' => '3',
+                'x' => '4',
+                _ => '5',
+            });
+        }
+    }
+
+    if let Some(t) = trailing_tone {
+        result.push(t);
+    }
+
+    result
+}
+
+pub fn decompose_to_raw(word: &str, method: Method) -> String {
+    match method {
+        Method::Vni | Method::TeipVni => decompose_to_vni(word),
+        _ => decompose_to_telex(word),
+    }
 }
 
 pub fn to_base_ascii(s: &str) -> String {
