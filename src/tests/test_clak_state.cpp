@@ -1127,5 +1127,42 @@ TEST_F(ClakStateTest, GivenKeyBufferOverflowDuringFallback_PendingReplacementCom
     EXPECT_EQ(ic.commits.size(), commit_count);
 }
 
+TEST_F(ClakStateTest, GivenPasswordField_BypassesIMEAndPassthroughKeys) {
+    MockInputContext ic(instance_->inputContextManager(), "test-browser");
+    ime::ClakState state(engine_.get(), &ic);
+
+    ic.setPasswordCapability(true);
+
+    // keys typed in password field must not be filtered or processed by ime
+    bool accepted = ic.sendKey(FcitxKey_v, fcitx::KeyStates(), false, &state);
+    EXPECT_FALSE(accepted);
+
+    accepted = ic.sendKey(FcitxKey_i, fcitx::KeyStates(), false, &state);
+    EXPECT_FALSE(accepted);
+
+    accepted = ic.sendKey(FcitxKey_e, fcitx::KeyStates(), false, &state);
+    EXPECT_FALSE(accepted);
+
+    accepted = ic.sendKey(FcitxKey_e, fcitx::KeyStates(), false, &state);
+    EXPECT_FALSE(accepted);
+
+    accepted = ic.sendKey(FcitxKey_t, fcitx::KeyStates(), false, &state);
+    EXPECT_FALSE(accepted);
+
+    accepted = ic.sendKey(FcitxKey_j, fcitx::KeyStates(), false, &state);
+    EXPECT_FALSE(accepted);
+
+    EXPECT_TRUE(ic.commits.empty());
+    EXPECT_TRUE(ic.deletions.empty());
+
+    // disabling password capability restores normal typing
+    ic.setPasswordCapability(false);
+    ic.clearHistory();
+
+    ic.typeChar('d', &state);
+    bool filtered = ic.typeChar('d', &state);
+    EXPECT_TRUE(filtered);
+}
+
 } // namespace test
 } // namespace clak

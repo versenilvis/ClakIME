@@ -127,6 +127,16 @@ void MockInputContext::setMultilineCapability(bool enabled) {
     setCapabilityFlags(flags);
 }
 
+void MockInputContext::setPasswordCapability(bool enabled) {
+    auto flags = capabilityFlags();
+    if (enabled) {
+        flags |= fcitx::CapabilityFlag::Password;
+    } else {
+        flags &= ~fcitx::CapabilityFlags(fcitx::CapabilityFlag::Password);
+    }
+    setCapabilityFlags(flags);
+}
+
 bool MockInputContext::sendKey(fcitx::KeySym sym, fcitx::KeyStates states, bool isRelease, ime::ClakState* state) {
     fcitx::KeyEvent event(this, fcitx::Key(sym, states), isRelease);
     if (state) {

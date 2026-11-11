@@ -1090,6 +1090,11 @@ bool ClakState::handleKey(const fcitx::Key& key) {
 }
 
 void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
+    if (ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Password)) {
+        reset(/*force=*/true);
+        return;
+    }
+
     std::string app = appKey();
     const auto& key = keyEvent.key();
     std::string key_str = fcitx::Key::keySymToUTF8(key.sym());

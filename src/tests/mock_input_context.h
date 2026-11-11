@@ -35,6 +35,7 @@ public:
     void setSurroundingEnabled(bool enabled);
     void setUrlCapability(bool enabled);
     void setMultilineCapability(bool enabled);
+    void setPasswordCapability(bool enabled);
 
     // key event dispatch helpers
     bool sendKey(fcitx::KeySym sym, fcitx::KeyStates states = fcitx::KeyStates(), bool isRelease = false, ime::ClakState* state = nullptr);
