@@ -1081,5 +1081,46 @@ TEST_F(ClakStateTest, GivenUinputFailure_MultiCharFallbackStaysOrderedBeforeComm
     EXPECT_EQ(ic.commits.back(), "ên");
 }
 
+TEST_F(ClakStateTest, GivenKeyBufferOverflowDuringFallback_PendingReplacementCommittedAndTimerIgnored) {
+    platform::setMockActiveWindow(platform::WindowInfo{"kitty", "kitty", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "kitty");
+    ime::ClakState state(engine_.get(), &ic);
+
+    uinput::UinputTool::instance().setMockHandler([](size_t, uint32_t, uint32_t, uint32_t, uint32_t) {
+        return false;
+    });
+
+    ic.setSurrounding("", 0, 0);
+    ic.typeChar('d', &state);
+    ic.typeChar('d', &state);
+    EXPECT_TRUE(state.isDeleting());
+
+    // fill buffer to capacity and overflow while fallback timer is active
+    for (size_t i = 0; i < config::kMaxBufferedKeys; ++i) {
+        ic.typeChar('a', &state);
+    }
+    ic.typeChar('z', &state);
+
+    // replacement string must be finalized and committed on overflow, not lost
+    EXPECT_FALSE(state.isDeleting());
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "đ");
+    size_t commit_count = ic.commits.size();
+
+    // running event loop past the original fallback delay must not perform duplicate/stale replay
+    auto exit_timer = instance_->eventLoop().addTimeEvent(
+        CLOCK_MONOTONIC,
+        fcitx::now(CLOCK_MONOTONIC) + 60000,
+        0,
+        [this](fcitx::EventSourceTime*, uint64_t) {
+            instance_->eventLoop().exit();
+            return true;
+        }
+    );
+    instance_->eventLoop().exec();
+
+    EXPECT_EQ(ic.commits.size(), commit_count);
+}
+
 } // namespace test
 } // namespace clak

@@ -120,6 +120,7 @@ private:
   std::unique_ptr<fcitx::EventSourceTime> safety_timer_;
   std::unique_ptr<fcitx::EventSourceTime> commit_timer_;
   std::unique_ptr<fcitx::EventSourceTime> retired_commit_timer_;
+  uint64_t fallback_seq_{0};
   std::unique_ptr<fcitx::EventSourceTime> surr_lag_timer_;
   bool is_surr_lag_replaying_{false};
   uint64_t last_key_time_us_{0};

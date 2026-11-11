@@ -139,6 +139,7 @@ void ClakState::reset(bool force) {
     if (retired_commit_timer_) {
         retired_commit_timer_.reset();
     }
+    ++fallback_seq_;
     if (surr_lag_timer_) {
         surr_lag_timer_.reset();
     }
@@ -438,6 +439,7 @@ bool ClakState::scheduleForwardBackspaceFallback(size_t count, const std::string
     pending_commit_string_ = commit_str;
 
     uint64_t delay_us = std::min<uint64_t>(20000ULL, 8000ULL + count * 2000ULL);
+    uint64_t seq = ++fallback_seq_;
     if (commit_timer_) {
         retired_commit_timer_ = std::move(commit_timer_);
     }
@@ -445,10 +447,13 @@ bool ClakState::scheduleForwardBackspaceFallback(size_t count, const std::string
         CLOCK_MONOTONIC,
         fcitx::now(CLOCK_MONOTONIC) + delay_us,
         1000,
-        [this, commit_str](fcitx::EventSourceTime*, uint64_t) {
-            if (is_deleting_) {
+        [this, seq, commit_str](fcitx::EventSourceTime*, uint64_t) {
+            if (is_deleting_ && fallback_seq_ == seq) {
                 is_deleting_ = false;
                 pending_commit_string_.clear();
+                if (commit_timer_) {
+                    commit_timer_.reset();
+                }
                 replayBufferedKeys(commit_str);
             }
             return false;
@@ -621,6 +626,7 @@ void ClakState::finishUinputDeletion(uint64_t rtt_us) {
     if (retired_commit_timer_) {
         retired_commit_timer_.reset();
     }
+    ++fallback_seq_;
     if (surr_lag_timer_) {
         surr_lag_timer_.reset();
     }
@@ -1629,6 +1635,19 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
         repeat_handler_.cancel();
         collision_stats_.buffered_key_interruptions++;
         if (!key_buffer_.push(key)) {
+            // finalize pending deferred fallback transaction before forwarding keys so replacement is not lost
+            if (!pending_commit_string_.empty()) {
+                doCommitString(pending_commit_string_);
+                pending_commit_string_.clear();
+            }
+            if (commit_timer_) {
+                commit_timer_.reset();
+            }
+            if (retired_commit_timer_) {
+                retired_commit_timer_.reset();
+            }
+            ++fallback_seq_;
+
             // flush queued keys first to preserve strict order on buffer overflow
             auto pending = key_buffer_.take_keys();
             if (ic_) {
@@ -1645,7 +1664,6 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
             is_address_bar_fix_ = false;
             is_selection_deletion_ = false;
             expected_backspaces_ = 0;
-            pending_commit_string_.clear();
             if (surr_lag_timer_) {
                 surr_lag_timer_.reset();
             }
