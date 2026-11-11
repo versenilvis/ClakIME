@@ -168,11 +168,14 @@ void ClakState::reset(bool force) {
     last_surr_cursor_ = 0;
     last_surr_text_len_ = 0;
     surr_keystroke_count_ = 0;
+    word_used_uinput_ = false;
     if (force) {
         verifier_.reset(/*hard_reset=*/false);
         if (config::isVSCodeApp(appKey())) {
             verifier_.setRichTextEditor(false);
         }
+        vscode_invalid_surr_count_ = 0;
+        last_vscode_uinput_commit_.clear();
         address_bar_has_space_ = false;
     } else {
         verifier_.clearPending();
@@ -193,12 +196,15 @@ std::string ClakState::appKey() {
     if (ic_ && !ic_->program().empty() && !de::isDesktopShell(ic_->program())) {
         return ic_->program();
     }
-    if (ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal)) {
-        return "terminal";
-    }
+    bool has_term_cap = ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal);
     platform::WindowInfo win = platform::getActiveWindow();
     if (!win.win_class.empty() && !de::isDesktopShell(win.win_class)) {
-        return win.win_class;
+        if (!has_term_cap || apps::isTerminalApp(win.win_class)) {
+            return win.win_class;
+        }
+    }
+    if (has_term_cap) {
+        return "terminal";
     }
     if (ic_ && !ic_->program().empty() && !de::isDesktopShell(ic_->program())) {
         return ic_->program();
@@ -630,7 +636,7 @@ void ClakState::finishUinputDeletion(uint64_t rtt_us) {
     pending_commit_string_.clear();
 
     uint32_t compensation_ms = pacing_engine_.commitCompensation(pgroup);
-    if ((app == "konsole" || site.find("konsole") != std::string::npos) && compensation_ms < 8) {
+    if ((apps::isKonsoleApp(app) || apps::isKonsoleApp(site)) && compensation_ms < 8) {
         compensation_ms = 8;
     }
     if (compensation_ms > 0 && engine_ && engine_->instance()) {
@@ -794,34 +800,65 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                       !verifier_.isRichTextEditor();
     bool use_surrounding = valid_surr && currentProfile()->allowsSurroundingText();
 
-    // detect frozen surrounding cursor in vscode (e.g. xterm.js in integrated terminal)
+    // detect xterm.js in vscode / electron ides (invalid or frozen surrounding cursor)
     bool is_printable = (!key_str.empty() && sym < 0xff00);
     bool is_bs_on_text = (sym == FcitxKey_BackSpace && surr.cursor() > 0);
-    if (!currentProfile()->preventsUinput() && config::isVSCodeApp(app) && has_surrounding && surr.isValid() && (is_printable || is_bs_on_text) && !has_ctrl_alt) {
-        bool in_flight_commit = (now_us - last_commit_time_us_ < 60000);
-        bool is_terminal_dummy_text = (surr.text().size() <= 3 && surr.text().find('\n') == std::string::npos);
-        if (is_terminal_dummy_text && !in_flight_commit && last_surr_cursor_ == surr.cursor() && last_surr_text_len_ == surr.text().size()) {
-            surr_keystroke_count_++;
-            if (surr_keystroke_count_ >= 2) {
+    if (!currentProfile()->preventsUinput() && config::isVSCodeApp(app) && !has_ctrl_alt) {
+        if ((!has_surrounding || !surr.isValid()) && is_printable) {
+            vscode_invalid_surr_count_++;
+            if (vscode_invalid_surr_count_ >= 2) {
                 verifier_.setRichTextEditor(true);
                 valid_surr = false;
                 use_surrounding = false;
-                utils::clakLog("handleKey: detected frozen surrounding cursor in app=" + app + " (cursor=" +
-                               std::to_string(surr.cursor()) + " len=" + std::to_string(surr.text().size()) + "), auto-switched to uinput");
             }
-        } else {
-            surr_keystroke_count_ = 0;
-            // only restore surrounding text when text is substantial (> 4 chars), terminal only has dummy chars (<= 2)
-            if (verifier_.isRichTextEditor() && surr.text().size() > 4) {
-                verifier_.setRichTextEditor(false);
-                verifier_.setDraftJsEditor(false);
-                valid_surr = true;
-                use_surrounding = currentProfile()->allowsSurroundingText();
-                utils::clakLog("handleKey: surrounding cursor resumed moving in app=" + app + ", restored surrounding text");
+        } else if (has_surrounding && surr.isValid() && (is_printable || is_bs_on_text)) {
+            vscode_invalid_surr_count_ = 0;
+            bool surr_matches_uinput_commit =
+                !last_vscode_uinput_commit_.empty() &&
+                surr.text().size() >= last_vscode_uinput_commit_.size() &&
+                surr.text().compare(
+                    surr.text().size() - last_vscode_uinput_commit_.size(),
+                    last_vscode_uinput_commit_.size(),
+                    last_vscode_uinput_commit_) == 0;
+            bool in_flight_commit = (now_us - last_commit_time_us_ < 60000);
+            bool is_terminal_dummy_text = (surr.text().size() <= 3 && surr.text().find('\n') == std::string::npos);
+
+            if (surr_matches_uinput_commit) {
+                // ignore helper textarea echoing our own uinput commitString (e.g. xterm.js)
+                if (word_used_uinput_) {
+                    verifier_.setRichTextEditor(true);
+                }
+                if (verifier_.isRichTextEditor()) {
+                    valid_surr = false;
+                    use_surrounding = false;
+                }
+            } else if ((is_terminal_dummy_text || verifier_.isRichTextEditor()) &&
+                       !in_flight_commit &&
+                       last_surr_cursor_ == surr.cursor() &&
+                       last_surr_text_len_ == surr.text().size()) {
+                surr_keystroke_count_++;
+                if (surr_keystroke_count_ >= 2) {
+                    verifier_.setRichTextEditor(true);
+                    valid_surr = false;
+                    use_surrounding = false;
+                    utils::clakLog("handleKey: detected frozen surrounding cursor in app=" + app + " (cursor=" +
+                                   std::to_string(surr.cursor()) + " len=" + std::to_string(surr.text().size()) + "), auto-switched to uinput");
+                }
+            } else {
+                surr_keystroke_count_ = 0;
+                // only restore surrounding text when cursor genuinely moved to real multi-char editor text
+                if (verifier_.isRichTextEditor() && !word_used_uinput_ && surr.text().size() > 4) {
+                    last_vscode_uinput_commit_.clear();
+                    verifier_.setRichTextEditor(false);
+                    verifier_.setDraftJsEditor(false);
+                    valid_surr = true;
+                    use_surrounding = currentProfile()->allowsSurroundingText();
+                    utils::clakLog("handleKey: surrounding cursor resumed moving in app=" + app + ", restored surrounding text");
+                }
             }
+            last_surr_cursor_ = surr.cursor();
+            last_surr_text_len_ = surr.text().size();
         }
-        last_surr_cursor_ = surr.cursor();
-        last_surr_text_len_ = surr.text().size();
     }
 
     bool skip_verify = is_gecko || is_meta || currentProfile()->preventsUinput();
@@ -1118,6 +1155,13 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                                "us commit='" + (action.commit_str ? action.commit_str : "") + "' app=" + app + " site='" + site + "'");
 
                 if (uinput::UinputTool::instance().send_backspace(bs_to_send, pacing.post_delay_ms, pre_delay, pacing.gap_ms, pacing.hold_us)) {
+                    word_used_uinput_ = true;
+                    if (config::isVSCodeApp(app)) {
+                        last_vscode_uinput_commit_ = (action.commit_str ? action.commit_str : "");
+                        if (!valid_surr) {
+                            verifier_.setRichTextEditor(true);
+                        }
+                    }
                     repeat_handler_.cancel();
                     if (utils::clakGetEnv("CLAK_DISABLE_SENTINEL_GATE")) {
                         in_flight_sentinel_count_ = 1;

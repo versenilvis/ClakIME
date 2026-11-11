@@ -1611,6 +1611,82 @@ TEST_F(RegressionCorpusTest, test_regression_send_select_aborts_when_physical_sh
     tool.clearMockShiftStateHook();
 }
 
+TEST_F(RegressionCorpusTest, test_regression_vscode_xterm_air_then_r_never_calls_delete_surrounding) {
+    platform::setMockActiveWindow(platform::WindowInfo{"antigravity-ide", "antigravity", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "antigravity-ide");
+    auto* state = ic.propertyFor(&engine_->factory());
+
+    size_t uinput_calls = 0;
+    uinput::UinputTool::instance().setMockHandler([&](size_t, uint32_t, uint32_t, uint32_t) {
+        uinput_calls++;
+        return true;
+    });
+
+    // scenario 1: xterm.js starts with invalid surrounding text (Surr: none)
+    ic.invalidateSurrounding();
+    ic.typeChar('a', state);
+    ic.typeChar('i', state);
+    ic.typeChar('r', state);
+
+    EXPECT_EQ(uinput_calls, 1u);
+    EXPECT_TRUE(ic.deletions.empty());
+    while (state->isDeleting()) {
+        ic.sendCleanBackspace(state);
+    }
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "ải");
+
+    // electron mirrors commitString("ải") into .xterm-helper-textarea (4+ bytes)
+    ic.setSurrounding(" đải", 4, 4);
+    ic.typeChar('r', state);
+
+    // must stay on uinput instead of calling deleteSurroundingText and producing "ảiair"
+    EXPECT_EQ(uinput_calls, 2u);
+    EXPECT_TRUE(ic.deletions.empty());
+    EXPECT_TRUE(state->isRichTextEditor());
+    while (state->isDeleting()) {
+        ic.sendCleanBackspace(state);
+    }
+    EXPECT_EQ(ic.commits.back(), "air");
+
+    // next word after space with frozen helper textarea (>4 bytes) still uses uinput
+    ic.typeChar(' ', state);
+    ic.typeChar('c', state);
+    ic.typeChar('a', state);
+    ic.typeChar('s', state);
+    EXPECT_EQ(uinput_calls, 3u);
+    EXPECT_TRUE(ic.deletions.empty());
+    while (state->isDeleting()) {
+        ic.sendCleanBackspace(state);
+    }
+    EXPECT_EQ(ic.commits.back(), "á");
+}
+
+TEST_F(RegressionCorpusTest, test_regression_kde_konsole_case_and_wayland_app_id_detection) {
+    EXPECT_TRUE(apps::isKonsoleApp("konsole"));
+    EXPECT_TRUE(apps::isKonsoleApp("Konsole"));
+    EXPECT_TRUE(apps::isKonsoleApp("org.kde.konsole"));
+    EXPECT_FALSE(apps::isKonsoleApp("kitty"));
+
+    EXPECT_TRUE(apps::isTerminalApp("Konsole"));
+    EXPECT_TRUE(apps::isTerminalApp("org.kde.konsole"));
+    EXPECT_TRUE(apps::isTerminalApp("Yakuake"));
+    EXPECT_TRUE(apps::isTerminalApp("org.kde.yakuake"));
+    EXPECT_FALSE(apps::isVteTerminalApp("Konsole"));
+    EXPECT_FALSE(apps::isVteTerminalApp("org.kde.konsole"));
+
+    // empty program with Terminal capability on kde resolves active Konsole class instead of generic vte "terminal"
+    platform::setMockActiveWindow(platform::WindowInfo{"org.kde.konsole", "bash - Konsole", 4242});
+    MockInputContext ic(instance_->inputContextManager(), "");
+    ic.setCapabilityFlags(fcitx::CapabilityFlag::Terminal);
+    ime::ClakState state(engine_.get(), &ic);
+
+    EXPECT_EQ(state.appKey(), "org.kde.konsole");
+    EXPECT_EQ(state.currentProfile()->name(), "Terminal-Uinput");
+    EXPECT_TRUE(state.currentProfile()->forcesUinput());
+    EXPECT_FALSE(state.currentProfile()->erasesWithCommittedDel());
+}
+
 } // namespace test
 } // namespace clak
 

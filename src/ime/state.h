@@ -108,6 +108,9 @@ private:
   size_t last_surr_cursor_{0};
   size_t last_surr_text_len_{0};
   uint32_t surr_keystroke_count_{0};
+  size_t vscode_invalid_surr_count_{0};
+  bool word_used_uinput_{false};
+  std::string last_vscode_uinput_commit_;
   uint64_t op_start_us_{0};
   std::string op_group_;
 

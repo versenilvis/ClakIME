@@ -4,13 +4,27 @@
 #include <cstdio>
 #include <cstring>
 #include <dirent.h>
+#include <cctype>
 #include <chrono>
 #include <vector>
 
 namespace clak {
 namespace apps {
 
+namespace {
+
+std::string toLowerAscii(const std::string& s) {
+    std::string out = s;
+    for (char& c : out) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return out;
+}
+
+} // namespace
+
 bool isVteTerminalApp(const std::string& app) {
+    std::string lower = toLowerAscii(app);
     static const std::vector<std::string> vte_terms = {
         "ptyxis", "kgx", "gnome-console", "blackbox",
         "gnome-terminal", "gnome-terminal-server",
@@ -19,20 +33,26 @@ bool isVteTerminalApp(const std::string& app) {
         "terminal", "ghostty"
     };
     for (const auto& t : vte_terms) {
-        if (app.find(t) != std::string::npos) return true;
+        if (lower.find(t) != std::string::npos) return true;
     }
     return false;
+}
+
+bool isKonsoleApp(const std::string& app) {
+    std::string lower = toLowerAscii(app);
+    return lower.find("konsole") != std::string::npos;
 }
 
 bool isTerminalApp(const std::string& app) {
     if (isJetBrainsApp(app)) return true;
     if (isVteTerminalApp(app)) return true;
+    std::string lower = toLowerAscii(app);
     static const std::vector<std::string> terms = {
         "kitty", "ghostty", "alacritty", "foot", "wezterm", "xterm",
-        "konsole", "yakuake", "urxvt", "terminal"
+        "konsole", "org.kde.konsole", "yakuake", "org.kde.yakuake", "urxvt", "terminal"
     };
     for (const auto& t : terms) {
-        if (app.find(t) != std::string::npos) return true;
+        if (lower.find(t) != std::string::npos) return true;
     }
     return false;
 }

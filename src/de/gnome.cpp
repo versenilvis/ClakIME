@@ -70,6 +70,9 @@ static std::string normalizeAppName(const std::string& raw_name) {
     std::string lower = raw_name;
     for (char& c : lower) c = tolower(static_cast<unsigned char>(c));
     if (lower.find("visual studio code") != std::string::npos || lower == "code") return "code";
+    if (lower.find("antigravity") != std::string::npos) return "antigravity-ide";
+    if (lower.find("konsole") != std::string::npos) return "konsole";
+    if (lower.find("yakuake") != std::string::npos) return "yakuake";
     if (lower.find("brave") != std::string::npos) return "brave";
     if (lower.find("helium") != std::string::npos) return "helium";
     if (lower.find("chrome") != std::string::npos || lower.find("chromium") != std::string::npos) return "google-chrome";
