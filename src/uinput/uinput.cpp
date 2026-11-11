@@ -13,21 +13,19 @@
 #include <thread>
 #include <chrono>
 #include <vector>
+#include <memory>
+#include <xcb/xcb.h>
 
 namespace clak {
 namespace uinput {
 
 namespace {
 
-struct XcbConnection;
-struct XcbVoidCookie {
-    unsigned int sequence;
-};
-using ConnectFn = XcbConnection* (*)(const char*, int*);
-using HasErrorFn = int (*)(XcbConnection*);
-using FlushFn = int (*)(XcbConnection*);
-using DisconnectFn = void (*)(XcbConnection*);
-using FakeInputFn = XcbVoidCookie (*)(XcbConnection*, uint8_t, uint8_t, uint32_t, uint32_t, int16_t, int16_t, uint8_t);
+using ConnectFn = xcb_connection_t* (*)(const char*, int*);
+using HasErrorFn = int (*)(xcb_connection_t*);
+using FlushFn = int (*)(xcb_connection_t*);
+using DisconnectFn = void (*)(xcb_connection_t*);
+using FakeInputFn = xcb_void_cookie_t (*)(xcb_connection_t*, uint8_t, uint8_t, uint32_t, uint32_t, int16_t, int16_t, uint8_t);
 
 constexpr uint8_t kXcbKeyPress = 2;
 constexpr uint8_t kXcbKeyRelease = 3;
@@ -61,7 +59,7 @@ UinputTool::~UinputTool() {
         if (xcb_conn_ && xcb_lib_) {
             auto disconnect_fn = reinterpret_cast<DisconnectFn>(dlsym(xcb_lib_, "xcb_disconnect"));
             if (disconnect_fn) {
-                disconnect_fn(reinterpret_cast<XcbConnection*>(xcb_conn_));
+                disconnect_fn(reinterpret_cast<xcb_connection_t*>(xcb_conn_));
             }
             xcb_conn_ = nullptr;
         }
@@ -338,7 +336,7 @@ bool UinputTool::init_xtest() {
         return false;
     }
 
-    XcbConnection* conn = connect_fn(nullptr, nullptr);
+    xcb_connection_t* conn = connect_fn(nullptr, nullptr);
     if (!conn || has_error_fn(conn) != 0) {
         if (conn) disconnect_fn(conn);
         dlclose(xcb);
@@ -364,7 +362,7 @@ bool UinputTool::send_backspace_xtest(size_t count, uint32_t post_delay_ms, uint
     auto flush_fn = reinterpret_cast<FlushFn>(dlsym(xcb_lib_, "xcb_flush"));
     if (!fake_fn || !flush_fn) return false;
 
-    auto* conn = reinterpret_cast<XcbConnection*>(xcb_conn_);
+    auto* conn = reinterpret_cast<xcb_connection_t*>(xcb_conn_);
 
     // synchronous fast path when zero delays requested
     if (pre_delay_ms == 0 && post_delay_ms == 0 && gap_ms == 0) {
@@ -421,7 +419,7 @@ bool UinputTool::send_select_xtest(size_t count) {
     auto flush_fn = reinterpret_cast<FlushFn>(dlsym(xcb_lib_, "xcb_flush"));
     if (!fake_fn || !flush_fn) return false;
 
-    auto* conn = reinterpret_cast<XcbConnection*>(xcb_conn_);
+    auto* conn = reinterpret_cast<xcb_connection_t*>(xcb_conn_);
 
     std::thread([this, count, fake_fn, flush_fn, conn]() {
         std::lock_guard<std::mutex> lock(xtest_mutex_);
@@ -461,52 +459,94 @@ bool UinputTool::send_select_xtest(size_t count) {
     return true;
 }
 
-bool UinputTool::isPhysicalShiftPressed() const {
+UinputTool::ShiftModifierState UinputTool::getShiftModifierState() const {
     if (mock_shift_hook_) {
-        return mock_shift_hook_();
+        auto val = mock_shift_hook_();
+        if (!val.has_value()) {
+            return ShiftModifierState::Unknown;
+        }
+        return *val ? ShiftModifierState::Pressed : ShiftModifierState::Released;
     }
+
     DIR* dir = opendir("/dev/input");
-    if (!dir) return false;
+    bool any_accessible = false;
+    if (dir) {
+        struct dirent* ent;
+        constexpr size_t kKeyBytes = (KEY_MAX / 8) + 1;
+        while ((ent = readdir(dir)) != nullptr) {
+            if (strncmp(ent->d_name, "event", 5) != 0) continue;
+            std::string path = std::string("/dev/input/") + ent->d_name;
+            int fd = open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+            if (fd < 0) continue;
 
-    bool pressed = false;
-    struct dirent* ent;
-    constexpr size_t kKeyBytes = (KEY_MAX / 8) + 1;
-    while ((ent = readdir(dir)) != nullptr) {
-        if (strncmp(ent->d_name, "event", 5) != 0) continue;
-        std::string path = std::string("/dev/input/") + ent->d_name;
-        int fd = open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-        if (fd < 0) continue;
-
-        char dev_name[128]{};
-        if (ioctl(fd, EVIOCGNAME(sizeof(dev_name)), dev_name) >= 0 &&
-            strstr(dev_name, "Clak-Uinput") != nullptr) {
-            close(fd);
-            continue;
-        }
-
-        unsigned char key_cap[kKeyBytes]{};
-        auto has_bit = [](const unsigned char* bits, size_t code) {
-            return (bits[code / 8] & (1u << (code % 8))) != 0;
-        };
-        if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(key_cap)), key_cap) >= 0 &&
-            (has_bit(key_cap, KEY_LEFTSHIFT) || has_bit(key_cap, KEY_RIGHTSHIFT))) {
-            unsigned char key_state[kKeyBytes]{};
-            if (ioctl(fd, EVIOCGKEY(sizeof(key_state)), key_state) >= 0 &&
-                (has_bit(key_state, KEY_LEFTSHIFT) || has_bit(key_state, KEY_RIGHTSHIFT))) {
-                pressed = true;
+            char dev_name[128]{};
+            if (ioctl(fd, EVIOCGNAME(sizeof(dev_name)), dev_name) >= 0 &&
+                strstr(dev_name, "Clak-Uinput") != nullptr) {
                 close(fd);
-                break;
+                continue;
             }
+
+            unsigned char key_cap[kKeyBytes]{};
+            auto has_bit = [](const unsigned char* bits, size_t code) {
+                return (bits[code / 8] & (1u << (code % 8))) != 0;
+            };
+            if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(key_cap)), key_cap) >= 0 &&
+                (has_bit(key_cap, KEY_LEFTSHIFT) || has_bit(key_cap, KEY_RIGHTSHIFT))) {
+                any_accessible = true;
+                unsigned char key_state[kKeyBytes]{};
+                if (ioctl(fd, EVIOCGKEY(sizeof(key_state)), key_state) >= 0 &&
+                    (has_bit(key_state, KEY_LEFTSHIFT) || has_bit(key_state, KEY_RIGHTSHIFT))) {
+                    close(fd);
+                    closedir(dir);
+                    return ShiftModifierState::Pressed;
+                }
+            }
+            close(fd);
         }
-        close(fd);
+        closedir(dir);
     }
-    closedir(dir);
-    return pressed;
+    if (any_accessible) {
+        return ShiftModifierState::Released;
+    }
+
+    // fallback to accessible x11 modifier state query when event nodes are inaccessible
+    const char* display = std::getenv("DISPLAY");
+    if (display && *display != '\0') {
+        xcb_connection_t* conn = xcb_connect(nullptr, nullptr);
+        if (conn && xcb_connection_has_error(conn) == 0) {
+            const xcb_setup_t* setup = xcb_get_setup(conn);
+            xcb_screen_iterator_t iter = xcb_setup_roots_iterator(setup);
+            if (iter.data) {
+                auto cookie = xcb_query_pointer(conn, iter.data->root);
+                std::unique_ptr<xcb_query_pointer_reply_t, decltype(&free)> reply(
+                    xcb_query_pointer_reply(conn, cookie, nullptr), &free);
+                if (reply) {
+                    bool shift = (reply->mask & XCB_KEY_BUT_MASK_SHIFT) != 0;
+                    xcb_disconnect(conn);
+                    return shift ? ShiftModifierState::Pressed : ShiftModifierState::Released;
+                }
+            }
+            xcb_disconnect(conn);
+        } else if (conn) {
+            xcb_disconnect(conn);
+        }
+    }
+
+    return ShiftModifierState::Unknown;
+}
+
+bool UinputTool::isPhysicalShiftPressed() const {
+    return getShiftModifierState() == ShiftModifierState::Pressed;
 }
 
 bool UinputTool::send_select(size_t count) {
-    if (isPhysicalShiftPressed()) {
-        utils::clakLog("send_select aborted: physical shift key currently pressed");
+    ShiftModifierState shift_state = getShiftModifierState();
+    if (shift_state != ShiftModifierState::Released) {
+        if (shift_state == ShiftModifierState::Pressed) {
+            utils::clakLog("send_select aborted: physical shift key currently pressed");
+        } else {
+            utils::clakLog("send_select aborted: physical shift key state unknown");
+        }
         return false;
     }
     if (direct_fd_ < 0) {

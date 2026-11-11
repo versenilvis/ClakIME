@@ -1628,9 +1628,20 @@ TEST_F(RegressionCorpusTest, test_regression_verifier_preserves_saw_delete_ignor
 
 TEST_F(RegressionCorpusTest, test_regression_send_select_aborts_when_physical_shift_pressed) {
     auto& tool = uinput::UinputTool::instance();
-    tool.setMockShiftStateHook([]() { return true; });
+    tool.setMockShiftStateHook([]() -> std::optional<bool> { return true; });
+    EXPECT_EQ(tool.getShiftModifierState(), uinput::UinputTool::ShiftModifierState::Pressed);
     EXPECT_TRUE(tool.isPhysicalShiftPressed());
     EXPECT_FALSE(tool.send_select(3));
+
+    tool.setMockShiftStateHook([]() -> std::optional<bool> { return false; });
+    EXPECT_EQ(tool.getShiftModifierState(), uinput::UinputTool::ShiftModifierState::Released);
+    EXPECT_FALSE(tool.isPhysicalShiftPressed());
+
+    tool.setMockShiftStateHook([]() -> std::optional<bool> { return std::nullopt; });
+    EXPECT_EQ(tool.getShiftModifierState(), uinput::UinputTool::ShiftModifierState::Unknown);
+    EXPECT_FALSE(tool.isPhysicalShiftPressed());
+    EXPECT_FALSE(tool.send_select(3));
+
     tool.clearMockShiftStateHook();
 }
 
