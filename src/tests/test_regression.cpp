@@ -1563,11 +1563,19 @@ TEST_F(RegressionCorpusTest, test_regression_firefox_address_bar_url_shape_witho
     ic.typeChar('d', &state);
     EXPECT_EQ(uinput_bs_sent, 3u);
 
-    // prose or plain word selections must not trigger URL shape detection
+    // prose, plain word, or dotted identifier selections must not trigger URL shape detection
     ic.setSurrounding("hello world", 1, 11);
     EXPECT_FALSE(ime::ClakState::looksLikeUrlAutofill(ic.surroundingText()));
     ic.setSurrounding("word", 1, 4);
     EXPECT_FALSE(ime::ClakState::looksLikeUrlAutofill(ic.surroundingText()));
+    ic.setSurrounding("foo.bar", 3, 7);
+    EXPECT_FALSE(ime::ClakState::looksLikeUrlAutofill(ic.surroundingText()));
+    EXPECT_NE(state.currentProfile()->name(), "address-bar");
+    EXPECT_FALSE(state.isAutofillCertain(ic.surroundingText()));
+    ic.setSurrounding("foo.bar", 4, 7);
+    EXPECT_FALSE(ime::ClakState::looksLikeUrlAutofill(ic.surroundingText()));
+    EXPECT_NE(state.currentProfile()->name(), "address-bar");
+    EXPECT_FALSE(state.isAutofillCertain(ic.surroundingText()));
 }
 
 TEST_F(RegressionCorpusTest, test_regression_verifier_preserves_saw_delete_ignored_across_streak) {

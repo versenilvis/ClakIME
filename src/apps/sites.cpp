@@ -116,6 +116,7 @@ public:
     std::string name() const override { return "address-bar"; }
     bool allowsSurroundingText() const override { return false; }
     bool forcesUinput() const override { return true; }
+    bool allowsAutofillHeuristic() const override { return true; }
     UinputPacing uinputPacing() const override {
         return {config::kAddressBarPostDelayMs, 2};
     }

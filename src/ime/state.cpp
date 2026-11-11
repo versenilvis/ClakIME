@@ -276,18 +276,47 @@ bool ClakState::looksLikeUrlAutofill(const fcitx::SurroundingText& surr) {
     unsigned int sel_end = std::max(anchor, cursor);
     if (sel_start == 0 || sel_end != text.size()) return false;
 
-    bool has_dot = false;
-    bool has_scheme = (text.find(":/") != std::string::npos);
-    bool has_localhost = (text.find("localhost") != std::string::npos);
     for (size_t i = 0; i < text.size(); ++i) {
         unsigned char c = static_cast<unsigned char>(text[i]);
         // url bar autofill contains printable ascii without whitespace
         if (c < 0x21 || c > 0x7e) return false;
-        if (c == '.' && i > 0 && i + 1 < text.size()) {
-            has_dot = true;
+    }
+
+    if (text.find(":/") != std::string::npos || text.rfind("about:", 0) == 0) {
+        return true;
+    }
+    if (text.find("localhost") != std::string::npos) {
+        return true;
+    }
+    if (text.rfind("www.", 0) == 0) {
+        return true;
+    }
+
+    // require established address-bar evidence (recognized tld before path or port)
+    size_t host_end = text.find_first_of("/:?#");
+    std::string host = (host_end == std::string::npos) ? text : text.substr(0, host_end);
+    if (host.empty() || host.front() == '.' || host.back() == '.') {
+        return false;
+    }
+
+    static const std::vector<std::string> tlds = {
+        ".com", ".org", ".net", ".edu", ".gov", ".mil", ".io", ".dev", ".app",
+        ".ai", ".vn", ".me", ".co", ".info", ".xyz", ".biz", ".tv", ".cc",
+        ".to", ".so", ".online", ".site", ".top", ".pro", ".uk", ".us",
+        ".de", ".fr", ".jp", ".cn", ".ru", ".ca", ".au", ".in"
+    };
+
+    for (const auto& tld : tlds) {
+        if (host.size() > tld.size() &&
+            host.compare(host.size() - tld.size(), tld.size(), tld) == 0) {
+            char before = host[host.size() - tld.size() - 1];
+            if (isalnum(before) || before == '-') {
+                return true;
+            }
         }
     }
-    return has_dot || has_scheme || has_localhost;
+
+    return false;
 }
 
 apps::AppProfile* ClakState::currentProfile() {

@@ -27,7 +27,7 @@ public:
     virtual bool allowsSurroundingText() const { return true; }
     virtual bool forcesUinput() const { return false; }
     virtual bool preventsUinput() const { return false; }
-    virtual bool allowsAutofillHeuristic() const { return true; }
+    virtual bool allowsAutofillHeuristic() const { return false; }
     virtual bool directCommitPrintableKey() const { return false; }
     virtual bool erasesWithCommittedDel() const { return false; }
 
