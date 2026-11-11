@@ -71,6 +71,8 @@ private:
   std::string activeSite();
   void doCommitString(const std::string& text);
   void doCommitDirect(const std::string& text);
+  void forwardBackspacePressRelease(size_t count);
+  bool scheduleForwardBackspaceFallback(size_t count, const std::string& commit_str, const std::string& app);
   std::string classifyGroup(const std::string& app, const std::string& site, bool is_autofill, bool used_uinput);
   void logLatency(const std::string& group, uint64_t start_us, const std::string& action_type, const std::string& layer = "");
   void logCsv(uint64_t rtt_us, const std::string& action);
@@ -113,6 +115,7 @@ private:
   bool is_replaying_{false};
   std::unique_ptr<fcitx::EventSourceTime> safety_timer_;
   std::unique_ptr<fcitx::EventSourceTime> commit_timer_;
+  std::unique_ptr<fcitx::EventSourceTime> retired_commit_timer_;
   std::unique_ptr<fcitx::EventSourceTime> surr_lag_timer_;
   bool is_surr_lag_replaying_{false};
   uint64_t last_key_time_us_{0};

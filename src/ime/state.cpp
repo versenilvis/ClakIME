@@ -136,6 +136,9 @@ void ClakState::reset(bool force) {
     if (commit_timer_) {
         commit_timer_.reset();
     }
+    if (retired_commit_timer_) {
+        retired_commit_timer_.reset();
+    }
     if (surr_lag_timer_) {
         surr_lag_timer_.reset();
     }
@@ -348,6 +351,56 @@ void ClakState::doCommitDirect(const std::string& text) {
     }
 }
 
+void ClakState::forwardBackspacePressRelease(size_t count) {
+    if (!ic_ || count == 0) return;
+    // x11/wayland keycode 22 matches evdev KEY_BACKSPACE (14 + 8)
+    const fcitx::Key bs_key(FcitxKey_BackSpace, fcitx::KeyStates(), 22);
+    for (size_t i = 0; i < count; ++i) {
+        ic_->forwardKey(bs_key, false);
+        ic_->forwardKey(bs_key, true);
+    }
+}
+
+bool ClakState::scheduleForwardBackspaceFallback(size_t count, const std::string& commit_str, const std::string& app) {
+    forwardBackspacePressRelease(count);
+    if (commit_str.empty() || !engine_ || !engine_->instance()) {
+        return false;
+    }
+
+    repeat_handler_.cancel();
+    is_deleting_ = true;
+    expected_backspaces_ = 0;
+    current_backspace_count_ = 0;
+    pending_commit_string_ = commit_str;
+
+    uint64_t delay_us = std::min<uint64_t>(20000ULL, 8000ULL + count * 2000ULL);
+    if (commit_timer_) {
+        retired_commit_timer_ = std::move(commit_timer_);
+    }
+    commit_timer_ = engine_->instance()->eventLoop().addTimeEvent(
+        CLOCK_MONOTONIC,
+        fcitx::now(CLOCK_MONOTONIC) + delay_us,
+        1000,
+        [this, commit_str](fcitx::EventSourceTime*, uint64_t) {
+            if (is_deleting_) {
+                is_deleting_ = false;
+                pending_commit_string_.clear();
+                replayBufferedKeys(commit_str);
+            }
+            return false;
+        }
+    );
+    if (!commit_timer_) {
+        is_deleting_ = false;
+        pending_commit_string_.clear();
+        return false;
+    }
+    commit_timer_->setOneShot();
+    utils::clakLog("forward backspace fallback scheduled commit in " +
+                   std::to_string(delay_us / 1000) + "ms app=" + app);
+    return true;
+}
+
 std::string ClakState::classifyGroup(const std::string& app, const std::string& site, bool is_address_bar, bool used_uinput) {
     (void)app;
     (void)site;
@@ -500,6 +553,9 @@ void ClakState::finishUinputDeletion(uint64_t rtt_us) {
     }
     if (commit_timer_) {
         commit_timer_.reset();
+    }
+    if (retired_commit_timer_) {
+        retired_commit_timer_.reset();
     }
     if (surr_lag_timer_) {
         surr_lag_timer_.reset();
@@ -1056,15 +1112,15 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                 }
             }
 
+            bool deferred_fallback_commit = false;
             if (real_bs > 0) {
                 if (use_surrounding) {
                     if (surr.cursor() < real_bs) {
                         utils::clakLog("WARNING: surr.cursor()=" + std::to_string(surr.cursor()) +
                                        " < real_bs=" + std::to_string(real_bs) +
                                        ", skipping deleteSurroundingText to prevent compositor crash!");
-                        for (size_t i = 0; i < real_bs; ++i) {
-                            ic_->forwardKey(fcitx::Key(FcitxKey_BackSpace));
-                        }
+                        std::string to_commit = action.commit_str ? action.commit_str : "";
+                        deferred_fallback_commit = scheduleForwardBackspaceFallback(real_bs, to_commit, app);
                     } else {
                         std::string wordBefore = utils::extractWordBeforeCursor(surr.text(), surr.cursor());
                         verifier_.setExpectation(wordBefore, real_bs, action.commit_str ? action.commit_str : "");
@@ -1100,10 +1156,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                         last_text_len_ = 0;
                         return true;
                     } else {
-                        for (size_t i = 0; i < real_bs; ++i) {
-                            ic_->forwardKey(fcitx::Key(FcitxKey_BackSpace), false);
-                            ic_->forwardKey(fcitx::Key(FcitxKey_BackSpace), true);
-                        }
+                        forwardBackspacePressRelease(real_bs);
                         if (action.commit_str && action.commit_str[0] != '\0') {
                             doCommitString(action.commit_str);
                         }
@@ -1116,10 +1169,16 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                 } else {
                     utils::clakLog("forward backspace: count=" + std::to_string(real_bs) +
                                    " commit='" + (action.commit_str ? action.commit_str : "") + "' app=" + app);
-                    for (size_t i = 0; i < real_bs; ++i) {
-                        ic_->forwardKey(fcitx::Key(FcitxKey_BackSpace));
-                    }
+                    std::string to_commit = action.commit_str ? action.commit_str : "";
+                    deferred_fallback_commit = scheduleForwardBackspaceFallback(real_bs, to_commit, app);
                 }
+            }
+            if (deferred_fallback_commit) {
+                logCsv(0, "FORWARD_FALLBACK");
+                logLatency(classifyGroup(app, site, false, false), op_start_us_, "REPLACE", "forwardKey");
+                op_start_us_ = 0;
+                last_text_len_ = 0;
+                return true;
             }
             if ((!currentProfile()->hasCustomDeletion() || real_bs == 0) && action.commit_str && action.commit_str[0] != '\0') {
                 doCommitString(action.commit_str);
@@ -1398,6 +1457,9 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
         if (is_deleting_) {
             if (safety_timer_) {
                 safety_timer_.reset();
+            }
+            if (commit_timer_) {
+                commit_timer_.reset();
             }
             if (expected_backspaces_ > current_backspace_count_) {
                 in_flight_sentinel_count_ = expected_backspaces_ - current_backspace_count_;

@@ -979,5 +979,107 @@ TEST_F(ClakStateTest, GivenQueueFull_WhenOverflowOccurs_ForwardsKeysDirectly) {
     EXPECT_FALSE(state.isDeleting());
 }
 
+TEST_F(ClakStateTest, GivenUinputFailure_FallsBackToKeycode22PressReleaseAndDelayedCommit) {
+    platform::setMockActiveWindow(platform::WindowInfo{"kitty", "kitty", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "kitty");
+    ime::ClakState state(engine_.get(), &ic);
+
+    uinput::UinputTool::instance().setMockHandler([](size_t, uint32_t, uint32_t, uint32_t, uint32_t) {
+        return false;
+    });
+
+    std::vector<std::tuple<fcitx::KeySym, int, bool>> events;
+    ic.on_forward_key = [&](const fcitx::ForwardKeyEvent& ev) {
+        events.emplace_back(ev.key().sym(), ev.key().code(), ev.isRelease());
+    };
+
+    ic.setSurrounding("", 0, 0);
+    ic.typeChar('d', &state);
+    ic.typeChar('d', &state);
+
+    // 1 backspace sent as keycode 22 press then release before any commit
+    ASSERT_EQ(events.size(), 2u);
+    EXPECT_EQ(std::get<0>(events[0]), FcitxKey_BackSpace);
+    EXPECT_EQ(std::get<1>(events[0]), 22);
+    EXPECT_FALSE(std::get<2>(events[0]));
+    EXPECT_EQ(std::get<0>(events[1]), FcitxKey_BackSpace);
+    EXPECT_EQ(std::get<1>(events[1]), 22);
+    EXPECT_TRUE(std::get<2>(events[1]));
+
+    EXPECT_TRUE(state.isDeleting());
+    EXPECT_TRUE(ic.commits.empty());
+
+    // keys typed while waiting for fallback backspace are buffered
+    ic.typeChar('a', &state);
+    ic.typeChar('a', &state);
+    ic.typeChar('n', &state);
+    EXPECT_EQ(state.bufferedKeysCount(), 3u);
+
+    auto exit_timer = instance_->eventLoop().addTimeEvent(
+        CLOCK_MONOTONIC,
+        fcitx::now(CLOCK_MONOTONIC) + 60000,
+        0,
+        [this](fcitx::EventSourceTime*, uint64_t) {
+            instance_->eventLoop().exit();
+            return true;
+        }
+    );
+    instance_->eventLoop().exec();
+
+    EXPECT_FALSE(state.isDeleting());
+    EXPECT_EQ(state.bufferedKeysCount(), 0u);
+    std::string combined;
+    for (const auto& c : ic.commits) combined += c;
+    EXPECT_EQ(combined, "đân");
+    // buffered 'aa' replacement is absorbed in batch_commit without extra backspaces
+    EXPECT_EQ(events.size(), 2u);
+}
+
+TEST_F(ClakStateTest, GivenUinputFailure_MultiCharFallbackStaysOrderedBeforeCommit) {
+    platform::setMockActiveWindow(platform::WindowInfo{"kitty", "kitty", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "kitty");
+    ime::ClakState state(engine_.get(), &ic);
+
+    uinput::UinputTool::instance().setMockHandler([](size_t, uint32_t, uint32_t, uint32_t, uint32_t) {
+        return false;
+    });
+
+    std::vector<std::tuple<fcitx::KeySym, int, bool>> events;
+    ic.on_forward_key = [&](const fcitx::ForwardKeyEvent& ev) {
+        events.emplace_back(ev.key().sym(), ev.key().code(), ev.isRelease());
+    };
+
+    ic.setSurrounding("", 0, 0);
+    ic.typeChar('t', &state);
+    ic.typeChar('i', &state);
+    ic.typeChar('e', &state);
+    ic.typeChar('n', &state);
+    ic.typeChar('e', &state); // tien + e -> tiên (del=2, commit="ên")
+
+    ASSERT_EQ(events.size(), 4u);
+    for (size_t i = 0; i < 4; ++i) {
+        EXPECT_EQ(std::get<0>(events[i]), FcitxKey_BackSpace);
+        EXPECT_EQ(std::get<1>(events[i]), 22);
+        EXPECT_EQ(std::get<2>(events[i]), (i % 2) == 1);
+    }
+    EXPECT_TRUE(state.isDeleting());
+    EXPECT_TRUE(ic.commits.empty());
+
+    auto exit_timer = instance_->eventLoop().addTimeEvent(
+        CLOCK_MONOTONIC,
+        fcitx::now(CLOCK_MONOTONIC) + 60000,
+        0,
+        [this](fcitx::EventSourceTime*, uint64_t) {
+            instance_->eventLoop().exit();
+            return true;
+        }
+    );
+    instance_->eventLoop().exec();
+
+    EXPECT_FALSE(state.isDeleting());
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "ên");
+}
+
 } // namespace test
 } // namespace clak
