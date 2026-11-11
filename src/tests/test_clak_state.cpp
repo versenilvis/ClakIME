@@ -320,6 +320,11 @@ TEST_F(ClakStateTest, GivenAppModeRules_AppliesCorrectProfile) {
     EXPECT_TRUE(p2->allowsSurroundingText());
     EXPECT_TRUE(p2->preventsUinput());
 
+    // app mode 2 in browser ignores autofill flag and uses meta profile
+    auto p_browser_mode2 = apps::createAppProfile("google-chrome", "example.com", true, false, false, 2);
+    EXPECT_EQ(p_browser_mode2->name(), "Meta-SurroundingText");
+    EXPECT_NE(p_browser_mode2->name(), "address-bar");
+
     // app mode 0 (auto) uses standard default profile
     auto p0 = apps::createAppProfile("myapp", "", false, false, false, 0);
     EXPECT_FALSE(p0->forcesUinput());

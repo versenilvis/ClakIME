@@ -1040,15 +1040,9 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                 }
             }
 
-            int app_mode = 0;
-            if (engine_ && engine_->config()) {
-                app_mode = clak_config_get_app_mode(engine_->config(), app.c_str());
-            }
             bool is_address_bar = (currentProfile() && currentProfile()->name() == "address-bar") ||
                                   (ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Url)) ||
-                                  (isBrowser() && (site == "New Tab" || site == "about:blank" || site == "address-bar" ||
-                                                   (app_mode == 0 && !apps::isMetaSite(site) && !apps::isMetaSite(app) &&
-                                                    looksLikeUrlAutofill(surr))));
+                                  (isBrowser() && (site == "New Tab" || site == "about:blank" || site == "address-bar"));
             bool has_autofill_selection = (action.action_type == CLAK_ACTION_ADDRESS_BAR_FIX) ||
                                           (isAutofillCertain(surr));
             if (real_bs > 0 && surr.isValid() && surr.cursor() < real_bs) {
