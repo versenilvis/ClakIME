@@ -123,9 +123,6 @@ target_user="$1"; \
 [ -n "$target_user" ] && usermod -aG input "$target_user" 2>/dev/null || true; \
 if command -v setfacl >/dev/null 2>&1 && [ -n "$target_user" ]; then \
   setfacl -m "u:$target_user:rw" /dev/uinput 2>/dev/null || true; \
-  for ev in /dev/input/event*; do \
-    [ -e "$ev" ] && setfacl -m "u:$target_user:rw" "$ev" 2>/dev/null || true; \
-  done; \
 fi"#;
 
     let pkexec_status = std::process::Command::new("pkexec")

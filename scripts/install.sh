@@ -471,9 +471,6 @@ SUBSYSTEM==\"input\", ENV{ID_INPUT_TOUCHPAD}==\"1\", TAG+=\"uaccess\""
             run_sudo udevadm trigger --subsystem-match=input 2>/dev/null || true
             if command -v setfacl >/dev/null 2>&1; then
                 run_sudo setfacl -m "u:${cur_user}:rw" /dev/uinput 2>/dev/null || true
-                for ev in /dev/input/event*; do
-                    [ -e "$ev" ] && run_sudo setfacl -m "u:${cur_user}:rw" "$ev" 2>/dev/null || true
-                done
             fi
             uinput_done=1
         fi
