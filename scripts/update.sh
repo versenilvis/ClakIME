@@ -488,6 +488,13 @@ EOF
                 sed -i 's|^exec \./steamwebhelper|export GTK_IM_MODULE=xim\nexport XMODIFIERS=@im=fcitx\nexec ./steamwebhelper|' "$helper_sh" 2>/dev/null || true
                 log_step "$lbl_steam" "Đã tối ưu tương thích CEF tại ${c_accent}${helper_sh}${c_reset}"
             fi
+
+            # hook steam.sh so system launchers (/usr/share/applications/steam.desktop) also inherit IME
+            local root_steam_sh="${HOME}/.local/share/Steam/steam.sh"
+            if [ -f "$root_steam_sh" ] && ! grep -q "PRESSURE_VESSEL_ENV_PASSTHROUGH" "$root_steam_sh" 2>/dev/null; then
+                sed -i '/set -u/a export PRESSURE_VESSEL_ENV_PASSTHROUGH="GTK_IM_MODULE,XMODIFIERS,${PRESSURE_VESSEL_ENV_PASSTHROUGH:-}"\nexport GTK_IM_MODULE=xim\nexport XMODIFIERS=@im=fcitx\nexport SDL_VIDEODRIVER=x11' "$root_steam_sh" 2>/dev/null || true
+                log_step "$lbl_steam" "Đã tối ưu biến môi trường khởi động tại ${c_accent}${root_steam_sh}${c_reset}"
+            fi
         fi
     fi
 }

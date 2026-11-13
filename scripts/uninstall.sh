@@ -478,6 +478,11 @@ run_uninstall() {
         sed -i '/export GTK_IM_MODULE=xim/d;/export XMODIFIERS=@im=fcitx/d' "$helper_sh" 2>/dev/null || true
         steam_cleaned=1
     fi
+    local root_steam_sh="${HOME}/.local/share/Steam/steam.sh"
+    if [ -f "$root_steam_sh" ] && grep -q "PRESSURE_VESSEL_ENV_PASSTHROUGH" "$root_steam_sh" 2>/dev/null; then
+        sed -i '/export PRESSURE_VESSEL_ENV_PASSTHROUGH/d;/export GTK_IM_MODULE=xim/d;/export XMODIFIERS=@im=fcitx/d;/export SDL_VIDEODRIVER=x11/d' "$root_steam_sh" 2>/dev/null || true
+        steam_cleaned=1
+    fi
     if command -v flatpak >/dev/null 2>&1 && flatpak list --app 2>/dev/null | grep -q "com.valvesoftware.Steam"; then
         flatpak override --user --reset com.valvesoftware.Steam 2>/dev/null || true
     fi
