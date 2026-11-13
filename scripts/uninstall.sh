@@ -473,6 +473,11 @@ run_uninstall() {
         rm -f "$steam_wb"
         steam_cleaned=1
     fi
+    local helper_sh="${HOME}/.local/share/Steam/steamrt64/steamwebhelper.sh"
+    if [ -f "$helper_sh" ] && grep -q "GTK_IM_MODULE=xim" "$helper_sh" 2>/dev/null; then
+        sed -i '/export GTK_IM_MODULE=xim/d;/export XMODIFIERS=@im=fcitx/d' "$helper_sh" 2>/dev/null || true
+        steam_cleaned=1
+    fi
     if command -v flatpak >/dev/null 2>&1 && flatpak list --app 2>/dev/null | grep -q "com.valvesoftware.Steam"; then
         flatpak override --user --reset com.valvesoftware.Steam 2>/dev/null || true
     fi

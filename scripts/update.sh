@@ -449,7 +449,7 @@ configure_steam_compatibility() {
             mkdir -p "${HOME}/.local/share/applications"
             local patched_desktop=0
             if [ -f /usr/share/applications/steam.desktop ]; then
-                sed -E 's#^Exec=(/usr/bin/steam|/usr/games/steam|steam)#Exec=env GTK_IM_MODULE=xim XMODIFIERS=@im=ibus SDL_VIDEODRIVER=x11 \1#g' \
+                sed -E 's#^Exec=(/usr/bin/steam|/usr/games/steam|steam)#Exec=env PRESSURE_VESSEL_ENV_PASSTHROUGH="GTK_IM_MODULE,XMODIFIERS" GTK_IM_MODULE=xim XMODIFIERS=@im=fcitx SDL_VIDEODRIVER=x11 \1#g' \
                     /usr/share/applications/steam.desktop > "${HOME}/.local/share/applications/steam.desktop"
                 patched_desktop=1
             fi
@@ -472,14 +472,21 @@ done
 if [ -z "$real_steam" ]; then
     real_steam="/usr/bin/steam"
 fi
-exec env GTK_IM_MODULE=xim XMODIFIERS=@im=ibus SDL_VIDEODRIVER=x11 "$real_steam" "$@"
+exec env PRESSURE_VESSEL_ENV_PASSTHROUGH="GTK_IM_MODULE,XMODIFIERS" GTK_IM_MODULE=xim XMODIFIERS=@im=fcitx SDL_VIDEODRIVER=x11 "$real_steam" "$@"
 EOF
             chmod +x "${HOME}/.local/bin/steam"
             log_step "$lbl_steam" "Đã tạo wrapper tương thích tại ${c_accent}~/.local/bin/steam${c_reset}"
 
             if [ "$is_flatpak" -eq 1 ]; then
-                flatpak override --user --env=GTK_IM_MODULE=xim --env=XMODIFIERS=@im=ibus --env=SDL_VIDEODRIVER=x11 com.valvesoftware.Steam 2>/dev/null || true
+                flatpak override --user --env=PRESSURE_VESSEL_ENV_PASSTHROUGH="GTK_IM_MODULE,XMODIFIERS" --env=GTK_IM_MODULE=xim --env=XMODIFIERS=@im=fcitx --env=SDL_VIDEODRIVER=x11 com.valvesoftware.Steam 2>/dev/null || true
                 log_step "$lbl_steam" "Đã tối ưu biến môi trường cho Steam Flatpak"
+            fi
+
+            # hook steamrt64 steamwebhelper.sh for native containerized CEF in Steam 64-bit
+            local helper_sh="${HOME}/.local/share/Steam/steamrt64/steamwebhelper.sh"
+            if [ -f "$helper_sh" ] && ! grep -q "GTK_IM_MODULE=xim" "$helper_sh" 2>/dev/null; then
+                sed -i 's|^exec \./steamwebhelper|export GTK_IM_MODULE=xim\nexport XMODIFIERS=@im=fcitx\nexec ./steamwebhelper|' "$helper_sh" 2>/dev/null || true
+                log_step "$lbl_steam" "Đã tối ưu tương thích CEF tại ${c_accent}${helper_sh}${c_reset}"
             fi
         fi
     fi
