@@ -350,6 +350,14 @@ pub(crate) fn should_auto_restore(
 
     let is_en = crate::english_dict::is_english(input);
 
+    // skip all-uppercase acronyms with vietnamese characters unless english word
+    let is_all_upper = input.len() >= 2
+        && input.chars().all(|c| !c.is_alphabetic() || c.is_uppercase())
+        && input.chars().any(|c| c.is_uppercase());
+    if is_all_upper && !is_en {
+        return false;
+    }
+
     // trailing doubled tone modifiers that actually swallowed one of the modifier characters are intentional un-toning
     if (!is_en || !auto_restore_english) && ends_with_doubled_tone_modifier(input) {
         let lower_in = input.to_ascii_lowercase();

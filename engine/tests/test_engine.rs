@@ -191,6 +191,7 @@ fn telex_english() {
         convert_telex_auto_restore("showoff", true, false),
         "showoff"
     );
+    assert_eq!(convert_telex_auto_restore("UWCLN", true, false), "ƯCLN");
     assert_eq!(t("delete"), "delete");
     assert_eq!(t("hotel"), "hotel");
     assert_eq!(t("metal"), "metal");
