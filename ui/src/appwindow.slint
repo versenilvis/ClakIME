@@ -20,10 +20,10 @@ export { MacroItemData, DoctorLineData, AppRuleData }
 export component MainWindow inherits Window {
     title: "Cài đặt Clak";
     icon: @image-url("../assets/icons/clak-logo.svg");
-    preferred-width: 940px;
-    preferred-height: 680px;
-    min-width: 820px;
-    min-height: 580px;
+    preferred-width: 980px;
+    preferred-height: 700px;
+    min-width: 860px;
+    min-height: 600px;
     background: Theme.bg;
     default-font-family: "SF Pro Text";
     default-font-size: root.is-wide ? 16px : 14px;
@@ -194,11 +194,11 @@ export component MainWindow inherits Window {
             // noi dung cac tab
             VerticalLayout {
                 horizontal-stretch: 1;
-                padding-left: root.is-wide ? 36px : 20px;
-                padding-right: root.is-wide ? 36px : 20px;
-                padding-top: root.is-wide ? 24px : 14px;
-                padding-bottom: root.is-wide ? 18px : 10px;
-                spacing: root.is-wide ? 14px : 8px;
+                padding-left: root.is-wide ? 36px : 24px;
+                padding-right: root.is-wide ? 36px : 24px;
+                padding-top: root.is-wide ? 24px : 16px;
+                padding-bottom: root.is-wide ? 18px : 12px;
+                spacing: root.is-wide ? 14px : 10px;
 
                 // banner canh bao clak chua duoc kich hoat hoac chua nap trong fcitx5
                 if (root.profile_needs_setup || root.addon_needs_load) && root.selected_tab != 4: Rectangle {
@@ -484,7 +484,7 @@ export component MainWindow inherits Window {
                 HorizontalLayout {
                     padding-left: root.is-wide ? 20px : 14px;
                     padding-right: root.is-wide ? 20px : 14px;
-                    height: root.is-wide ? 48px : 38px;
+                    height: root.is-wide ? 48px : 40px;
                     alignment: space-between;
                     spacing: 10px;
 

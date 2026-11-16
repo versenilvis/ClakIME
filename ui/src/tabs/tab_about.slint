@@ -36,7 +36,7 @@ export component TabAbout inherits VerticalLayout {
     callback uninstall_requested();
 
     alignment: start;
-    spacing: 0px;
+    spacing: root.is-wide ? 6px : 3px;
 
     SectionHeader {
         title: "CẬP NHẬT";

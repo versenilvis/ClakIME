@@ -68,8 +68,8 @@ export component SectionHeader inherits VerticalLayout {
     HorizontalLayout {
         padding-left: 14px;
         padding-right: 14px;
-        padding-top: root.show-divider ? (root.is-wide ? 26px : 12px) : (root.is-wide ? 14px : 5px);
-        padding-bottom: root.is-wide ? 8px : 2px;
+        padding-top: root.show-divider ? (root.is-wide ? 24px : 16px) : (root.is-wide ? 14px : 8px);
+        padding-bottom: root.is-wide ? 8px : 4px;
 
         Text {
             text: root.title;
@@ -106,7 +106,7 @@ export component SettingItem {
     callback toggled();
 
     Rectangle {
-        min-height: root.is-wide ? 54px : 34px;
+        min-height: root.is-wide ? 54px : 44px;
         background: area.has-hover ? #ffffff0a : transparent;
         border-radius: Theme.radius-sm;
 
@@ -121,14 +121,14 @@ export component SettingItem {
         HorizontalLayout {
             padding-left: 14px;
             padding-right: 14px;
-            padding-top: root.is-wide ? 10px : 3px;
-            padding-bottom: root.is-wide ? 10px : 3px;
+            padding-top: root.is-wide ? 10px : 6px;
+            padding-bottom: root.is-wide ? 10px : 6px;
             alignment: space-between;
             spacing: 14px;
 
             VerticalLayout {
                 alignment: center;
-                spacing: root.is-wide ? 4px : 2px;
+                spacing: root.is-wide ? 4px : 3px;
                 padding-top: 1px;
 
                 Text {
@@ -168,11 +168,11 @@ export component FieldRow {
     in property <bool> is-wide: false;
 
     HorizontalLayout {
-        min-height: root.is-wide ? 54px : 34px;
+        min-height: root.is-wide ? 54px : 44px;
         padding-left: 14px;
         padding-right: 14px;
-        padding-top: root.is-wide ? 10px : 3px;
-        padding-bottom: root.is-wide ? 10px : 3px;
+        padding-top: root.is-wide ? 10px : 6px;
+        padding-bottom: root.is-wide ? 10px : 6px;
         alignment: space-between;
         spacing: 14px;
 

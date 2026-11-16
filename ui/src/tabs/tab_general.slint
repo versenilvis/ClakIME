@@ -27,7 +27,7 @@ export component TabGeneral inherits VerticalLayout {
     callback start_recording_shortcut();
 
     alignment: start;
-    spacing: root.is-wide ? 10px : 0px;
+    spacing: root.is-wide ? 8px : 3px;
 
     SectionHeader {
         title: "KIỂU GÕ";
@@ -41,7 +41,7 @@ export component TabGeneral inherits VerticalLayout {
         is-wide: root.is-wide;
 
         Rectangle {
-            height: root.is-wide ? 42px : 32px;
+            height: root.is-wide ? 42px : 34px;
             min-width: root.is-wide ? 180px : 140px;
             border-radius: 8px;
             background: root.is_recording_shortcut ? #3b82f6.with-alpha(0.22) : (rec_ta.has-hover ? #282828 : #1c1c1e);
@@ -193,9 +193,9 @@ export component TabGeneral inherits VerticalLayout {
         padding-bottom: 2px;
 
         Rectangle {
-            min-height: root.is-wide ? 130px : 48px;
-            max-height: root.is-wide ? 220px : 76px;
-            preferred-height: root.is-wide ? 160px : 58px;
+            min-height: root.is-wide ? 130px : 52px;
+            max-height: root.is-wide ? 220px : 80px;
+            preferred-height: root.is-wide ? 160px : 60px;
             background: #121214;
             border-radius: 8px;
             border-width: 0px;

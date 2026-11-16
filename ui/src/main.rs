@@ -2756,7 +2756,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 } else {
                     width as f32
                 };
-                let is_wide = logical_width >= 1150.0;
+                let is_wide = logical_width >= 1100.0;
                 if w.get_is_wide() != is_wide {
                     w.set_is_wide(is_wide);
                 }
