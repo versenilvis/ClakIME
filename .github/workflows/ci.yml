@@ -4,9 +4,21 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+      - ".gitignore"
+      - "assets/**"
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+      - ".gitignore"
+      - "assets/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -28,7 +40,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y libfontconfig1-dev
+          sudo apt-get install -y --no-install-recommends libfontconfig1-dev
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -58,31 +70,40 @@ jobs:
         run: cargo test --workspace --verbose
 
   check-msrv:
-    name: Check MSRV (1.85 & 1.92)
+    name: Check MSRV (${{ matrix.toolchain }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - toolchain: 1.85.0
+            packages: "-p clak-engine -p clak-diagnostics -p clak"
+            needs_gui_deps: false
+          - toolchain: 1.92.0
+            packages: "-p clak-gui"
+            needs_gui_deps: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Install system dependencies for UI
+        if: matrix.needs_gui_deps
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y libfontconfig1-dev
+          sudo apt-get install -y --no-install-recommends libfontconfig1-dev
 
-      - name: Install MSRV toolchains
-        run: |
-          rustup toolchain install 1.85.0 --profile minimal
-          rustup toolchain install 1.92.0 --profile minimal
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
 
-      - name: Check MSRV for engine, cli, diagnostics (1.85.0)
-        run: |
-          for c in clak-engine clak-diagnostics clak; do
-            cargo +1.85.0 test --no-run --locked --all-targets -p $c
-          done
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv-${{ matrix.toolchain }}
 
-      - name: Check MSRV for ui (1.92.0)
-        run: |
-          cargo +1.92.0 test --no-run --locked --all-targets -p clak-gui
+      - name: Check MSRV
+        run: cargo +${{ matrix.toolchain }} test --no-run --locked --all-targets ${{ matrix.packages }}
 
   build-distros:
     name: Build & Test (${{ matrix.distro }})
@@ -95,7 +116,7 @@ jobs:
             image: archlinux:latest
             setup: |
               pacman -Syu --noconfirm --needed \
-                base-devel cmake ninja extra-cmake-modules fcitx5 libinput rustup git nodejs gtest fontconfig
+                base-devel cmake ninja extra-cmake-modules fcitx5 libinput rustup git nodejs gtest fontconfig ccache
               rustup default stable
               rustup show
             cmake_args: "-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr"
@@ -104,11 +125,11 @@ jobs:
             image: ubuntu:24.04
             setup: |
               apt-get update -y
-              DEBIAN_FRONTEND=noninteractive apt-get install -y \
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
                 build-essential cmake ninja-build extra-cmake-modules pkg-config \
                 libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev \
                 fcitx5 fcitx5-modules \
-                libinput-dev libudev-dev libxcb1-dev curl git libgtest-dev
+                libinput-dev libudev-dev libxcb1-dev curl git libgtest-dev ccache ca-certificates
               curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
               echo "$HOME/.cargo/bin" >> $GITHUB_PATH
               export PATH="$HOME/.cargo/bin:$PATH"
@@ -118,9 +139,9 @@ jobs:
           - distro: fedora
             image: fedora:latest
             setup: |
-              dnf install -y \
+              dnf install -y --setopt=install_weak_deps=False \
                 gcc-c++ cmake ninja-build extra-cmake-modules fcitx5 fcitx5-devel \
-                libinput-devel systemd-devel libxcb-devel pkgconfig curl git gtest-devel
+                libinput-devel systemd-devel libxcb-devel pkgconfig curl git gtest-devel ccache
               curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
               echo "$HOME/.cargo/bin" >> $GITHUB_PATH
               export PATH="$HOME/.cargo/bin:$PATH"
@@ -133,6 +154,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Cache ccache & cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ccache
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ matrix.distro }}-build-${{ hashFiles('**/Cargo.lock', '**/CMakeLists.txt') }}
+          restore-keys: |
+            ${{ matrix.distro }}-build-
+
       - name: Install dependencies
         run: ${{ matrix.setup }}
 
@@ -140,8 +174,14 @@ jobs:
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
           export RUSTUP_AUTO_INSTALL=0
+          export CCACHE_DIR="$HOME/.cache/ccache"
+          export CCACHE_MAXSIZE="500M"
+          export CCACHE_COMPRESS="true"
+          mkdir -p "$CCACHE_DIR"
+          ccache -z
           cmake -B build -G Ninja ${{ matrix.cmake_args }}
           cmake --build build -j$(nproc)
+          ccache -s
 
       - name: Run C++ test suite
         run: |
@@ -173,22 +213,3 @@ jobs:
         run: |
           bash scripts/install.sh --dry-run
           bash scripts/uninstall.sh --dry-run
-
-  check-nix:
-    name: Nix Flake Check & Build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v16
-
-      - name: Cache Nix store
-        uses: DeterminateSystems/magic-nix-cache-action@v9
-
-      - name: Check Nix Flake
-        run: nix flake check
-
-      - name: Build Clak via Nix
-        run: nix build

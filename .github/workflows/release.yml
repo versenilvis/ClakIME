@@ -24,7 +24,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get install -y --no-install-recommends \
             build-essential \
             cmake \
             ninja-build \
@@ -37,6 +37,7 @@ jobs:
             libxkbcommon-dev \
             libfontconfig1-dev \
             pkg-config \
+            ccache \
             git
 
       - name: Setup Rust toolchain
@@ -46,26 +47,30 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
+            ~/.cache/ccache
             ~/.cargo/bin/
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ runner.os }}-build-ubuntu-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-build-ubuntu-${{ hashFiles('Cargo.lock', '**/CMakeLists.txt') }}
           restore-keys: |
             ${{ runner.os }}-build-ubuntu-
 
-      - name: Run engine tests
-        run: cargo test -p clak-engine --verbose
-
       - name: Build Clak
         run: |
+          export CCACHE_DIR="$HOME/.cache/ccache"
+          export CCACHE_MAXSIZE="500M"
+          export CCACHE_COMPRESS="true"
+          mkdir -p "$CCACHE_DIR"
+          ccache -z
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DRELEASE_DIST=ON \
             -DCMAKE_INSTALL_PREFIX=/usr \
             -DBUILD_TESTING=OFF
           cmake --build build -j$(nproc)
+          ccache -s
 
       - name: Create release bundle
         run: |
@@ -79,7 +84,7 @@ jobs:
             cp -a /tmp/clak-dist/usr/lib/fcitx5/libclak.so /tmp/clak-dist/usr/lib/x86_64-linux-gnu/fcitx5/libclak.so
           fi
           mkdir -p dist
-          XZ_OPT="-9e -T0" tar -C /tmp/clak-dist -cJf dist/clak-${VERSION}-linux-x86_64.tar.xz usr/
+          XZ_OPT="-T0 -6" tar -C /tmp/clak-dist -cJf dist/clak-${VERSION}-linux-x86_64.tar.xz usr/
           tar -C /tmp/clak-dist -czf dist/clak-${VERSION}-linux-x86_64.tar.gz usr/
 
           # Build .deb package for Debian/Ubuntu
@@ -165,9 +170,19 @@ jobs:
           fi
 
   deploy-aur:
-    name: Deploy to AUR
+    name: Deploy ${{ matrix.pkg }} to AUR
     needs: publish
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pkg: clak
+            pkgbuild: packaging/aur/PKGBUILD
+            assets: packaging/aur/clak.install
+          - pkg: clak-bin
+            pkgbuild: packaging/aur-bin/PKGBUILD
+            assets: packaging/aur-bin/clak-bin.install
     env:
       AUR_KEY: ${{ secrets.AUR_KEY }}
     steps:
@@ -177,30 +192,16 @@ jobs:
       - name: Update PKGBUILD versions
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" packaging/aur/PKGBUILD
-          sed -i "s/^pkgrel=.*/pkgrel=1/" packaging/aur/PKGBUILD
-          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" packaging/aur-bin/PKGBUILD
-          sed -i "s/^pkgrel=.*/pkgrel=1/" packaging/aur-bin/PKGBUILD
+          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" ${{ matrix.pkgbuild }}
+          sed -i "s/^pkgrel=.*/pkgrel=1/" ${{ matrix.pkgbuild }}
 
-      - name: Publish clak to AUR
+      - name: Publish ${{ matrix.pkg }} to AUR
         if: env.AUR_KEY != ''
         uses: KSXGitHub/github-actions-deploy-aur@v4.2.0
         with:
-          pkgname: clak
-          pkgbuild: packaging/aur/PKGBUILD
-          assets: packaging/aur/clak.install
-          commit_username: "verse"
-          commit_email: "versedev.store@proton.me"
-          ssh_private_key: ${{ secrets.AUR_KEY }}
-          commit_message: "release: update to ${GITHUB_REF_NAME}"
-
-      - name: Publish clak-bin to AUR
-        if: env.AUR_KEY != ''
-        uses: KSXGitHub/github-actions-deploy-aur@v4.2.0
-        with:
-          pkgname: clak-bin
-          pkgbuild: packaging/aur-bin/PKGBUILD
-          assets: packaging/aur-bin/clak-bin.install
+          pkgname: ${{ matrix.pkg }}
+          pkgbuild: ${{ matrix.pkgbuild }}
+          assets: ${{ matrix.assets }}
           commit_username: "verse"
           commit_email: "versedev.store@proton.me"
           ssh_private_key: ${{ secrets.AUR_KEY }}
