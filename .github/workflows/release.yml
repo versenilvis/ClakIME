@@ -44,6 +44,10 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.94.1
+          components: rustfmt, clippy
+
+      - name: Ensure active toolchain
+        run: rustup show
 
       - name: Cache Cargo & build artifacts
         uses: actions/cache@v4
@@ -61,6 +65,7 @@ jobs:
 
       - name: Build Clak
         run: |
+          export RUSTUP_AUTO_INSTALL=0
           export CCACHE_DIR="$HOME/.cache/ccache"
           export CCACHE_MAXSIZE="500M"
           export CCACHE_COMPRESS="true"
