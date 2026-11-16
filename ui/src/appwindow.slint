@@ -49,6 +49,7 @@ export component MainWindow inherits Window {
     in-out property <bool> spelling_enabled: true;
     in-out property <bool> auto_restore: true;
     in-out property <bool> auto_restore_english: false;
+    in-out property <bool> allow_foreign_consonants: false;
     in-out property <bool> modern_tone: false;
 
     // go tat va tu dong sua
@@ -347,6 +348,7 @@ export component MainWindow inherits Window {
                     spelling_enabled <=> root.spelling_enabled;
                     auto_restore <=> root.auto_restore;
                     auto_restore_english <=> root.auto_restore_english;
+                    allow_foreign_consonants <=> root.allow_foreign_consonants;
                     modern_tone <=> root.modern_tone;
                     playground_input <=> root.playground_input;
                     changed => { root.has_changes = true; }

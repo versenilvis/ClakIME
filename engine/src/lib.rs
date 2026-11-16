@@ -53,6 +53,7 @@ pub struct ClakCore {
     auto_restore: bool,
     auto_restore_english: bool,
     dict: bool,
+    allow_foreign_consonants: bool,
     user_words: HashSet<String>,
     user_bases: Vec<String>,
 }
@@ -68,6 +69,7 @@ impl ClakCore {
             auto_restore: false,
             auto_restore_english: false,
             dict: false,
+            allow_foreign_consonants: false,
             user_words: HashSet::new(),
             user_bases: Vec::new(),
         }
@@ -105,6 +107,12 @@ impl ClakCore {
     }
     pub fn set_dict(&mut self, v: bool) {
         self.dict = v;
+    }
+    pub fn set_allow_foreign_consonants(&mut self, v: bool) {
+        self.allow_foreign_consonants = v;
+    }
+    pub fn allow_foreign_consonants(&self) -> bool {
+        self.allow_foreign_consonants
     }
 
     pub fn add_word(&mut self, word: &str) {
@@ -168,20 +176,39 @@ impl ClakCore {
 
     pub fn transform(&self, input: &str) -> String {
         let composed = match self.method {
-            Method::Telex => engine::convert_telex(input, self.modern, self.short_w),
-            Method::Vni => engine::convert_vni(input, self.modern, self.short_w),
-            Method::TeipVni => engine::convert_teip_vni(input, self.modern, self.short_w),
+            Method::Telex => engine::convert_telex_with_options(
+                input,
+                self.modern,
+                self.short_w,
+                self.allow_foreign_consonants,
+            ),
+            Method::Vni => engine::convert_vni_with_options(
+                input,
+                self.modern,
+                self.short_w,
+                self.allow_foreign_consonants,
+            ),
+            Method::TeipVni => engine::convert_teip_vni_with_options(
+                input,
+                self.modern,
+                self.short_w,
+                self.allow_foreign_consonants,
+            ),
             Method::Viqr => engine::convert_viqr(input),
         };
         let is_en = crate::english_dict::is_english(input);
+        let is_foreign_initial =
+            self.allow_foreign_consonants && starts_with_foreign_initial(&composed);
         let known = if self.dict {
-            if is_en {
+            if is_en && !is_foreign_initial {
                 self.is_exact_dict_word(&composed)
+            } else if is_foreign_initial {
+                spelling::is_valid_cvc_with_options(&composed, true)
             } else {
                 self.dict_known(&composed.to_lowercase())
             }
         } else {
-            Self::is_valid(&composed)
+            spelling::is_valid_cvc_with_options(&composed, self.allow_foreign_consonants)
         };
         if self.auto_restore
             && should_auto_restore(input, &composed, known, self.auto_restore_english)
@@ -195,6 +222,13 @@ impl ClakCore {
     pub fn is_valid(s: &str) -> bool {
         spelling::is_valid_cvc(s)
     }
+}
+
+pub fn starts_with_foreign_initial(s: &str) -> bool {
+    let s = s.trim_start_matches(|c: char| c.is_ascii_digit());
+    s.chars()
+        .next()
+        .is_some_and(|c| matches!(c.to_ascii_lowercase(), 'z' | 'f' | 'w' | 'j'))
 }
 
 #[allow(dead_code)]
@@ -457,6 +491,15 @@ pub unsafe extern "C" fn clak_core_set_auto_restore_english(e: *mut ClakCore, v:
     if !e.is_null() {
         unsafe {
             (*e).set_auto_restore_english(v != 0);
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_core_set_allow_foreign_consonants(e: *mut ClakCore, v: i32) {
+    if !e.is_null() {
+        unsafe {
+            (*e).set_allow_foreign_consonants(v != 0);
         }
     }
 }
@@ -933,6 +976,26 @@ pub unsafe extern "C" fn clak_config_set_auto_restore_english(
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_config_get_allow_foreign_consonants(
+    cfg: *const config::ClakConfig,
+) -> bool {
+    if cfg.is_null() {
+        return false;
+    }
+    (*cfg).spelling.allow_foreign_consonants
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_config_set_allow_foreign_consonants(
+    cfg: *mut config::ClakConfig,
+    v: bool,
+) {
+    if !cfg.is_null() {
+        unsafe { (*cfg).spelling.allow_foreign_consonants = v };
+    }
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn clak_config_set_spelling(cfg: *mut config::ClakConfig, v: bool) {
     if !cfg.is_null() {
         unsafe { (*cfg).spelling.enabled = v };
@@ -1389,6 +1452,30 @@ mod tests {
         assert_eq!(e.transform("just"), "just");
         assert_eq!(e.transform("jus"), "jus");
         assert_eq!(e.transform("fast"), "fast");
+    }
+
+    #[test]
+    fn test_allow_foreign_consonants() {
+        let mut e = eng(true, false);
+        e.set_allow_foreign_consonants(true);
+        assert_eq!(e.transform("zui"), "zui");
+        assert_eq!(e.transform("zer"), "zẻ");
+        assert_eq!(e.transform("zuis"), "zúi");
+        assert_eq!(e.transform("zuir"), "zủi");
+        assert_eq!(e.transform("fair"), "fải");
+        assert_eq!(e.transform("fee"), "fê");
+        assert_eq!(e.transform("was"), "wá");
+        assert_eq!(e.transform("jups"), "júp");
+        assert_eq!(e.transform("jif"), "jì");
+
+        let mut e_dict = eng(true, true);
+        e_dict.set_allow_foreign_consonants(true);
+        assert_eq!(e_dict.transform("zui"), "zui");
+        assert_eq!(e_dict.transform("zer"), "zẻ");
+        assert_eq!(e_dict.transform("zuis"), "zúi");
+        assert_eq!(e_dict.transform("fair"), "fải");
+        assert_eq!(e_dict.transform("was"), "wá");
+        assert_eq!(e_dict.transform("jups"), "júp");
     }
 
     #[test]

@@ -101,14 +101,14 @@ fn last_dstroke_index(ls: &[Letter]) -> Option<usize> {
     ls.iter().rposition(|lt| lt.is_dstroke)
 }
 
-fn is_valid_vietnamese_initial(initial: &[Letter], first_vowel: char) -> bool {
+fn is_valid_vietnamese_initial(initial: &[Letter], first_vowel: char, allow_foreign: bool) -> bool {
     let fv = first_vowel.to_ascii_lowercase();
     match initial.len() {
         0 => true,
         1 => {
             let c0 = initial[0].c.to_ascii_lowercase();
             match c0 {
-                'j' | 'w' | 'z' => false,
+                'j' | 'w' | 'z' => allow_foreign,
                 'k' => matches!(fv, 'e' | 'i' | 'y'),
                 'c' => !matches!(fv, 'e' | 'i' | 'y'),
                 'q' => fv == 'u',
@@ -159,7 +159,7 @@ fn is_valid_vietnamese_coda(coda: &[Letter]) -> bool {
     }
 }
 
-fn tone_vowel_index(ls: &[Letter], modern: bool) -> Option<usize> {
+fn tone_vowel_index(ls: &[Letter], modern: bool, allow_foreign: bool) -> Option<usize> {
     let end = last_vowel_index(ls)?;
     let mut start = end;
     while start > 0 && ls[start - 1].is_vowel {
@@ -181,7 +181,7 @@ fn tone_vowel_index(ls: &[Letter], modern: bool) -> Option<usize> {
         .take_while(|lt| lt.c.is_ascii_digit())
         .count();
     let initial_slice = &ls[digit_prefix_len..start];
-    if !initial_slice.is_empty() && !is_valid_vietnamese_initial(initial_slice, ls[start].c) {
+    if !initial_slice.is_empty() && !is_valid_vietnamese_initial(initial_slice, ls[start].c, allow_foreign) {
         return None;
     }
     if end + 1 < ls.len() && !is_valid_vietnamese_coda(&ls[end + 1..]) {
@@ -221,7 +221,7 @@ fn tone_vowel_index(ls: &[Letter], modern: bool) -> Option<usize> {
 /// After a hook change (w key), recalculate the correct tone position and
 /// move the tone if it's on the wrong vowel. Ported from fcitx5-unikey's
 /// tone re-positioning in processHook / processHookWithUO.
-fn reposition_tone_after_hook(ls: &mut [Letter], modern: bool) {
+fn reposition_tone_after_hook(ls: &mut [Letter], modern: bool, allow_foreign: bool) {
     let end = match last_vowel_index(ls) {
         Some(e) => e,
         None => return,
@@ -250,7 +250,7 @@ fn reposition_tone_after_hook(ls: &mut [Letter], modern: bool) {
     };
 
     // Find where tone SHOULD be after the hook change
-    let new_tone_idx = match tone_vowel_index(ls, modern) {
+    let new_tone_idx = match tone_vowel_index(ls, modern, allow_foreign) {
         Some(i) => i,
         None => return,
     };
@@ -320,7 +320,16 @@ fn vni_tone(c: char) -> Option<u8> {
 }
 
 pub fn convert_telex(input: &str, modern: bool, short_w: bool) -> String {
-    convert_telex_impl(input, modern, short_w)
+    convert_telex_impl(input, modern, short_w, false)
+}
+
+pub fn convert_telex_with_options(
+    input: &str,
+    modern: bool,
+    short_w: bool,
+    allow_foreign: bool,
+) -> String {
+    convert_telex_impl(input, modern, short_w, allow_foreign)
 }
 
 /// Telex conversion with auto-restore: if the composed output is not valid
@@ -328,8 +337,17 @@ pub fn convert_telex(input: &str, modern: bool, short_w: bool) -> String {
 /// Skips auto-restore when the input has Vietnamese composition markers
 /// (dd, vowel+w, double vowels): those signal intentional IME transforms
 pub fn convert_telex_auto_restore(input: &str, modern: bool, short_w: bool) -> String {
-    let composed = convert_telex_impl(input, modern, short_w);
-    let known = crate::spelling::is_valid_cvc(&composed);
+    convert_telex_auto_restore_with_options(input, modern, short_w, false)
+}
+
+pub fn convert_telex_auto_restore_with_options(
+    input: &str,
+    modern: bool,
+    short_w: bool,
+    allow_foreign: bool,
+) -> String {
+    let composed = convert_telex_impl(input, modern, short_w, allow_foreign);
+    let known = crate::spelling::is_valid_cvc_with_options(&composed, allow_foreign);
     if crate::should_auto_restore(input, &composed, known, false) {
         input.to_string()
     } else {
@@ -337,7 +355,7 @@ pub fn convert_telex_auto_restore(input: &str, modern: bool, short_w: bool) -> S
     }
 }
 
-fn convert_telex_impl(input: &str, modern: bool, short_w: bool) -> String {
+fn convert_telex_impl(input: &str, modern: bool, short_w: bool, allow_foreign: bool) -> String {
     let mut ls: Vec<Letter> = Vec::with_capacity(input.len());
     let mut reverted = false;
     for ch in input.chars() {
@@ -451,11 +469,11 @@ fn convert_telex_impl(input: &str, modern: bool, short_w: bool) -> String {
             let hook_result = crate::vseq::try_apply_hook(&mut ls);
             match hook_result {
                 crate::vseq::HookResult::Applied => {
-                    reposition_tone_after_hook(&mut ls, modern);
+                    reposition_tone_after_hook(&mut ls, modern, allow_foreign);
                     continue;
                 }
                 crate::vseq::HookResult::ToggledOff => {
-                    reposition_tone_after_hook(&mut ls, modern);
+                    reposition_tone_after_hook(&mut ls, modern, allow_foreign);
                     reverted = true;
                 }
                 crate::vseq::HookResult::ToggledToLiteral => {
@@ -470,7 +488,7 @@ fn convert_telex_impl(input: &str, modern: bool, short_w: bool) -> String {
             }
         }
         if let Some(t) = telex_tone(lc) {
-            if let Some(vi) = tone_vowel_index(&ls, modern) {
+            if let Some(vi) = tone_vowel_index(&ls, modern, allow_foreign) {
                 if ls[vi].tone == t {
                     ls[vi].tone = 0;
                     reverted = true;
@@ -481,7 +499,7 @@ fn convert_telex_impl(input: &str, modern: bool, short_w: bool) -> String {
             }
         }
         if lc == 'z' {
-            if let Some(vi) = tone_vowel_index(&ls, modern) {
+            if let Some(vi) = tone_vowel_index(&ls, modern, allow_foreign) {
                 if ls[vi].tone != 0 {
                     ls[vi].tone = 0;
                     continue;
@@ -586,6 +604,19 @@ fn convert_telex_impl(input: &str, modern: bool, short_w: bool) -> String {
 }
 
 pub fn convert_teip_vni(input: &str, modern: bool, short_w: bool) -> String {
+    convert_teip_vni_impl(input, modern, short_w, false)
+}
+
+pub fn convert_teip_vni_with_options(
+    input: &str,
+    modern: bool,
+    short_w: bool,
+    allow_foreign: bool,
+) -> String {
+    convert_teip_vni_impl(input, modern, short_w, allow_foreign)
+}
+
+fn convert_teip_vni_impl(input: &str, modern: bool, short_w: bool, allow_foreign: bool) -> String {
     let mut ls: Vec<Letter> = Vec::with_capacity(input.len());
     let mut reverted = false;
     for ch in input.chars() {
@@ -598,7 +629,7 @@ pub fn convert_teip_vni(input: &str, modern: bool, short_w: bool) -> String {
 
         // ── VNI digit rules ──
         if let Some(t) = vni_tone(lc) {
-            if let Some(vi) = tone_vowel_index(&ls, modern) {
+            if let Some(vi) = tone_vowel_index(&ls, modern, allow_foreign) {
                 ls[vi].tone = t;
                 continue;
             }
@@ -740,11 +771,11 @@ pub fn convert_teip_vni(input: &str, modern: bool, short_w: bool) -> String {
             let hook_result = crate::vseq::try_apply_hook(&mut ls);
             match hook_result {
                 crate::vseq::HookResult::Applied => {
-                    reposition_tone_after_hook(&mut ls, modern);
+                    reposition_tone_after_hook(&mut ls, modern, allow_foreign);
                     continue;
                 }
                 crate::vseq::HookResult::ToggledOff => {
-                    reposition_tone_after_hook(&mut ls, modern);
+                    reposition_tone_after_hook(&mut ls, modern, allow_foreign);
                     reverted = true;
                 }
                 crate::vseq::HookResult::ToggledToLiteral => {
@@ -761,7 +792,7 @@ pub fn convert_teip_vni(input: &str, modern: bool, short_w: bool) -> String {
 
         // ── Telex tone marks ──
         if let Some(t) = telex_tone(lc) {
-            if let Some(vi) = tone_vowel_index(&ls, modern) {
+            if let Some(vi) = tone_vowel_index(&ls, modern, allow_foreign) {
                 if ls[vi].tone == t {
                     ls[vi].tone = 0;
                     reverted = true;
@@ -951,12 +982,25 @@ pub fn convert_viqr(input: &str) -> String {
 }
 
 pub fn convert_vni(input: &str, modern: bool, _short_w: bool) -> String {
+    convert_vni_impl(input, modern, false)
+}
+
+pub fn convert_vni_with_options(
+    input: &str,
+    modern: bool,
+    _short_w: bool,
+    allow_foreign: bool,
+) -> String {
+    convert_vni_impl(input, modern, allow_foreign)
+}
+
+fn convert_vni_impl(input: &str, modern: bool, allow_foreign: bool) -> String {
     let mut ls: Vec<Letter> = Vec::with_capacity(input.len());
     for ch in input.chars() {
         let lc = ch.to_ascii_lowercase();
         let upper = ch.is_ascii_uppercase();
         if let Some(t) = vni_tone(lc) {
-            if let Some(vi) = tone_vowel_index(&ls, modern) {
+            if let Some(vi) = tone_vowel_index(&ls, modern, allow_foreign) {
                 ls[vi].tone = t;
                 continue;
             }

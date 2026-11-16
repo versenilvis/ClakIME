@@ -19,6 +19,7 @@ export component TabGeneral inherits VerticalLayout {
     in-out property <bool> spelling_enabled: true;
     in-out property <bool> auto_restore: true;
     in-out property <bool> auto_restore_english: false;
+    in-out property <bool> allow_foreign_consonants: false;
     in-out property <bool> modern_tone: false;
     in-out property <string> playground_input: "";
     in property <bool> is-wide: false;
@@ -172,6 +173,14 @@ export component TabGeneral inherits VerticalLayout {
         subtitle: "Chuẩn hiện đại theo bộ giáo dục";
         is-wide: root.is-wide;
         checked <=> root.modern_tone;
+        toggled => { root.changed(); }
+    }
+
+    SettingItem {
+        title: "Cho phép [z, f, w, j] làm phụ âm";
+        subtitle: "Gõ được các từ mượn hoặc biến thể như zui zẻ, fải, wa, júp...";
+        is-wide: root.is-wide;
+        checked <=> root.allow_foreign_consonants;
         toggled => { root.changed(); }
     }
 

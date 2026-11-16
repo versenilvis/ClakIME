@@ -19,7 +19,6 @@ static FC_0: &[Token] = &[
     (['t', '\0', '\0', '\0'], 1),
     (['t', 'r', '\0', '\0'], 2),
     (['v', '\0', '\0', '\0'], 1),
-    (['z', '\0', '\0', '\0'], 1),
 ];
 static FC_1: &[Token] = &[
     (['c', '\0', '\0', '\0'], 1),
@@ -438,6 +437,10 @@ fn split_cvc(s: &str) -> (Vec<char>, Vec<char>, Vec<char>) {
 /// Returns `true` if `s` can be parsed as a valid Vietnamese syllable.
 /// `s` should already be in composed form (with diacritics applied).
 pub fn is_valid_cvc(s: &str) -> bool {
+    is_valid_cvc_with_options(s, false)
+}
+
+pub fn is_valid_cvc_with_options(s: &str, allow_foreign: bool) -> bool {
     let s = s.trim_start_matches(|c: char| c.is_ascii_digit());
     if s.is_empty() || s.chars().count() <= 1 {
         return !s.is_empty(); // empty is invalid, single char is always valid (partial input)
@@ -511,11 +514,15 @@ pub fn is_valid_cvc(s: &str) -> bool {
     // eprintln!("is_valid_cvc({s:?}): fc={fc:?} vo={vo:?} lc={lc:?}");
 
     let fc_mask = if !fc.is_empty() {
-        let m = lookup_mask(FC_ROWS, &fc, !vo.is_empty(), true);
-        if m == 0 {
-            return false;
+        if allow_foreign && fc.len() == 1 && matches!(fc[0], 'f' | 'j' | 'w' | 'z') {
+            1u16 << 0
+        } else {
+            let m = lookup_mask(FC_ROWS, &fc, !vo.is_empty(), true);
+            if m == 0 {
+                return false;
+            }
+            m
         }
-        m
     } else {
         0
     };

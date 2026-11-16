@@ -219,3 +219,23 @@ fn test_debug_log_toggle_and_secure_permissions() {
         assert_eq!(permissions, 0o600);
     }
 }
+
+#[test]
+fn test_toggle_allow_foreign_consonants() {
+    let mut cfg_off = ClakConfig::default();
+    cfg_off.spelling.allow_foreign_consonants = false;
+
+    let mut ctx_off = ClakContext::new(Method::Telex);
+    ctx_off.apply_config(&cfg_off);
+    let acts_off = type_text(&mut ctx_off, "zer");
+    assert_eq!(acts_off.last().unwrap().0, ACTION_FORWARD);
+
+    let mut cfg_on = ClakConfig::default();
+    cfg_on.spelling.allow_foreign_consonants = true;
+
+    let mut ctx_on = ClakContext::new(Method::Telex);
+    ctx_on.apply_config(&cfg_on);
+    let acts_on = type_text(&mut ctx_on, "zer");
+    assert_eq!(acts_on.last().unwrap().0, ACTION_REPLACE);
+    assert_eq!(acts_on.last().unwrap().2, "ẻ");
+}

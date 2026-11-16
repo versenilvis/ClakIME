@@ -108,6 +108,8 @@ impl ClakContext {
         self.engine.set_auto_restore(cfg.spelling.auto_restore);
         self.engine
             .set_auto_restore_english(cfg.spelling.auto_restore_english);
+        self.engine
+            .set_allow_foreign_consonants(cfg.spelling.allow_foreign_consonants);
         self.engine.set_dict(cfg.spelling.enabled);
         self.engine.set_short_w(cfg.general.short_w);
         self.bracket_brackets = cfg.general.bracket_brackets;

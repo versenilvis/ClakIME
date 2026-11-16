@@ -60,6 +60,8 @@ pub struct SpellingConfig {
     pub free_marking: bool,
     #[serde(default = "default_true")]
     pub autocorrect: bool,
+    #[serde(default)]
+    pub allow_foreign_consonants: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -277,6 +279,7 @@ impl Default for SpellingConfig {
             modern_tone: false,
             free_marking: default_true(),
             autocorrect: default_true(),
+            allow_foreign_consonants: false,
         }
     }
 }
