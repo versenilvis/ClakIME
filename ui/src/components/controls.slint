@@ -436,3 +436,74 @@ export component Dropdown inherits Rectangle {
         }
     }
 }
+
+// thanh keo slider toi gian chi gom thanh bar mau trang
+export component ClakSlider inherits Rectangle {
+    in property <float> minimum: 0;
+    in property <float> maximum: 100;
+    in-out property <float> value: 50;
+    in property <bool> is-wide: false;
+    in property <bool> enabled: true;
+    callback changed(float);
+
+    height: 20px;
+    horizontal-stretch: 1;
+
+    private property <float> range: Math.max(0.001, root.maximum - root.minimum);
+    private property <float> norm: Math.max(0.0, Math.min(1.0, (root.value - root.minimum) / root.range));
+
+    track := Rectangle {
+        y: (parent.height - self.height) / 2;
+        height: (ta.has-hover || ta.pressed) ? (root.is-wide ? 8px : 7px) : (root.is-wide ? 6px : 5px);
+        width: parent.width;
+        border-radius: self.height / 2;
+        background: #27272a;
+        clip: true;
+
+        animate height {
+            duration: 120ms;
+            easing: ease-out;
+        }
+
+        active_fill := Rectangle {
+            x: 0px;
+            y: 0px;
+            height: parent.height;
+            width: root.norm * parent.width;
+            border-radius: parent.border-radius;
+            background: ta.pressed ? #ffffff : (ta.has-hover ? #f4f4f5 : #e4e4e7);
+
+            animate width {
+                duration: ta.pressed ? 0ms : 70ms;
+                easing: ease-out;
+            }
+            animate background {
+                duration: 100ms;
+                easing: ease-out;
+            }
+        }
+    }
+
+    ta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
+
+        pointer-event(event) => {
+            if event.button == PointerEventButton.left && event.kind == PointerEventKind.down {
+                if parent.width > 0px {
+                    let ratio = Math.max(0.0, Math.min(1.0, self.mouse-x / parent.width));
+                    root.value = root.minimum + ratio * root.range;
+                    root.changed(root.value);
+                }
+            }
+        }
+
+        moved => {
+            if self.pressed && parent.width > 0px {
+                let ratio = Math.max(0.0, Math.min(1.0, self.mouse-x / parent.width));
+                root.value = root.minimum + ratio * root.range;
+                root.changed(root.value);
+            }
+        }
+    }
+}
