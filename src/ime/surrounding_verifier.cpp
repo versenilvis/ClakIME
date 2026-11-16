@@ -66,18 +66,18 @@ void SurroundingVerifier::setExpectation(const std::string& wordBefore, size_t d
 
 void SurroundingVerifier::verify(const fcitx::SurroundingText& surr) {
     if (!verify_.pending) return;
-    verify_.pending = false;
 
     std::string actualWord = utils::extractWordBeforeCursor(surr.text(), surr.cursor());
 
     if (actualWord == verify_.expectWord) {
+        verify_.pending = false;
         mismatch_count_ = 0;
         saw_delete_ignored_ = false;
     } else if (actualWord == verify_.preWord) {
-        // Asynchronous Wayland roundtrip: the client application has not yet processed
-        // the in-flight deleteSurroundingText/commitString. This is normal IPC latency,
-        // NOT an editor mismatch. Do not increment mismatch_count_ or trigger uinput.
+        // asynchronous wayland roundtrip: client application has not yet processed
+        // the in-flight deleteSurroundingText/commitString; keep pending = true until editor catches up
     } else {
+        verify_.pending = false;
         bool delete_ignored = (!verify_.preWord.empty() &&
                                !verify_.added.empty() &&
                                actualWord.find(verify_.preWord) != std::string::npos &&

@@ -14,6 +14,7 @@ enum class PacingGroup {
     WebDraftJs,
     TerminalUinput,
     HeavyApp,
+    SteamCEF,
     Default
 };
 
@@ -59,11 +60,11 @@ public:
     void onIncident(PacingGroup group, IncidentType incident, uint64_t now_us, uint64_t key_interval_us = 0);
     void observeTimerDrift(PacingGroup group, uint64_t deadline_us, uint64_t fired_at_us);
     void onTransactionSuccess(PacingGroup group);
-    void recordRtt(PacingGroup group, uint64_t rtt_us);
+    void recordRtt(PacingGroup group, uint64_t rtt_us, uint64_t key_interval_us = 0);
 
     // retrieval
     PacingMetrics metrics(PacingGroup group) const;
-    apps::UinputPacing uinputPacing(PacingGroup group) const;
+    apps::UinputPacing uinputPacing(PacingGroup group, uint64_t key_interval_us = 0) const;
     uint32_t driftCompensation(PacingGroup group) const;
     uint32_t commitCompensation(PacingGroup group) const;
     uint32_t calculatePreDelay(PacingGroup group, uint64_t last_commit_time_us, uint64_t now_us) const;
@@ -75,6 +76,7 @@ public:
             case PacingGroup::WebDraftJs: return "WebDraftJs";
             case PacingGroup::TerminalUinput: return "TerminalUinput";
             case PacingGroup::HeavyApp: return "HeavyApp";
+            case PacingGroup::SteamCEF: return "SteamCEF";
             case PacingGroup::Default: default: return "Default";
         }
     }
@@ -93,6 +95,7 @@ private:
         PacingMetrics metrics;
         std::deque<uint64_t> incident_timestamps_us;
         std::deque<uint32_t> rtt_samples;
+        uint64_t last_key_interval_us{0};
     };
 
     GroupState& getGroup(PacingGroup group);
@@ -102,6 +105,7 @@ private:
     GroupState web_draftjs_;
     GroupState terminal_uinput_;
     GroupState heavy_app_;
+    GroupState steam_cef_;
     GroupState default_group_;
 };
 

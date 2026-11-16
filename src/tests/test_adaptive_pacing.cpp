@@ -32,6 +32,12 @@ TEST_F(AdaptivePacingTest, InitialMetricsAndFloors) {
     auto heavy = engine.metrics(PacingGroup::HeavyApp);
     EXPECT_EQ(heavy.post_delay_ms, 15u);
     EXPECT_EQ(heavy.gap_ms, 4u);
+
+    auto steam = engine.metrics(PacingGroup::SteamCEF);
+    EXPECT_EQ(steam.post_delay_ms, 6u);
+    EXPECT_EQ(steam.gap_ms, 3u);
+    EXPECT_EQ(steam.floor_post_ms, 4u);
+    EXPECT_EQ(steam.ceiling_post_ms, 18u);
 }
 
 TEST_F(AdaptivePacingTest, AdditiveIncreaseOnStarvation) {
@@ -129,7 +135,8 @@ TEST_F(AdaptivePacingTest, Classification) {
     EXPECT_EQ(AdaptivePacingEngine::classify("brave", "tiktok.com", false), PacingGroup::WebDraftJs);
 
     EXPECT_EQ(AdaptivePacingEngine::classify("wps", "", false), PacingGroup::HeavyApp);
-    EXPECT_EQ(AdaptivePacingEngine::classify("steam", "", false), PacingGroup::HeavyApp);
+    EXPECT_EQ(AdaptivePacingEngine::classify("steam", "", false), PacingGroup::SteamCEF);
+    EXPECT_EQ(AdaptivePacingEngine::classify("steamwebhelper", "", false), PacingGroup::SteamCEF);
     EXPECT_EQ(AdaptivePacingEngine::classify("idea.sh", "", false), PacingGroup::HeavyApp);
 
     EXPECT_EQ(AdaptivePacingEngine::classify("gedit", "", false), PacingGroup::Default);
@@ -383,9 +390,68 @@ TEST_F(AdaptivePacingTest, TcpStyleSsthreshDecayAndRelaxation) {
     EXPECT_EQ(engine.metrics(PacingGroup::WebDraftJs).ssthresh_post_ms, 19u);
 }
 
-TEST(SimpleBackoffDefaultTest, DefaultModeUsesFixed13WithBackoffAndDecay) {
-    unsetenv("CLAK_ADAPTIVE");
-    unsetenv("CLAK_SIMPLE_BACKOFF");
+TEST_F(AdaptivePacingTest, SteamCefSmartPacingAndFastDecay) {
+    AdaptivePacingEngine engine;
+    uint64_t t0 = 1000000ULL;
+
+    auto m = engine.metrics(PacingGroup::SteamCEF);
+    EXPECT_EQ(m.post_delay_ms, 6u);
+    EXPECT_EQ(m.floor_post_ms, 4u);
+    EXPECT_EQ(m.ceiling_post_ms, 18u);
+    EXPECT_EQ(m.gap_ms, 3u);
+
+    // pre-delay for Steam is 0ms for instant backspace
+    EXPECT_EQ(engine.calculatePreDelay(PacingGroup::SteamCEF, t0, t0 + 1000ULL), 0u);
+
+    // incident causes small additive increase (+2ms)
+    engine.onIncident(PacingGroup::SteamCEF, IncidentType::PacingStarvation, t0);
+    m = engine.metrics(PacingGroup::SteamCEF);
+    EXPECT_EQ(m.post_delay_ms, 8u);
+    EXPECT_EQ(m.ssthresh_post_ms, 8u);
+
+    // with healthy RTT (0-1ms), recordRtt steps delay down towards floor immediately
+    engine.recordRtt(PacingGroup::SteamCEF, 1000ULL);
+    m = engine.metrics(PacingGroup::SteamCEF);
+    EXPECT_EQ(m.post_delay_ms, 7u);
+
+    // clean transaction drops delay down towards floor
+    engine.onTransactionSuccess(PacingGroup::SteamCEF);
+    m = engine.metrics(PacingGroup::SteamCEF);
+    EXPECT_EQ(m.post_delay_ms, 5u);
+
+    // next clean transaction hits 4ms floor
+    engine.onTransactionSuccess(PacingGroup::SteamCEF);
+    m = engine.metrics(PacingGroup::SteamCEF);
+    EXPECT_EQ(m.post_delay_ms, 4u);
+}
+
+TEST_F(AdaptivePacingTest, RealtimePacingAdaptsToTypingSpeedAcrossAllGroups) {
+    AdaptivePacingEngine engine;
+    uint64_t t0 = 1000000ULL;
+
+    // bump up delay for Terminal and Default
+    engine.onIncident(PacingGroup::TerminalUinput, IncidentType::PacingStarvation, t0);
+    engine.onIncident(PacingGroup::Default, IncidentType::PacingStarvation, t0);
+    EXPECT_EQ(engine.metrics(PacingGroup::TerminalUinput).post_delay_ms, 16u);
+    EXPECT_EQ(engine.metrics(PacingGroup::Default).post_delay_ms, 12u);
+
+    // when user types fast (interval = 60ms), uinputPacing scales down delay in real-time
+    auto pacing_term = engine.uinputPacing(PacingGroup::TerminalUinput, 60000ULL);
+    EXPECT_LE(pacing_term.post_delay_ms, 8u);
+
+    auto pacing_default = engine.uinputPacing(PacingGroup::Default, 60000ULL);
+    EXPECT_LE(pacing_default.post_delay_ms, 8u);
+
+    // during fast typing with low RTT, recordRtt converges towards floor immediately
+    engine.recordRtt(PacingGroup::Default, 2000ULL, 60000ULL);
+    EXPECT_LT(engine.metrics(PacingGroup::Default).post_delay_ms, 12u);
+
+    engine.onTransactionSuccess(PacingGroup::Default);
+    EXPECT_LE(engine.metrics(PacingGroup::Default).post_delay_ms, 8u);
+}
+
+TEST(SimpleBackoffModeTest, SimpleBackoffModeUsesFixed13WithBackoffAndDecay) {
+    setenv("CLAK_SIMPLE_BACKOFF", "1", 1);
     AdaptivePacingEngine engine;
 
     for (auto grp : {PacingGroup::WebDraftJs, PacingGroup::TerminalUinput, PacingGroup::HeavyApp, PacingGroup::Default}) {
@@ -409,4 +475,5 @@ TEST(SimpleBackoffDefaultTest, DefaultModeUsesFixed13WithBackoffAndDecay) {
     }
     EXPECT_EQ(engine.metrics(PacingGroup::Default).post_delay_ms, 29u);
     EXPECT_EQ(engine.metrics(PacingGroup::Default).gap_ms, 3u);
+    unsetenv("CLAK_SIMPLE_BACKOFF");
 }

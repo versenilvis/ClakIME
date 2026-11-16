@@ -126,8 +126,10 @@ private:
   uint64_t fallback_seq_{0};
   std::unique_ptr<fcitx::EventSourceTime> surr_lag_timer_;
   bool is_surr_lag_replaying_{false};
+  uint32_t surr_lag_retries_{0};
   uint64_t last_key_time_us_{0};
   uint64_t last_key_interval_us_{0};
+  uint64_t last_uinput_finish_time_us_{0};
 
   uint64_t last_site_check_us_{0};
   std::string cached_site_;

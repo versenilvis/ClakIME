@@ -18,9 +18,13 @@ class SteamProfile : public AppProfile {
 public:
     std::string name() const override { return "Steam-ForwardKey"; }
     bool allowsSurroundingText() const override { return false; }
-    bool directCommitPrintableKey() const override { return true; }
+    // steam uses forwardKey for both characters and backspaces
+    // mixing commitString with forwardKey(BackSpace) breaks cef xim pipeline
+    bool directCommitPrintableKey() const override { return false; }
+    bool hasCustomDeletion() const override { return true; }
 
     bool filterIncomingKey(uint32_t sym, uint64_t now_us) override {
+        // drop cef/xwayland duplicate key echoes arriving within 2ms
         if (sym == last_sym_ && (now_us - last_time_us_) < 2000) {
             utils::clakLog("steam duplicate key dropped: sym=" + std::to_string(sym) +
                            " delta=" + std::to_string(now_us - last_time_us_) + "us");
@@ -30,8 +34,6 @@ public:
         last_time_us_ = now_us;
         return false;
     }
-
-    bool hasCustomDeletion() const override { return true; }
 
     void startCustomDeletion(
         fcitx::EventLoop& loop,
@@ -95,13 +97,9 @@ private:
                     CLOCK_MONOTONIC,
                     now_us + 8000,
                     1000,
-                    [this, commit_str = std::move(commit_str),
-                     commit_fn = std::move(commit_fn),
-                     on_completed = std::move(on_completed)](fcitx::EventSourceTime*, uint64_t) {
-                        if (!commit_str.empty() && commit_fn) {
-                            commit_fn(commit_str);
-                        }
+                    [this, on_completed = std::move(on_completed)](fcitx::EventSourceTime*, uint64_t) {
                         cancelCustomDeletion();
+                        // on_completed triggers clak_session_on_sentinel_received which commits pending_commit
                         if (on_completed) {
                             on_completed();
                         }

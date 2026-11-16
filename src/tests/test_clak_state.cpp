@@ -57,6 +57,7 @@ TEST_F(ClakStateTest, GivenGeckoApp_AlwaysRoutesToUinput) {
 
     ic.setSurrounding("", 0, 0);
     ic.typeChar('d', &state);
+    usleep(15000);
     ic.typeChar('d', &state);
 
     // expect 2 backspaces: 1 real + 1 sentinel loopback
@@ -69,7 +70,7 @@ TEST_F(ClakStateTest, GivenGeckoApp_AlwaysRoutesToUinput) {
     ic.sendCleanBackspace(&state);
 
     EXPECT_FALSE(state.isDeleting());
-    ASSERT_FALSE(ic.commits.empty());
+    ASSERT_EQ(ic.commits.size(), 1);
     EXPECT_EQ(ic.commits.back(), "đ");
 }
 
@@ -109,6 +110,7 @@ TEST_F(ClakStateTest, GivenStaleSurroundingText3TimesInRow_FallsBackToUinput) {
     ic.clearHistory();
     ic.setSurrounding("", 0, 0);
     ic.typeChar('d', &state);
+    usleep(15000);
     ic.typeChar('d', &state);
 
     EXPECT_GT(uinput_calls, 0);
@@ -127,6 +129,7 @@ TEST_F(ClakStateTest, GivenSentinelNeverArrives_SafetyTimerFires_RecoversAndComm
 
     ic.setSurrounding("", 0, 0);
     ic.typeChar('d', &state);
+    usleep(15000);
     ic.typeChar('d', &state);
 
     EXPECT_TRUE(state.isDeleting());
@@ -145,7 +148,7 @@ TEST_F(ClakStateTest, GivenSentinelNeverArrives_SafetyTimerFires_RecoversAndComm
     instance_->eventLoop().exec();
 
     EXPECT_FALSE(state.isDeleting());
-    ASSERT_FALSE(ic.commits.empty());
+    ASSERT_EQ(ic.commits.size(), 1);
     EXPECT_EQ(ic.commits.back(), "đ");
 }
 
@@ -161,6 +164,7 @@ TEST_F(ClakStateTest, GivenKeysBufferedDuringDelete_ReplaysInOriginalOrder) {
 
     ic.setSurrounding("", 0, 0);
     ic.typeChar('d', &state);
+    usleep(15000);
     ic.typeChar('d', &state);
 
     EXPECT_TRUE(state.isDeleting());
@@ -277,6 +281,7 @@ TEST_F(ClakStateTest, GivenChromiumNormalPage_UsesSurroundingText) {
 
     ic.setSurrounding("", 0, 0);
     ic.typeChar('d', &state);
+    usleep(15000);
     ic.typeChar('d', &state);
 
     EXPECT_FALSE(ic.deletions.empty());
@@ -472,29 +477,28 @@ TEST_F(ClakStateTest, GivenSteamApp_UsesForwardBackspaceWithTimer) {
     instance_->eventLoop().exec();
 
     EXPECT_FALSE(state.isDeleting());
-    ASSERT_FALSE(ic.commits.empty());
+    ASSERT_EQ(ic.commits.size(), 1);
     EXPECT_EQ(ic.commits.back(), "đ");
 }
 
-TEST_F(ClakStateTest, GivenSteamApp_CommitsPrintableKeyDirectly) {
-    // steam app commits printable characters directly to prevent xim bounce reflections
+TEST_F(ClakStateTest, GivenSteamApp_ForwardsPrintableKeyToAvoidXimMismatch) {
+    // steam passes printable keys through (not filtered, not committed directly)
+    // this keeps all input on the same xim channel, so forwardKey(BackSpace) can delete them
     platform::setMockActiveWindow(platform::WindowInfo{"steamwebhelper", "Steam", 1234});
     MockInputContext ic(instance_->inputContextManager(), "steamwebhelper");
     ime::ClakState state(engine_.get(), &ic);
 
-    // printable key is filtered and committed directly
+    // printable key is NOT filtered (passes through to app via fcitx native forward)
     fcitx::Key key_n(FcitxKey_n);
     fcitx::KeyEvent event1(&ic, key_n, false);
     state.keyEvent(event1);
-    EXPECT_TRUE(event1.filtered());
-    ASSERT_FALSE(ic.commits.empty());
-    EXPECT_EQ(ic.commits.back(), "n");
+    EXPECT_FALSE(event1.filtered());
+    EXPECT_TRUE(ic.commits.empty());
 
-    // immediate duplicate reflection within 2ms is filtered and dropped without committing again
+    // immediate duplicate reflection within 2ms is filtered and dropped
     fcitx::KeyEvent event2(&ic, key_n, false);
     state.keyEvent(event2);
     EXPECT_TRUE(event2.filtered());
-    EXPECT_EQ(ic.commits.size(), 1);
 }
 
 TEST_F(ClakStateTest, GivenSteamApp_WhenTypingFast_ProcessesBufferedKeysInStrictOrder) {
@@ -1000,6 +1004,7 @@ TEST_F(ClakStateTest, GivenUinputFailure_FallsBackToKeycode22PressReleaseAndDela
 
     ic.setSurrounding("", 0, 0);
     ic.typeChar('d', &state);
+    usleep(15000);
     ic.typeChar('d', &state);
 
     // 1 backspace sent as keycode 22 press then release before any commit
@@ -1097,6 +1102,7 @@ TEST_F(ClakStateTest, GivenKeyBufferOverflowDuringFallback_PendingReplacementCom
 
     ic.setSurrounding("", 0, 0);
     ic.typeChar('d', &state);
+    usleep(15000);
     ic.typeChar('d', &state);
     EXPECT_TRUE(state.isDeleting());
 

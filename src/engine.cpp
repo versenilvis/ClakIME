@@ -90,9 +90,9 @@ void ClakEngine::loadConfig() {
         if (!env) {
             utils::setLogEnabled(debug_log);
         }
-        bool is_adaptive_env = (utils::clakGetEnv("CLAK_ADAPTIVE") &&
-                                std::string(utils::clakGetEnv("CLAK_ADAPTIVE")) == "1" &&
-                                !utils::clakGetEnv("CLAK_SIMPLE_BACKOFF"));
+        bool is_adaptive_env = (!utils::clakGetEnv("CLAK_SIMPLE_BACKOFF") &&
+                                !(utils::clakGetEnv("CLAK_ADAPTIVE") &&
+                                  std::string(utils::clakGetEnv("CLAK_ADAPTIVE")) == "0"));
         std::string pacing_mode = utils::clakGetEnv("CLAK_FIXED_DELAY_MS") ? "fixed" :
                                   (!is_adaptive_env ? "fixed_13_backoff" : "adaptive");
         utils::clakLog("config loaded: version=" + std::to_string(config_version_) +

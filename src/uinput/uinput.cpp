@@ -116,26 +116,33 @@ bool UinputTool::send_backspace_direct(size_t count, uint32_t post_delay_ms, uin
         return false;
     }
 
-    // synchronous fast path when zero delays requested
-    if (pre_delay_ms == 0 && post_delay_ms == 0 && gap_ms == 0) {
+    // synchronous fast path when zero pre-delay and single backspace, or zero delays
+    if (pre_delay_ms == 0 && (count == 1 || (post_delay_ms == 0 && gap_ms == 0))) {
         std::lock_guard<std::mutex> lock(uinput_mutex_);
         if (direct_fd_ < 0) return false;
 
         auto emit_one_bs = [this, hold_us]() {
-            struct input_event down[2]{};
-            down[0] = { {}, EV_KEY, KEY_BACKSPACE, 1 };
-            down[1] = { {}, EV_SYN, SYN_REPORT, 0 };
-            (void)write(direct_fd_, down, sizeof(down));
-
             if (hold_us > 0) {
+                struct input_event down[2]{};
+                down[0] = { {}, EV_KEY, KEY_BACKSPACE, 1 };
+                down[1] = { {}, EV_SYN, SYN_REPORT, 0 };
+                (void)write(direct_fd_, down, sizeof(down));
+
                 struct timespec ts = {0, static_cast<long>(hold_us * 1000)};
                 nanosleep(&ts, nullptr);
-            }
 
-            struct input_event up[2]{};
-            up[0] = { {}, EV_KEY, KEY_BACKSPACE, 0 };
-            up[1] = { {}, EV_SYN, SYN_REPORT, 0 };
-            (void)write(direct_fd_, up, sizeof(up));
+                struct input_event up[2]{};
+                up[0] = { {}, EV_KEY, KEY_BACKSPACE, 0 };
+                up[1] = { {}, EV_SYN, SYN_REPORT, 0 };
+                (void)write(direct_fd_, up, sizeof(up));
+            } else {
+                struct input_event evs[4]{};
+                evs[0] = { {}, EV_KEY, KEY_BACKSPACE, 1 };
+                evs[1] = { {}, EV_SYN, SYN_REPORT, 0 };
+                evs[2] = { {}, EV_KEY, KEY_BACKSPACE, 0 };
+                evs[3] = { {}, EV_SYN, SYN_REPORT, 0 };
+                (void)write(direct_fd_, evs, sizeof(evs));
+            }
         };
 
         for (size_t i = 0; i < count - 1; ++i) {
@@ -230,7 +237,7 @@ bool UinputTool::send_backspace_direct(size_t count, uint32_t post_delay_ms, uin
         }
 
         // wait for target app to finish deletion before dispatching sentinel
-        if (post_delay_ms > 0) {
+        if (count > 1 && post_delay_ms > 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(post_delay_ms));
             if (is_cancelled()) return;
         }
@@ -364,8 +371,8 @@ bool UinputTool::send_backspace_xtest(size_t count, uint32_t post_delay_ms, uint
 
     auto* conn = reinterpret_cast<xcb_connection_t*>(xcb_conn_);
 
-    // synchronous fast path when zero delays requested
-    if (pre_delay_ms == 0 && post_delay_ms == 0 && gap_ms == 0) {
+    // synchronous fast path when zero pre-delay and single backspace, or zero delays
+    if (pre_delay_ms == 0 && (count == 1 || (post_delay_ms == 0 && gap_ms == 0))) {
         std::lock_guard<std::mutex> lock(xtest_mutex_);
         for (size_t i = 0; i < count; ++i) {
             fake_fn(conn, kXcbKeyPress, kXcbBackSpaceCode, 0, 0, 0, 0, 0);
@@ -396,7 +403,7 @@ bool UinputTool::send_backspace_xtest(size_t count, uint32_t post_delay_ms, uint
             }
         }
 
-        if (post_delay_ms > 0) {
+        if (count > 1 && post_delay_ms > 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(post_delay_ms));
         }
 

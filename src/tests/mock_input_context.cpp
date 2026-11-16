@@ -180,6 +180,7 @@ bool MockInputContext::typeString(const std::string& str, ime::ClakState* state)
 }
 
 bool MockInputContext::sendCleanBackspace(ime::ClakState* state) {
+    usleep(2500);
     return sendKey(FcitxKey_BackSpace, fcitx::KeyStates(), false, state);
 }
 

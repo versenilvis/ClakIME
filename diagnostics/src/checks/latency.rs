@@ -362,9 +362,13 @@ fn detect_connected_protocol() -> String {
 }
 
 fn is_adaptive_mode_active(log_content: &str) -> bool {
-    if std::env::var("CLAK_ADAPTIVE").ok().as_deref() == Some("1")
-        && std::env::var("CLAK_SIMPLE_BACKOFF").is_err()
-    {
+    if std::env::var("CLAK_SIMPLE_BACKOFF").is_ok() {
+        return false;
+    }
+    if std::env::var("CLAK_ADAPTIVE").ok().as_deref() == Some("0") {
+        return false;
+    }
+    if std::env::var("CLAK_ADAPTIVE").ok().as_deref() == Some("1") {
         return true;
     }
     for line in log_content.lines().rev() {
@@ -378,7 +382,7 @@ fn is_adaptive_mode_active(log_content: &str) -> bool {
             }
         }
     }
-    false
+    true
 }
 
 fn detect_group_snapshots(log_content: &str) -> Vec<PacingGroupSnapshot> {
@@ -390,33 +394,42 @@ fn detect_group_snapshots(log_content: &str) -> Vec<PacingGroupSnapshot> {
                 current_delay_ms: 16,
                 floor_ms: 10,
                 ceiling_ms: 40,
-                gap_ms: 8,
+                gap_ms: 6,
                 hold_us: 1000,
                 ssthresh_ms: 10,
             },
             PacingGroupSnapshot {
                 name: "Terminal (Kitty/Alacritty/Ghostty)".to_string(),
-                current_delay_ms: 12,
+                current_delay_ms: 8,
                 floor_ms: 0,
-                ceiling_ms: 30,
-                gap_ms: 3,
+                ceiling_ms: 20,
+                gap_ms: 2,
                 hold_us: 1000,
                 ssthresh_ms: 0,
             },
             PacingGroupSnapshot {
-                name: "HeavyApp (WPS/JetBrains/Steam)".to_string(),
-                current_delay_ms: 15,
-                floor_ms: 8,
+                name: "HeavyApp (WPS/JetBrains)".to_string(),
+                current_delay_ms: 14,
+                floor_ms: 10,
                 ceiling_ms: 35,
-                gap_ms: 4,
+                gap_ms: 3,
                 hold_us: 1000,
-                ssthresh_ms: 8,
+                ssthresh_ms: 10,
+            },
+            PacingGroupSnapshot {
+                name: "SteamCEF (Steam/CEF)".to_string(),
+                current_delay_ms: 6,
+                floor_ms: 4,
+                ceiling_ms: 18,
+                gap_ms: 3,
+                hold_us: 1000,
+                ssthresh_ms: 6,
             },
             PacingGroupSnapshot {
                 name: "Default (GTK/Qt/Desktop)".to_string(),
                 current_delay_ms: 8,
                 floor_ms: 4,
-                ceiling_ms: 30,
+                ceiling_ms: 25,
                 gap_ms: 2,
                 hold_us: 1000,
                 ssthresh_ms: 4,
@@ -443,13 +456,22 @@ fn detect_group_snapshots(log_content: &str) -> Vec<PacingGroupSnapshot> {
                 ssthresh_ms: 13,
             },
             PacingGroupSnapshot {
-                name: "HeavyApp (WPS/JetBrains/Steam)".to_string(),
+                name: "HeavyApp (WPS/JetBrains)".to_string(),
                 current_delay_ms: 13,
                 floor_ms: 13,
                 ceiling_ms: 30,
                 gap_ms: 2,
                 hold_us: 1000,
                 ssthresh_ms: 13,
+            },
+            PacingGroupSnapshot {
+                name: "SteamCEF (Steam/CEF)".to_string(),
+                current_delay_ms: 6,
+                floor_ms: 4,
+                ceiling_ms: 18,
+                gap_ms: 3,
+                hold_us: 1000,
+                ssthresh_ms: 6,
             },
             PacingGroupSnapshot {
                 name: "Default (GTK/Qt/Desktop)".to_string(),
