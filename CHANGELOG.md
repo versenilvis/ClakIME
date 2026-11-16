@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.9.2](https://github.com/versenilvis/ClakIME/releases/tag/v0.9.2) - 2026-11-16
+
+### Bug fixes
+
+- Allow surrounding text in url bar ([ce2062](https://github.com/versenilvis/ClakIME/commit/ce2062030d8fe2074cc9b85cb6aa390058af8960))
+- Honor calibrated custom profile and enhance doctor ui responsiveness ([449ce8](https://github.com/versenilvis/ClakIME/commit/449ce89ba6a071f829c228f95c41742627c67603))
+- Support informal abbreviations and loanwords with spelling check ([15b2e7](https://github.com/versenilvis/ClakIME/commit/15b2e776ed0b0c1e1bf6b60ac90c6e442e3e24b4))
+- Keep banner text left-aligned next to icon instead of centering ([f281d8](https://github.com/versenilvis/ClakIME/commit/f281d8d30894f812d399ba9b6681b97e61250e0c))
+
+### Features
+
+- Rollback version ([2b42b4](https://github.com/versenilvis/ClakIME/commit/2b42b40f56a02f2e26d6a90c78fb1d85f8f4379b))
+- Support z,f,w,j as consonants ([640436](https://github.com/versenilvis/ClakIME/commit/6404361dcbf0e9524d71b8332e3d27c5c6961c49))
+- Refine responsive spacing, row padding and window sizing ([aaf1e1](https://github.com/versenilvis/ClakIME/commit/aaf1e140a95b5c6312724c7bc626e3ad9c7cca00))
+
 ## [v0.9.1](https://github.com/versenilvis/ClakIME/releases/tag/v0.9.1) - 2026-11-16
 
 ### Bug fixes
