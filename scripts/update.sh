@@ -10,6 +10,7 @@ target_version=""
 force_update=0
 assume_yes=0
 build_from_source=0
+do_rollback=0
 tmp_dir=""
 
 # load shared path helpers if available
@@ -51,6 +52,9 @@ for arg in "$@"; do
         --yes|-y)
             assume_yes=1
             ;;
+        --rollback|-r)
+            do_rollback=1
+            ;;
         --version=*|--tag=*)
             target_version="${arg#*=}"
             ;;
@@ -63,6 +67,7 @@ for arg in "$@"; do
             echo "  -d, --dry-run, --simulate  Chạy giả lập kiểm tra quy trình cập nhật"
             echo "  -f, --force                Cập nhật đè phiên bản mới nhất ngay cả khi đang ở bản mới"
             echo "  -y, --yes                  Tự động đồng ý cập nhật qua trình quản lý gói nếu có"
+            echo "  -r, --rollback             Khôi phục về phiên bản trước đó"
             echo "      --version=<phiên bản>  Chỉ định phiên bản cụ thể cần update (ví dụ: v0.1.1)"
             echo "  -h, --help                 Hiển thị trợ giúp này"
             exit 0
@@ -317,6 +322,12 @@ detect_install_source() {
                 return
             fi
         done
+        for d in $(get_system_addon_dirs); do
+            if [ -f "$d/libclak.so" ] && pacman -Qo "$d/libclak.so" >/dev/null 2>&1; then
+                echo "aur"
+                return
+            fi
+        done
     fi
 
     # debian or ubuntu dpkg package
@@ -325,6 +336,12 @@ detect_install_source() {
             echo "dpkg"
             return
         fi
+        for d in $(get_system_addon_dirs); do
+            if [ -f "$d/libclak.so" ] && dpkg -S "$d/libclak.so" >/dev/null 2>&1; then
+                echo "dpkg"
+                return
+            fi
+        done
     fi
 
     # 2. nix package manager or flake
@@ -344,7 +361,7 @@ detect_install_source() {
     # 4. user local directory
     for d in $(get_user_addon_dirs); do
         if [ -f "$d/libclak.so" ]; then
-            echo "user"
+            echo "script-user"
             return
         fi
     done
@@ -352,7 +369,7 @@ detect_install_source() {
     # 5. system wide directory
     for d in $(get_system_addon_dirs); do
         if [ -f "$d/libclak.so" ]; then
-            echo "system"
+            echo "script-system"
             return
         fi
     done
@@ -499,6 +516,218 @@ EOF
     fi
 }
 
+# create atomic backup before updating
+create_backup() {
+    local cur_v="$1"
+    local next_v="$2"
+    local src_type="$3"
+
+    case "$src_type" in
+        aur|dpkg|nix)
+            return 0
+            ;;
+    esac
+
+    if [ -n "$cur_v" ] && [ -n "$next_v" ] && [ "$cur_v" = "$next_v" ]; then
+        return 0
+    fi
+
+    local cur_lib=""
+    if [ "$src_type" = "script-system" ] || [ "$src_type" = "system" ]; then
+        for d in $(get_system_addon_dirs); do
+            if [ -f "$d/libclak.so" ]; then
+                cur_lib="$d/libclak.so"
+                break
+            fi
+        done
+    else
+        for d in $(get_user_addon_dirs); do
+            if [ -f "$d/libclak.so" ]; then
+                cur_lib="$d/libclak.so"
+                break
+            fi
+        done
+    fi
+
+    [ -z "$cur_lib" ] || [ ! -f "$cur_lib" ] && return 0
+
+    local b_dir="${HOME}/.local/share/clak/backup"
+    local b_tmp="${HOME}/.local/share/clak/backup.tmp"
+
+    rm -rf "$b_tmp"
+    mkdir -p "$b_tmp"
+
+    install -m 755 "$cur_lib" "${b_tmp}/libclak.so"
+
+    for bin_path in "/usr/bin/clak" "${HOME}/.local/bin/clak"; do
+        if [ -f "$bin_path" ]; then
+            install -m 755 "$bin_path" "${b_tmp}/clak" 2>/dev/null || true
+            break
+        fi
+    done
+
+    for bin_path in "/usr/bin/clak-gui" "${HOME}/.local/bin/clak-gui"; do
+        if [ -f "$bin_path" ]; then
+            install -m 755 "$bin_path" "${b_tmp}/clak-gui" 2>/dev/null || true
+            break
+        fi
+    done
+
+    echo "$cur_v" > "${b_tmp}/version_prev"
+    echo "$src_type" > "${b_tmp}/install_source"
+    echo "$cur_v" > "${HOME}/.local/share/clak/version_prev"
+
+    rm -rf "$b_dir"
+    mv "$b_tmp" "$b_dir"
+}
+
+# execute rollback
+run_rollback() {
+    local source_type
+    source_type=$(detect_install_source)
+
+    log_step "$lbl_check" "Kiểm tra phương thức cài đặt: ${c_cyan}${source_type}${c_reset}"
+
+    if [ "$source_type" = "aur" ]; then
+        log_step "$lbl_aur" "Clak được quản lý bởi ${c_purple}Arch Linux (AUR / Pacman)${c_reset}"
+
+        local cache_dirs=(
+            "/var/cache/pacman/pkg"
+            "${HOME}/.cache/yay/clak"
+            "${HOME}/.cache/yay/clak-bin"
+            "${HOME}/.cache/paru/clone/clak"
+            "${HOME}/.cache/paru/clone/clak-bin"
+        )
+        local cur_ver
+        cur_ver=$(get_installed_version)
+
+        local candidate_pkg=""
+        for cd in "${cache_dirs[@]}"; do
+            if [ -d "$cd" ]; then
+                while IFS= read -r pkg_file; do
+                    if [ -n "$pkg_file" ] && [ -f "$pkg_file" ]; then
+                        local fname
+                        fname=$(basename "$pkg_file")
+                        if [[ "$fname" =~ ^clak(-bin|-git)?-([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+                            local p_ver="v${BASH_REMATCH[2]}"
+                            if [ "$p_ver" != "$cur_ver" ]; then
+                                candidate_pkg="$pkg_file"
+                                break 2
+                            fi
+                        fi
+                    fi
+                done < <(find "$cd" -maxdepth 1 \( -name "clak-*.pkg.tar.*" -o -name "clak-bin-*.pkg.tar.*" \) 2>/dev/null | sort -V -r)
+            fi
+        done
+
+        if [ -n "$candidate_pkg" ]; then
+            echo ""
+            log_step "$lbl_check" "Tìm thấy gói bản cũ trong cache: ${c_green}$(basename "$candidate_pkg")${c_reset}"
+            echo -e "  ${c_yellow}• Chuẩn bị hạ cấp an toàn qua pacman${c_reset}"
+            echo -e "  ${c_yellow}• Lưu ý: Để tránh yay -Syu tự động nâng lại bản mới, bạn có thể thêm 'IgnorePkg = clak' vào /etc/pacman.conf${c_reset}"
+            echo ""
+            local aur_reply="y"
+            if [ "$assume_yes" -eq 0 ]; then
+                read -r -p "Bạn có muốn chạy 'sudo pacman -U ${candidate_pkg}' ngay bây giờ? [Y/n] " aur_reply < /dev/tty || aur_reply="y"
+            fi
+            case "$aur_reply" in
+                [yY][eE][sS]|[yY]|"")
+                    run_sudo pacman -U "$candidate_pkg"
+                    spin_step "Đang nạp lại daemon Fcitx5..." 0.6
+                    reload_fcitx5
+                    printf "\r\033[K\n"
+                    echo -e "${c_green}Đã hạ cấp Clak thành công!${c_reset}"
+                    echo ""
+                    exit 0
+                    ;;
+                *)
+                    echo "Đã hủy thao tác rollback"
+                    exit 0
+                    ;;
+            esac
+        else
+            echo ""
+            log_step "$lbl_warn" "Không tìm thấy gói phiên bản cũ trong cache pacman/AUR"
+            echo -e "  ${c_yellow}Vì Clak được quản lý qua AUR, để đảm bảo tính toàn vẹn của pacman database:${c_reset}"
+            echo -e "  ${c_bold}  1. Khuyên dùng lệnh: ${c_cyan}downgrade clak${c_reset}"
+            echo -e "  ${c_bold}  2. Hoặc checkout commit cũ trên AUR và chạy: ${c_cyan}makepkg -si${c_reset}"
+            echo -e "  ${c_dim}Lưu ý: Không tự ý dùng curl ghi đè file trong /usr để tránh xung đột pacman database.${c_reset}"
+            echo ""
+            exit 0
+        fi
+    fi
+
+    if [ "$source_type" = "dpkg" ] || [ "$source_type" = "nix" ]; then
+        log_step "$lbl_warn" "Clak được quản lý bởi ${source_type}. Vui lòng dùng trình quản lý gói tương ứng để rollback"
+        exit 0
+    fi
+
+    # check local backup
+    local backup_dir="${HOME}/.local/share/clak/backup"
+    if [ -f "${backup_dir}/libclak.so" ] && [ -f "${backup_dir}/version_prev" ]; then
+        local prev_ver
+        prev_ver=$(cat "${backup_dir}/version_prev" | tr -d ' \n')
+        local orig_source="script-user"
+        [ -f "${backup_dir}/install_source" ] && orig_source=$(cat "${backup_dir}/install_source" | tr -d ' \n')
+
+        log_step "$lbl_check" "Tìm thấy bản sao lưu cục bộ: ${c_green}${prev_ver}${c_reset}"
+
+        if [ "$orig_source" = "script-system" ] || [ "$orig_source" = "system" ]; then
+            echo "Yêu cầu quyền sudo để khôi phục file hệ thống (/usr)..."
+            run_sudo install -d -m 755 "/usr/lib/fcitx5"
+            run_sudo install -m 755 "${backup_dir}/libclak.so" "/usr/lib/fcitx5/libclak.so"
+            if [ -f "${backup_dir}/clak" ]; then
+                run_sudo install -d -m 755 "/usr/bin"
+                run_sudo install -m 755 "${backup_dir}/clak" "/usr/bin/clak"
+            fi
+            if [ -f "${backup_dir}/clak-gui" ]; then
+                run_sudo install -d -m 755 "/usr/bin"
+                run_sudo install -m 755 "${backup_dir}/clak-gui" "/usr/bin/clak-gui"
+            fi
+        else
+            install -d -m 755 "${HOME}/.local/lib/fcitx5"
+            install -m 755 "${backup_dir}/libclak.so" "${HOME}/.local/lib/fcitx5/libclak.so"
+            if [ -f "${backup_dir}/clak" ]; then
+                install -d -m 755 "${HOME}/.local/bin"
+                install -m 755 "${backup_dir}/clak" "${HOME}/.local/bin/clak"
+            fi
+            if [ -f "${backup_dir}/clak-gui" ]; then
+                install -d -m 755 "${HOME}/.local/bin"
+                install -m 755 "${backup_dir}/clak-gui" "${HOME}/.local/bin/clak-gui"
+            fi
+        fi
+
+        mkdir -p "${HOME}/.local/share/clak"
+        echo "$prev_ver" > "$version_file"
+        rm -rf "$backup_dir"
+        rm -f "${HOME}/.local/share/clak/version_prev"
+
+        spin_step "Đang nạp lại daemon Fcitx5..." 0.6
+        reload_fcitx5
+        printf "\r\033[K\n"
+        echo -e "${c_green}Đã khôi phục thành công về phiên bản ${prev_ver}!${c_reset}"
+        echo ""
+        exit 0
+    fi
+
+    # fallback to previous version tag
+    local version_prev_file="${HOME}/.local/share/clak/version_prev"
+    if [ -f "$version_prev_file" ]; then
+        local target_v
+        target_v=$(cat "$version_prev_file" | tr -d ' \n')
+        if [ -n "$target_v" ]; then
+            log_step "$lbl_fetch" "Không có backup local, tải lại phiên bản trước đó: ${c_cyan}${target_v}${c_reset}"
+            target_version="$target_v"
+            rm -f "$version_prev_file"
+            run_update
+            exit 0
+        fi
+    fi
+
+    log_step "$lbl_err" "Không tìm thấy bản sao lưu hoặc thông tin phiên bản trước đó để rollback"
+    exit 1
+}
+
 # simulation flow
 run_simulation() {
     local cur_ver
@@ -518,7 +747,7 @@ run_simulation() {
         git)
             log_step "$lbl_check" "Phát hiện mã nguồn Clak từ ${c_accent}Git repository${c_reset}"
             ;;
-        system)
+        system|script-system)
             log_step "$lbl_check" "Phát hiện Clak cài đặt toàn hệ thống: ${c_accent}/usr/lib/fcitx5${c_reset}"
             ;;
         *)
@@ -864,50 +1093,48 @@ run_update() {
         err "Gói cập nhật không hợp lệ: thiếu libclak.so"
     fi
 
+    # create atomic backup of current files before installing new ones
+    create_backup "$cur_ver" "$latest_tag" "$source_type"
+
     # 5. install files
     local lib_dest="${HOME}/.local/lib/fcitx5"
     local addon_dest="${HOME}/.local/share/fcitx5/addon"
     local im_dest="${HOME}/.local/share/fcitx5/inputmethod"
 
-    if [ "$source_type" = "system" ]; then
+    if [ "$source_type" = "system" ] || [ "$source_type" = "script-system" ]; then
         lib_dest="/usr/lib/fcitx5"
         addon_dest="/usr/share/fcitx5/addon"
         im_dest="/usr/share/fcitx5/inputmethod"
 
         echo "Yêu cầu quyền sudo để ghi đè file hệ thống (/usr)..."
-        run_sudo mkdir -p "$lib_dest" "$addon_dest" "$im_dest"
-        run_sudo cp "$lib_src" "${lib_dest}/libclak.so"
-        run_sudo cp "$addon_src" "${addon_dest}/clak.conf"
-        run_sudo cp "$im_src" "${im_dest}/clak.conf"
-        run_sudo chmod 755 "${lib_dest}/libclak.so"
-        run_sudo chmod 644 "${addon_dest}/clak.conf" "${im_dest}/clak.conf"
+        run_sudo install -d -m 755 "$lib_dest" "$addon_dest" "$im_dest"
+        run_sudo install -m 755 "$lib_src" "${lib_dest}/libclak.so"
+        run_sudo install -m 644 "$addon_src" "${addon_dest}/clak.conf"
+        run_sudo install -m 644 "$im_src" "${im_dest}/clak.conf"
 
         # create symlinks for known system addon directories
         for d in $(get_system_addon_dirs); do
             if [ "$d" != "$lib_dest" ]; then
                 parent_dir="$(dirname "$d")"
                 if [ -d "$parent_dir" ]; then
-                    run_sudo mkdir -p "$d"
+                    run_sudo install -d -m 755 "$d"
                     run_sudo ln -sf "${lib_dest}/libclak.so" "$d/libclak.so" 2>/dev/null || true
                 fi
             fi
         done
 
         if [ -f "$cli_src" ]; then
-            run_sudo mkdir -p "/usr/bin"
-            run_sudo cp "$cli_src" "/usr/bin/clak"
-            run_sudo chmod 755 "/usr/bin/clak"
+            run_sudo install -d -m 755 "/usr/bin"
+            run_sudo install -m 755 "$cli_src" "/usr/bin/clak"
         fi
         if [ -f "$gui_src" ]; then
-            run_sudo mkdir -p "/usr/bin"
-            run_sudo cp "$gui_src" "/usr/bin/clak-gui"
-            run_sudo chmod 755 "/usr/bin/clak-gui"
+            run_sudo install -d -m 755 "/usr/bin"
+            run_sudo install -m 755 "$gui_src" "/usr/bin/clak-gui"
         fi
         if [ -f "$desktop_src" ]; then
-            run_sudo mkdir -p "/usr/share/applications"
-            run_sudo cp "$desktop_src" "/usr/share/applications/clak-gui.desktop"
+            run_sudo install -d -m 755 "/usr/share/applications"
+            run_sudo install -m 644 "$desktop_src" "/usr/share/applications/clak-gui.desktop"
             run_sudo sed -i "s|^Exec=.*|Exec=/usr/bin/clak-gui|" "/usr/share/applications/clak-gui.desktop" 2>/dev/null || true
-            run_sudo chmod 644 "/usr/share/applications/clak-gui.desktop"
             command -v update-desktop-database >/dev/null 2>&1 && run_sudo update-desktop-database "/usr/share/applications" 2>/dev/null || true
         fi
         if [ -d "$icons_src" ]; then
@@ -917,45 +1144,39 @@ run_update() {
             fi
         fi
     else
-        mkdir -p "$lib_dest" "$addon_dest" "$im_dest"
-        cp "$lib_src" "${lib_dest}/libclak.so"
-        cp "$addon_src" "${addon_dest}/clak.conf"
-        cp "$im_src" "${im_dest}/clak.conf"
-        chmod 755 "${lib_dest}/libclak.so"
-        chmod 644 "${addon_dest}/clak.conf" "${im_dest}/clak.conf"
+        install -d -m 755 "$lib_dest" "$addon_dest" "$im_dest"
+        install -m 755 "$lib_src" "${lib_dest}/libclak.so"
+        install -m 644 "$addon_src" "${addon_dest}/clak.conf"
+        install -m 644 "$im_src" "${im_dest}/clak.conf"
 
-        # for user-level install, addon configuration must point to the absolute library path
-        # because fcitx5 only resolves relative Library paths against system PKGLIBDIR
+        # for user-level install, addon configuration must point to absolute library path
         sed -i "s|^Library=.*|Library=${lib_dest}/libclak|" "${addon_dest}/clak.conf"
 
-        # create symlinks for known user addon directories (e.g. Ubuntu multiarch)
+        # create symlinks for known user addon directories
         for d in $(get_user_addon_dirs); do
             if [ "$d" != "$lib_dest" ]; then
-                mkdir -p "$d"
+                install -d -m 755 "$d"
                 ln -sf "${lib_dest}/libclak.so" "$d/libclak.so" 2>/dev/null || true
             fi
         done
 
         if [ -f "$cli_src" ]; then
-            mkdir -p "${HOME}/.local/bin"
-            cp "$cli_src" "${HOME}/.local/bin/clak"
-            chmod 755 "${HOME}/.local/bin/clak"
+            install -d -m 755 "${HOME}/.local/bin"
+            install -m 755 "$cli_src" "${HOME}/.local/bin/clak"
         fi
         if [ -f "$gui_src" ]; then
-            mkdir -p "${HOME}/.local/bin"
-            cp "$gui_src" "${HOME}/.local/bin/clak-gui"
-            chmod 755 "${HOME}/.local/bin/clak-gui"
+            install -d -m 755 "${HOME}/.local/bin"
+            install -m 755 "$gui_src" "${HOME}/.local/bin/clak-gui"
         fi
         if [ -f "$desktop_src" ]; then
-            mkdir -p "${HOME}/.local/share/applications"
-            cp "$desktop_src" "${HOME}/.local/share/applications/clak-gui.desktop"
+            install -d -m 755 "${HOME}/.local/share/applications"
+            install -m 644 "$desktop_src" "${HOME}/.local/share/applications/clak-gui.desktop"
             # use absolute path for Exec so desktop environment finds binary without ~/.local/bin in PATH
             sed -i "s|^Exec=.*|Exec=${HOME}/.local/bin/clak-gui|" "${HOME}/.local/share/applications/clak-gui.desktop" 2>/dev/null || true
-            chmod 644 "${HOME}/.local/share/applications/clak-gui.desktop"
             command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "${HOME}/.local/share/applications" 2>/dev/null || true
         fi
         if [ -d "$icons_src" ]; then
-            mkdir -p "${HOME}/.local/share/icons"
+            install -d -m 755 "${HOME}/.local/share/icons"
             cp -r "$icons_src"/* "${HOME}/.local/share/icons/" 2>/dev/null || true
             if command -v gtk-update-icon-cache >/dev/null 2>&1; then
                 for icondir in "${HOME}/.local/share/icons"/*; do
@@ -965,10 +1186,10 @@ run_update() {
         fi
     fi
 
-    mkdir -p "${HOME}/.local/share/clak"
+    install -d -m 755 "${HOME}/.local/share/clak"
     echo "$latest_tag" > "$version_file"
     if [ -f "${script_dir}/update.sh" ]; then
-        cp "${script_dir}/update.sh" "${HOME}/.local/share/clak/update.sh" 2>/dev/null || true
+        install -m 755 "${script_dir}/update.sh" "${HOME}/.local/share/clak/update.sh" 2>/dev/null || true
     fi
 
     # clean up temporary archive directory
@@ -994,7 +1215,9 @@ run_update() {
 }
 
 # main router
-if [ "$dry_run" -eq 1 ]; then
+if [ "$do_rollback" -eq 1 ]; then
+    run_rollback
+elif [ "$dry_run" -eq 1 ]; then
     run_simulation
 else
     run_update

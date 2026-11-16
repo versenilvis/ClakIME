@@ -69,6 +69,9 @@ enum Commands {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
+
+    #[command(about = "Rollback Clak to previous installed version")]
+    Rollback,
 }
 
 #[derive(Args, Debug)]
@@ -111,6 +114,25 @@ fn main() {
         }
         Commands::Gui { args } => {
             commands::gui::execute(args);
+        }
+        Commands::Rollback => {
+            handle_rollback();
+        }
+    }
+}
+
+fn handle_rollback() {
+    let script_cmd = "if [ -f \"$HOME/.local/share/clak/update.sh\" ]; then bash \"$HOME/.local/share/clak/update.sh\" --rollback; else curl -fsSL https://raw.githubusercontent.com/versenilvis/ClakIME/main/scripts/update.sh | bash -s -- --rollback; fi";
+    let status = std::process::Command::new("bash")
+        .args(["-c", script_cmd])
+        .status();
+
+    match status {
+        Ok(s) if s.success() => {}
+        Ok(s) => std::process::exit(s.code().unwrap_or(1)),
+        Err(e) => {
+            eprintln!("Lỗi khi khởi chạy rollback: {}", e);
+            std::process::exit(1);
         }
     }
 }

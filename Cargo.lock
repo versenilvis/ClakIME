@@ -677,6 +677,7 @@ dependencies = [
  "clak-diagnostics",
  "clak-engine",
  "serde",
+ "serde_json",
  "slint",
  "slint-build",
  "toml 0.8.23",

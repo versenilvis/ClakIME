@@ -1159,6 +1159,316 @@ fn save_config(
     let _ = cfg_to_save.save();
 }
 
+fn check_can_rollback() -> (bool, bool, String, Option<String>) {
+    let home = match std::env::var("HOME") {
+        Ok(h) if !h.is_empty() => h,
+        _ => return (false, false, String::new(), None),
+    };
+
+    // check aur or pacman cache if installed via pacman
+    let is_pacman = std::process::Command::new("pacman")
+        .args(["-Qi", "clak"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+        || std::process::Command::new("pacman")
+            .args(["-Qi", "clak-bin"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+
+    if is_pacman {
+        let cache_dirs = [
+            std::path::PathBuf::from("/var/cache/pacman/pkg"),
+            std::path::Path::new(&home).join(".cache/yay/clak"),
+            std::path::Path::new(&home).join(".cache/yay/clak-bin"),
+            std::path::Path::new(&home).join(".cache/paru/clone/clak"),
+            std::path::Path::new(&home).join(".cache/paru/clone/clak-bin"),
+        ];
+
+        // get current installed pacman version
+        let cur_pkg_ver = std::process::Command::new("pacman")
+            .args(["-Q", "clak-bin"])
+            .output()
+            .ok()
+            .and_then(|o| if o.status.success() { String::from_utf8(o.stdout).ok() } else { None })
+            .or_else(|| {
+                std::process::Command::new("pacman")
+                    .args(["-Q", "clak"])
+                    .output()
+                    .ok()
+                    .and_then(|o| if o.status.success() { String::from_utf8(o.stdout).ok() } else { None })
+            })
+            .and_then(|out| out.split_whitespace().nth(1).map(|v| v.split('-').next().unwrap_or("").to_string()))
+            .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
+
+        let mut candidates: Vec<String> = Vec::new();
+        for cd in &cache_dirs {
+            if let Ok(entries) = std::fs::read_dir(cd) {
+                for entry in entries.flatten() {
+                    let fname = entry.file_name().to_string_lossy().to_string();
+                    if fname.contains(".pkg.tar.") {
+                        let prefixes = ["clak-bin-", "clak-git-", "clak-"];
+                        for prefix in prefixes {
+                            if let Some(rest) = fname.strip_prefix(prefix) {
+                                if let Some(dash_idx) = rest.find('-') {
+                                    let v_str = &rest[..dash_idx];
+                                    if v_str.chars().all(|c| c.is_ascii_digit() || c == '.') && v_str.contains('.') {
+                                        candidates.push(v_str.to_string());
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // sort semver descending and find latest version strictly less than current
+        let parse_semver = |v: &str| -> (u32, u32, u32) {
+            let mut parts = v.split('.').filter_map(|s| s.parse::<u32>().ok());
+            (parts.next().unwrap_or(0), parts.next().unwrap_or(0), parts.next().unwrap_or(0))
+        };
+
+        candidates.sort_by(|a, b| parse_semver(b).cmp(&parse_semver(a)));
+        candidates.dedup();
+
+        let cur_parsed = parse_semver(&cur_pkg_ver);
+        for cand in candidates {
+            if parse_semver(&cand) < cur_parsed {
+                return (true, true, format!("Bản trước trong cache: v{}", cand), None);
+            }
+        }
+        return (true, false, "Không có gói cũ hơn trong cache pacman/AUR".to_string(), None);
+    }
+
+    // check local backup
+    let backup_dir = std::path::Path::new(&home).join(".local/share/clak/backup");
+    let version_prev_file = backup_dir.join("version_prev");
+    let lib_so = backup_dir.join("libclak.so");
+    if lib_so.exists() && version_prev_file.exists() {
+        if let Ok(prev_ver) = std::fs::read_to_string(&version_prev_file) {
+            let ver = prev_ver.trim();
+            if !ver.is_empty() {
+                return (false, true, format!("Bản trước: {}", ver), Some(ver.to_string()));
+            }
+        }
+    }
+
+    // check standalone version_prev file
+    let standalone_prev = std::path::Path::new(&home).join(".local/share/clak/version_prev");
+    if standalone_prev.exists() {
+        if let Ok(prev_ver) = std::fs::read_to_string(&standalone_prev) {
+            let ver = prev_ver.trim();
+            if !ver.is_empty() {
+                return (false, false, format!("Bản trước: {}", ver), Some(ver.to_string()));
+            }
+        }
+    }
+
+    (false, false, String::new(), None)
+}
+
+#[derive(Clone, Debug)]
+struct VersionItem {
+    label: String,
+    target: String,
+    is_backup: bool,
+    is_pacman_pkg: bool,
+}
+
+fn fetch_available_versions(home: &str, is_pacman: bool, prev_backup_ver: Option<&str>) -> Vec<VersionItem> {
+    let cur_pkg_ver = env!("CARGO_PKG_VERSION");
+
+    let mut items = vec![VersionItem {
+        label: "Mới nhất (Hiện tại)".to_string(),
+        target: String::new(),
+        is_backup: false,
+        is_pacman_pkg: false,
+    }];
+
+    let parse_semver = |v: &str| -> (u32, u32, u32) {
+        let trimmed = v.trim_start_matches('v');
+        let mut parts = trimmed.split('.').filter_map(|s| s.parse::<u32>().ok());
+        (parts.next().unwrap_or(0), parts.next().unwrap_or(0), parts.next().unwrap_or(0))
+    };
+    let cur_parsed = parse_semver(cur_pkg_ver);
+
+    if is_pacman {
+        let cache_dirs = [
+            std::path::PathBuf::from("/var/cache/pacman/pkg"),
+            std::path::Path::new(home).join(".cache/yay/clak"),
+            std::path::Path::new(home).join(".cache/yay/clak-bin"),
+            std::path::Path::new(home).join(".cache/paru/clone/clak"),
+            std::path::Path::new(home).join(".cache/paru/clone/clak-bin"),
+        ];
+
+        let mut found: Vec<((u32, u32, u32), String, String)> = Vec::new();
+        for cd in &cache_dirs {
+            if let Ok(entries) = std::fs::read_dir(cd) {
+                for entry in entries.flatten() {
+                    let fname = entry.file_name().to_string_lossy().to_string();
+                    if fname.contains(".pkg.tar.") {
+                        let prefixes = ["clak-bin-", "clak-git-", "clak-"];
+                        for prefix in prefixes {
+                            if let Some(rest) = fname.strip_prefix(prefix) {
+                                if let Some(dash_idx) = rest.find('-') {
+                                    let v_str = &rest[..dash_idx];
+                                    let sem = parse_semver(v_str);
+                                    if sem < cur_parsed && sem >= (0, 7, 0) {
+                                        found.push((sem, format!("v{}", v_str), entry.path().to_string_lossy().to_string()));
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        found.sort_by(|a, b| b.0.cmp(&a.0));
+        let mut seen = std::collections::HashSet::new();
+        for (_, v_str, path) in found {
+            if seen.insert(v_str.clone()) {
+                items.push(VersionItem {
+                    label: format!("{} (Trong cache)", v_str),
+                    target: path,
+                    is_backup: false,
+                    is_pacman_pkg: true,
+                });
+            }
+        }
+        return items;
+    }
+
+    // script install branch: github releases + local backup
+    let cache_dir = std::path::Path::new(home).join(".local/share/clak");
+    let cache_file = cache_dir.join("releases_cache.json");
+    let mut json_str = String::new();
+
+    let is_cache_valid = if let Ok(meta) = std::fs::metadata(&cache_file) {
+        if let Ok(mtime) = meta.modified() {
+            if let Ok(elapsed) = mtime.elapsed() {
+                elapsed.as_secs() < 3600
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    if is_cache_valid {
+        if let Ok(content) = std::fs::read_to_string(&cache_file) {
+            json_str = content;
+        }
+    }
+
+    if json_str.is_empty() {
+        let output = std::process::Command::new("curl")
+            .args([
+                "-fsSL",
+                "--max-time",
+                "4",
+                "-H",
+                "Accept: application/vnd.github.v3+json",
+                "-H",
+                "User-Agent: clak-gui",
+                "https://api.github.com/repos/versenilvis/ClakIME/releases",
+            ])
+            .output();
+
+        if let Ok(out) = output {
+            if out.status.success() {
+                if let Ok(s) = String::from_utf8(out.stdout) {
+                    if !s.trim().is_empty() {
+                        let _ = std::fs::create_dir_all(&cache_dir);
+                        let _ = std::fs::write(&cache_file, &s);
+                        json_str = s;
+                    }
+                }
+            }
+        }
+    }
+
+    // fallback to stale cache if it exists
+    if json_str.is_empty() {
+        if let Ok(content) = std::fs::read_to_string(&cache_file) {
+            json_str = content;
+        }
+    }
+
+    let min_semver = (0, 8, 0);
+    let cur_tag = format!("v{}", cur_pkg_ver);
+
+    if let Ok(releases) = serde_json::from_str::<Vec<serde_json::Value>>(&json_str) {
+        for r in releases {
+            let is_draft = r.get("draft").and_then(|v| v.as_bool()).unwrap_or(false);
+            let is_prerelease = r.get("prerelease").and_then(|v| v.as_bool()).unwrap_or(false);
+            if is_draft || is_prerelease {
+                continue;
+            }
+
+            let tag = r.get("tag_name").and_then(|v| v.as_str()).unwrap_or("");
+            if tag.is_empty() || tag == cur_tag {
+                continue;
+            }
+
+            if parse_semver(tag) < min_semver {
+                continue;
+            }
+
+            let has_tarball = r.get("assets").and_then(|v| v.as_array()).map(|arr| {
+                arr.iter().any(|a| {
+                    let name = a.get("name").and_then(|n| n.as_str()).unwrap_or("");
+                    name.contains("x86_64") && name.ends_with(".tar.gz")
+                })
+            }).unwrap_or(false);
+
+            if !has_tarball {
+                continue;
+            }
+
+            let is_backup = Some(tag) == prev_backup_ver;
+            let label = if is_backup {
+                format!("{} (Bản sao lưu)", tag)
+            } else {
+                tag.to_string()
+            };
+
+            items.push(VersionItem {
+                label,
+                target: tag.to_string(),
+                is_backup,
+                is_pacman_pkg: false,
+            });
+
+            if items.len() >= 8 {
+                break;
+            }
+        }
+    }
+
+    if items.len() == 1 {
+        if let Some(prev) = prev_backup_ver {
+            if prev != cur_tag {
+                items.push(VersionItem {
+                    label: format!("{} (Bản sao lưu)", prev),
+                    target: prev.to_string(),
+                    is_backup: true,
+                    is_pacman_pkg: false,
+                });
+            }
+        }
+    }
+
+    items
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = ClakConfig::load();
     let main_window = MainWindow::new()?;
@@ -1170,6 +1480,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     main_window.set_git_commit_date(env!("GIT_DATE").into());
     main_window.set_auto_update_enabled(cfg.update.auto_update);
     main_window.set_update_poll_index(cfg.update.poll_index);
+
+    let (is_pacman, can_rb, rb_text, prev_backup_ver) = check_can_rollback();
+    main_window.set_is_pacman(is_pacman);
+    main_window.set_can_rollback(can_rb);
+    main_window.set_rollback_version_text(rb_text.into());
+
+    let home_dir = std::env::var("HOME").unwrap_or_default();
+    let version_items = fetch_available_versions(&home_dir, is_pacman, prev_backup_ver.as_deref());
+    let slint_versions: Vec<slint::SharedString> = version_items.iter().map(|item| item.label.as_str().into()).collect();
+    let model = std::rc::Rc::new(slint::VecModel::from(slint_versions));
+    main_window.set_available_versions(model.clone().into());
     let method_idx = match cfg.general.method.as_str() {
         "vni" => 1,
         "viqr" => 2,
@@ -1720,12 +2041,190 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(w) = win_weak_thread.upgrade() {
                     w.set_is_updating(false);
                     w.set_reload_needed(is_deleted);
+                    let (_, can_rb, rb_text, _) = check_can_rollback();
+                    w.set_can_rollback(can_rb);
+                    w.set_rollback_version_text(rb_text.into());
                     match res {
                         Ok(s) if s.success() => {
                             w.set_update_status_text("Cập nhật hoàn tất!".into());
                         }
                         _ => {
                             w.set_update_status_text("Quá trình cập nhật đã kết thúc".into());
+                        }
+                    }
+                }
+            });
+        });
+    });
+
+    let win_rollback = main_window.as_weak();
+    main_window.on_rollback_requested(move || {
+        let Some(window) = win_rollback.upgrade() else {
+            return;
+        };
+        window.set_is_updating(true);
+        window.set_update_status_text("Đang thực hiện rollback phiên bản...".into());
+
+        let win_weak_thread = win_rollback.clone();
+        std::thread::spawn(move || {
+            let terminals = [
+                "ptyxis",
+                "kgx",
+                "gnome-terminal",
+                "kitty",
+                "alacritty",
+                "foot",
+                "wezterm",
+                "konsole",
+                "xfce4-terminal",
+                "x-terminal-emulator",
+                "xterm",
+            ];
+            let term = terminals.iter().find(|&&t| {
+                std::process::Command::new("which")
+                    .arg(t)
+                    .output()
+                    .map(|o| o.status.success())
+                    .unwrap_or(false)
+            });
+
+            let script_cmd = "if [ -f \"$HOME/.local/share/clak/update.sh\" ]; then bash \"$HOME/.local/share/clak/update.sh\" --rollback; else curl -fsSL https://raw.githubusercontent.com/versenilvis/ClakIME/main/scripts/update.sh | bash -s -- --rollback; fi; echo ''; read -p 'Nhấn Enter để đóng...' dummy";
+
+            let res = if let Some(&term_cmd) = term {
+                let mut cmd = std::process::Command::new(term_cmd);
+                match term_cmd {
+                    "gnome-terminal" | "kgx" | "ptyxis" | "kitty" => {
+                        cmd.args(["--", "bash", "-c", script_cmd]);
+                    }
+                    "foot" => {
+                        cmd.args(["bash", "-c", script_cmd]);
+                    }
+                    "wezterm" => {
+                        cmd.args(["start", "--", "bash", "-c", script_cmd]);
+                    }
+                    _ => {
+                        cmd.args(["-e", "bash", "-c", script_cmd]);
+                    }
+                }
+                cmd.status()
+            } else {
+                std::process::Command::new("bash")
+                    .args(["-c", script_cmd])
+                    .status()
+            };
+
+            let daemon = clak_diagnostics::check_daemon();
+            let is_deleted = if daemon.fcitx5_running {
+                let memory = clak_diagnostics::check_memory(&daemon.fcitx5_pids);
+                memory.is_deleted_inode
+            } else {
+                false
+            };
+
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(w) = win_weak_thread.upgrade() {
+                    w.set_is_updating(false);
+                    w.set_reload_needed(is_deleted);
+                    let (_, can_rb, rb_text, _) = check_can_rollback();
+                    w.set_can_rollback(can_rb);
+                    w.set_rollback_version_text(rb_text.into());
+                    match res {
+                        Ok(s) if s.success() => {
+                            w.set_update_status_text("Đã hoàn tất rollback!".into());
+                        }
+                        _ => {
+                            w.set_update_status_text("Quá trình rollback đã kết thúc".into());
+                        }
+                    }
+                }
+            });
+        });
+    });
+
+    let win_install_ver = main_window.as_weak();
+    let items_clone = version_items.clone();
+    main_window.on_install_version_requested(move |idx| {
+        let Some(window) = win_install_ver.upgrade() else {
+            return;
+        };
+        let idx = idx as usize;
+        let Some(item) = items_clone.get(idx).cloned() else {
+            return;
+        };
+
+        window.set_is_updating(true);
+        window.set_update_status_text(format!("Đang cài đặt {}...", item.label).into());
+
+        let win_weak_thread = win_install_ver.clone();
+        std::thread::spawn(move || {
+            let terminals = [
+                "ptyxis", "kgx", "gnome-terminal", "kitty", "alacritty",
+                "foot", "wezterm", "konsole", "xfce4-terminal",
+                "x-terminal-emulator", "xterm",
+            ];
+            let term = terminals.iter().find(|&&t| {
+                std::process::Command::new("which")
+                    .arg(t)
+                    .output()
+                    .map(|o| o.status.success())
+                    .unwrap_or(false)
+            });
+
+            let script_cmd = if item.is_pacman_pkg {
+                format!(
+                    "echo 'Hạ cấp gói pacman từ cache: {0}'; sudo pacman -U \"{1}\"; echo ''; read -p 'Nhấn Enter để đóng...' dummy",
+                    item.label, item.target
+                )
+            } else if item.is_backup {
+                "if [ -f \"$HOME/.local/share/clak/update.sh\" ]; then bash \"$HOME/.local/share/clak/update.sh\" --rollback; else curl -fsSL https://raw.githubusercontent.com/versenilvis/ClakIME/main/scripts/update.sh | bash -s -- --rollback; fi; echo ''; read -p 'Nhấn Enter để đóng...' dummy".to_string()
+            } else {
+                format!(
+                    "if [ -f \"$HOME/.local/share/clak/update.sh\" ]; then bash \"$HOME/.local/share/clak/update.sh\" --version={0}; else curl -fsSL https://raw.githubusercontent.com/versenilvis/ClakIME/main/scripts/update.sh | bash -s -- --version={0}; fi; echo ''; read -p 'Nhấn Enter để đóng...' dummy",
+                    item.target
+                )
+            };
+
+            let res = if let Some(&term_cmd) = term {
+                let mut cmd = std::process::Command::new(term_cmd);
+                match term_cmd {
+                    "gnome-terminal" | "kgx" | "ptyxis" | "kitty" => {
+                        cmd.args(["--", "bash", "-c", &script_cmd]);
+                    }
+                    "foot" => {
+                        cmd.args(["bash", "-c", &script_cmd]);
+                    }
+                    "wezterm" => {
+                        cmd.args(["start", "--", "bash", "-c", &script_cmd]);
+                    }
+                    _ => {
+                        cmd.args(["-e", "bash", "-c", &script_cmd]);
+                    }
+                }
+                cmd.status()
+            } else {
+                std::process::Command::new("bash")
+                    .args(["-c", &script_cmd])
+                    .status()
+            };
+
+            let daemon = clak_diagnostics::check_daemon();
+            let is_deleted = if daemon.fcitx5_running {
+                let memory = clak_diagnostics::check_memory(&daemon.fcitx5_pids);
+                memory.is_deleted_inode
+            } else {
+                false
+            };
+
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(w) = win_weak_thread.upgrade() {
+                    w.set_is_updating(false);
+                    w.set_reload_needed(is_deleted);
+                    match res {
+                        Ok(s) if s.success() => {
+                            w.set_update_status_text(format!("Đã chuyển sang {}!", item.label).into());
+                        }
+                        _ => {
+                            w.set_update_status_text("Quá trình cài đặt đã kết thúc".into());
                         }
                     }
                 }

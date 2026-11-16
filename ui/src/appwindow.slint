@@ -92,6 +92,11 @@ export component MainWindow inherits Window {
     in-out property <int> update_poll_index: 4;
     in-out property <string> update_status_text: "";
     in-out property <bool> is_updating: false;
+    in-out property <bool> is_pacman: false;
+    in-out property <[string]> available_versions: ["Mới nhất (Hiện tại)"];
+    in-out property <int> selected_version_index: 0;
+    in-out property <bool> can_rollback: false;
+    in-out property <string> rollback_version_text: "";
     in-out property <bool> reload_needed: false;
     in-out property <string> reload_status_text: "";
     in-out property <bool> is_reloading: false;
@@ -149,6 +154,8 @@ export component MainWindow inherits Window {
     callback remove_macro(int);
     callback reset_defaults_requested();
     callback check_update_requested();
+    callback rollback_requested();
+    callback install_version_requested(int);
     callback restart_fcitx5_requested();
     callback uninstall_requested();
 
@@ -449,6 +456,11 @@ export component MainWindow inherits Window {
                             update_poll_index <=> root.update_poll_index;
                             update_status_text: root.update_status_text;
                             is_updating: root.is_updating;
+                            is_pacman: root.is_pacman;
+                            available_versions: root.available_versions;
+                            selected_version_index <=> root.selected_version_index;
+                            can_rollback: root.can_rollback;
+                            rollback_version_text: root.rollback_version_text;
                             reload_needed: root.reload_needed;
                             reload_status_text: root.reload_status_text;
                             is_reloading: root.is_reloading;
@@ -456,6 +468,8 @@ export component MainWindow inherits Window {
                             open_url(url) => { root.open_url(url); }
                             reset_defaults => { root.reset_defaults_requested(); }
                             check_update_requested => { root.check_update_requested(); }
+                            rollback_requested => { root.rollback_requested(); }
+                            install_version_requested(idx) => { root.install_version_requested(idx); }
                             restart_fcitx5_requested => { root.restart_fcitx5_requested(); }
                             uninstall_requested => { root.uninstall_requested(); }
                         }

@@ -17,6 +17,11 @@ export component TabAbout inherits VerticalLayout {
     in-out property <int> update_poll_index: 4;
     in-out property <string> update_status_text: "";
     in-out property <bool> is_updating: false;
+    in-out property <bool> is_pacman: false;
+    in-out property <[string]> available_versions: ["Mới nhất (Hiện tại)"];
+    in-out property <int> selected_version_index: 0;
+    in-out property <bool> can_rollback: false;
+    in-out property <string> rollback_version_text: "";
     in-out property <bool> reload_needed: false;
     in-out property <string> reload_status_text: "";
     in-out property <bool> is_reloading: false;
@@ -25,6 +30,8 @@ export component TabAbout inherits VerticalLayout {
     callback open_url(string);
     callback reset_defaults();
     callback check_update_requested();
+    callback rollback_requested();
+    callback install_version_requested(int);
     callback restart_fcitx5_requested();
     callback uninstall_requested();
 
@@ -148,14 +155,13 @@ export component TabAbout inherits VerticalLayout {
         alignment: space-between;
         spacing: 10px;
 
-        VerticalLayout {
-            alignment: center;
-            ActionButton {
-                is-wide: root.is-wide;
-                text: root.is_updating ? "Đang cập nhật..." : "Cập nhật từ nguồn";
-                primary: true;
-                enabled: !root.is_updating;
-                clicked => { root.check_update_requested(); }
+        ActionButton {
+            is-wide: root.is-wide;
+            text: root.is_updating ? "Đang cập nhật..." : "Cập nhật từ nguồn";
+            primary: true;
+            enabled: !root.is_updating;
+            clicked => {
+                root.check_update_requested();
             }
         }
 
@@ -295,6 +301,28 @@ export component TabAbout inherits VerticalLayout {
                 color: Theme.text-muted;
                 font-size: 12px;
                 font-weight: Theme.text-weight;
+            }
+        }
+
+        HorizontalLayout {
+            alignment: center;
+            spacing: 8px;
+
+            Dropdown {
+                width: root.is-wide ? 210px : 180px;
+                model: root.available_versions;
+                current-index <=> root.selected_version_index;
+                selected => { root.changed(); }
+            }
+
+            if root.selected_version_index != 0: ActionButton {
+                is-wide: root.is-wide;
+                text: root.is_updating ? "Đang xử lý..." : "Cài bản này";
+                primary: true;
+                enabled: !root.is_updating;
+                clicked => {
+                    root.install_version_requested(root.selected_version_index);
+                }
             }
         }
     }

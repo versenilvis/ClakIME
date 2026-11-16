@@ -1488,39 +1488,34 @@ run_install() {
         im_dest="/usr/share/fcitx5/inputmethod"
         print_system_sudo_notice
 
-        run_sudo mkdir -p "$lib_dest" "$addon_dest" "$im_dest"
-        run_sudo cp "$lib_src" "${lib_dest}/libclak.so"
-        run_sudo cp "$addon_src" "${addon_dest}/clak.conf"
-        run_sudo cp "$im_src" "${im_dest}/clak.conf"
-        run_sudo chmod 755 "${lib_dest}/libclak.so"
-        run_sudo chmod 644 "${addon_dest}/clak.conf" "${im_dest}/clak.conf"
+        run_sudo install -d -m 755 "$lib_dest" "$addon_dest" "$im_dest"
+        run_sudo install -m 755 "$lib_src" "${lib_dest}/libclak.so"
+        run_sudo install -m 644 "$addon_src" "${addon_dest}/clak.conf"
+        run_sudo install -m 644 "$im_src" "${im_dest}/clak.conf"
 
         # create symlinks for known system addon directories
         for d in $(get_system_addon_dirs); do
             if [ "$d" != "$lib_dest" ]; then
                 parent_dir="$(dirname "$d")"
                 if [ -d "$parent_dir" ]; then
-                    run_sudo mkdir -p "$d"
+                    run_sudo install -d -m 755 "$d"
                     run_sudo ln -sf "${lib_dest}/libclak.so" "$d/libclak.so" 2>/dev/null || true
                 fi
             fi
         done
 
         if [ -f "$cli_src" ]; then
-            run_sudo mkdir -p "/usr/bin"
-            run_sudo cp "$cli_src" "/usr/bin/clak"
-            run_sudo chmod 755 "/usr/bin/clak"
+            run_sudo install -d -m 755 "/usr/bin"
+            run_sudo install -m 755 "$cli_src" "/usr/bin/clak"
         fi
         if [ -f "$gui_src" ]; then
-            run_sudo mkdir -p "/usr/bin"
-            run_sudo cp "$gui_src" "/usr/bin/clak-gui"
-            run_sudo chmod 755 "/usr/bin/clak-gui"
+            run_sudo install -d -m 755 "/usr/bin"
+            run_sudo install -m 755 "$gui_src" "/usr/bin/clak-gui"
         fi
         if [ -f "$desktop_src" ]; then
-            run_sudo mkdir -p "/usr/share/applications"
-            run_sudo cp "$desktop_src" "/usr/share/applications/clak-gui.desktop"
+            run_sudo install -d -m 755 "/usr/share/applications"
+            run_sudo install -m 644 "$desktop_src" "/usr/share/applications/clak-gui.desktop"
             run_sudo sed -i "s|^Exec=.*|Exec=/usr/bin/clak-gui|" "/usr/share/applications/clak-gui.desktop" 2>/dev/null || true
-            run_sudo chmod 644 "/usr/share/applications/clak-gui.desktop"
             command -v update-desktop-database >/dev/null 2>&1 && run_sudo update-desktop-database "/usr/share/applications" 2>/dev/null || true
         fi
         if [ -d "$icons_src" ]; then
@@ -1534,45 +1529,39 @@ run_install() {
         addon_dest="${HOME}/.local/share/fcitx5/addon"
         im_dest="${HOME}/.local/share/fcitx5/inputmethod"
 
-        mkdir -p "$lib_dest" "$addon_dest" "$im_dest"
-        cp "$lib_src" "${lib_dest}/libclak.so"
-        cp "$addon_src" "${addon_dest}/clak.conf"
-        cp "$im_src" "${im_dest}/clak.conf"
-        chmod 755 "${lib_dest}/libclak.so"
-        chmod 644 "${addon_dest}/clak.conf" "${im_dest}/clak.conf"
+        install -d -m 755 "$lib_dest" "$addon_dest" "$im_dest"
+        install -m 755 "$lib_src" "${lib_dest}/libclak.so"
+        install -m 644 "$addon_src" "${addon_dest}/clak.conf"
+        install -m 644 "$im_src" "${im_dest}/clak.conf"
 
-        # for user-level install, addon configuration must point to the absolute library path
-        # because fcitx5 only resolves relative Library paths against system PKGLIBDIR
+        # for user-level install, addon configuration must point to absolute library path
         sed -i "s|^Library=.*|Library=${lib_dest}/libclak|" "${addon_dest}/clak.conf"
 
-        # create symlinks for known user addon directories (e.g. Ubuntu multiarch)
+        # create symlinks for known user addon directories
         for d in $(get_user_addon_dirs); do
             if [ "$d" != "$lib_dest" ]; then
-                mkdir -p "$d"
+                install -d -m 755 "$d"
                 ln -sf "${lib_dest}/libclak.so" "$d/libclak.so" 2>/dev/null || true
             fi
         done
 
         if [ -f "$cli_src" ]; then
-            mkdir -p "${HOME}/.local/bin"
-            cp "$cli_src" "${HOME}/.local/bin/clak"
-            chmod 755 "${HOME}/.local/bin/clak"
+            install -d -m 755 "${HOME}/.local/bin"
+            install -m 755 "$cli_src" "${HOME}/.local/bin/clak"
         fi
         if [ -f "$gui_src" ]; then
-            mkdir -p "${HOME}/.local/bin"
-            cp "$gui_src" "${HOME}/.local/bin/clak-gui"
-            chmod 755 "${HOME}/.local/bin/clak-gui"
+            install -d -m 755 "${HOME}/.local/bin"
+            install -m 755 "$gui_src" "${HOME}/.local/bin/clak-gui"
         fi
         if [ -f "$desktop_src" ]; then
-            mkdir -p "${HOME}/.local/share/applications"
-            cp "$desktop_src" "${HOME}/.local/share/applications/clak-gui.desktop"
+            install -d -m 755 "${HOME}/.local/share/applications"
+            install -m 644 "$desktop_src" "${HOME}/.local/share/applications/clak-gui.desktop"
             # use absolute path for Exec so desktop environment finds binary without ~/.local/bin in PATH
             sed -i "s|^Exec=.*|Exec=${HOME}/.local/bin/clak-gui|" "${HOME}/.local/share/applications/clak-gui.desktop" 2>/dev/null || true
-            chmod 644 "${HOME}/.local/share/applications/clak-gui.desktop"
             command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "${HOME}/.local/share/applications" 2>/dev/null || true
         fi
         if [ -d "$icons_src" ]; then
-            mkdir -p "${HOME}/.local/share/icons"
+            install -d -m 755 "${HOME}/.local/share/icons"
             cp -r "$icons_src"/* "${HOME}/.local/share/icons/" 2>/dev/null || true
             if command -v gtk-update-icon-cache >/dev/null 2>&1; then
                 for icondir in "${HOME}/.local/share/icons"/*; do
@@ -1595,13 +1584,13 @@ run_install() {
     [ -f "$gui_src" ] && log_step "$lbl_install" "Đã cài đặt giao diện điều khiển cấu hình clak-gui"
 
     # save installed version for updater
-    mkdir -p "${HOME}/.local/share/clak"
+    install -d -m 755 "${HOME}/.local/share/clak"
     echo "$tag_name" > "${HOME}/.local/share/clak/version"
     if [ -f "${script_dir}/update.sh" ]; then
-        cp "${script_dir}/update.sh" "${HOME}/.local/share/clak/update.sh" 2>/dev/null || true
+        install -m 755 "${script_dir}/update.sh" "${HOME}/.local/share/clak/update.sh" 2>/dev/null || true
     fi
     if [ -f "${script_dir}/uninstall.sh" ]; then
-        cp "${script_dir}/uninstall.sh" "${HOME}/.local/share/clak/uninstall.sh" 2>/dev/null || true
+        install -m 755 "${script_dir}/uninstall.sh" "${HOME}/.local/share/clak/uninstall.sh" 2>/dev/null || true
     fi
 
     # clean up temporary archive directory
