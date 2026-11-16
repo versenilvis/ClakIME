@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.9.1](https://github.com/versenilvis/ClakIME/releases/tag/v0.9.1) - 2026-11-16
+
+### Bug fixes
+
+- Steam ([a77b20](https://github.com/versenilvis/ClakIME/commit/a77b2035c5c577a260172e5fd3fcca93e37875ba))
+- Steam ([c41379](https://github.com/versenilvis/ClakIME/commit/c413796afd6dffa504634420e8e619837d1bb046))
+- Restore forwardKey custom deletion and fix surrounding text lag ([1f2d62](https://github.com/versenilvis/ClakIME/commit/1f2d628b694f1b0b4644a137d45a99cb68ff6f6e))
+
 ## [v0.9.0](https://github.com/versenilvis/ClakIME/releases/tag/v0.9.0) - 2026-11-11
 
 ### Bug fixes
