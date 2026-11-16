@@ -206,6 +206,7 @@ impl ClakCore {
                 spelling::is_valid_cvc_with_options(&composed, true)
             } else {
                 self.dict_known(&composed.to_lowercase())
+                    || is_informal_or_loanword(&composed)
             }
         } else {
             spelling::is_valid_cvc_with_options(&composed, self.allow_foreign_consonants)
@@ -229,6 +230,46 @@ pub fn starts_with_foreign_initial(s: &str) -> bool {
     s.chars()
         .next()
         .is_some_and(|c| matches!(c.to_ascii_lowercase(), 'z' | 'f' | 'w' | 'j'))
+}
+
+pub(crate) fn is_informal_or_loanword(s: &str) -> bool {
+    let lower: String = s.chars().map(|c| c.to_lowercase().next().unwrap_or(c)).collect();
+    if lower == "ôkê" || lower == "oke" {
+        return true;
+    }
+    // chat abbreviations starting with k
+    if lower.starts_with('k') && spelling::is_valid_cvc_with_options(&lower, true) {
+        return true;
+    }
+    // abbreviations starting with dc or vc
+    if (lower.starts_with("đc") || lower.starts_with("vc"))
+        && (lower.len() == 2 || spelling::is_valid_cvc_with_options(&lower, true))
+    {
+        return true;
+    }
+    // loanword initials
+    if lower.len() >= 2 {
+        let mut chars = lower.chars();
+        let c0 = chars.next().unwrap_or('\0');
+        let c1 = chars.next().unwrap_or('\0');
+        if matches!(
+            (c0, c1),
+            ('c', 'r')
+                | ('k', 'p')
+                | ('d', 'r')
+                | ('đ', 'r')
+                | ('k', 'l')
+                | ('p', 'l')
+                | ('b', 'l')
+                | ('b', 'r')
+                | ('p', 'r')
+                | ('f', 'r')
+        ) && spelling::is_valid_cvc_with_options(&lower, true)
+        {
+            return true;
+        }
+    }
+    false
 }
 
 #[allow(dead_code)]
@@ -1751,5 +1792,29 @@ mod tests {
             }
         }
         assert_eq!(sim_before, "before");
+    }
+
+    #[test]
+    fn test_informal_and_loanwords_with_spelling_enabled() {
+        let e = eng(true, true);
+        assert_eq!(e.transform("kos"), "kó");
+        assert_eq!(e.transform("kcos"), "kcó");
+        assert_eq!(e.transform("ddcuj"), "đcụ");
+        assert_eq!(e.transform("klaf"), "klà");
+        assert_eq!(e.transform("kphari"), "kphải");
+        assert_eq!(e.transform("croong"), "crông");
+        assert_eq!(e.transform("kpaang"), "kpâng");
+        assert_eq!(e.transform("kpawng"), "kpăng");
+        assert_eq!(e.transform("ddrawk"), "đrăk");
+        assert_eq!(e.transform("drawk"), "drăk");
+        assert_eq!(e.transform("ookee"), "ôkê");
+
+        // english protection intact
+        assert_eq!(e.transform("ghost"), "ghost");
+        assert_eq!(e.transform("ghostty"), "ghostty");
+        assert_eq!(e.transform("detect"), "detect");
+        assert_eq!(e.transform("speedtest"), "speedtest");
+        assert_eq!(e.transform("class"), "class");
+        assert_eq!(e.transform("address"), "address");
     }
 }

@@ -1272,3 +1272,40 @@ fn test_vni_and_telex_uppercase_and_tone_remove_seed() {
     let act = ident_ctx.process_key(b's' as u32, "s", false, Some("tien_bien"), 4, 4);
     assert_eq!(act.action_type, ACTION_FORWARD);
 }
+
+#[test]
+fn test_typing_informal_abbreviations_and_loanwords() {
+    let mut cfg = clak_engine::config::ClakConfig::default();
+    cfg.spelling.enabled = true;
+    cfg.spelling.auto_restore = true;
+
+    let mut ctx = ClakContext::new(Method::Telex);
+    ctx.apply_config(&cfg);
+
+    for ch in "kos".chars() {
+        let s = ch.to_string();
+        ctx.process_key(ch as u32, &s, false, None, 0, 0);
+    }
+    assert_eq!(ctx.last_composed, "kó");
+
+    ctx.reset();
+    for ch in "kcos".chars() {
+        let s = ch.to_string();
+        ctx.process_key(ch as u32, &s, false, None, 0, 0);
+    }
+    assert_eq!(ctx.last_composed, "kcó");
+
+    ctx.reset();
+    for ch in "ddcuj".chars() {
+        let s = ch.to_string();
+        ctx.process_key(ch as u32, &s, false, None, 0, 0);
+    }
+    assert_eq!(ctx.last_composed, "đcụ");
+
+    ctx.reset();
+    for ch in "croong".chars() {
+        let s = ch.to_string();
+        ctx.process_key(ch as u32, &s, false, None, 0, 0);
+    }
+    assert_eq!(ctx.last_composed, "crông");
+}

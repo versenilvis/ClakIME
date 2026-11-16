@@ -1115,7 +1115,7 @@ fn save_config(
     cfg_to_save.general.short_w = window.get_short_w();
     cfg_to_save.general.bracket_brackets = window.get_bracket_brackets();
 
-    cfg_to_save.spelling.enabled = window.get_spelling_enabled();
+    cfg_to_save.spelling.enabled = window.get_auto_restore();
     cfg_to_save.spelling.auto_restore = window.get_auto_restore();
     cfg_to_save.spelling.auto_restore_english = window.get_auto_restore_english();
     cfg_to_save.spelling.allow_foreign_consonants = window.get_allow_foreign_consonants();
@@ -1515,7 +1515,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     main_window.set_short_w(cfg.general.short_w);
     main_window.set_bracket_brackets(cfg.general.bracket_brackets);
 
-    main_window.set_spelling_enabled(cfg.spelling.enabled);
+    main_window.set_spelling_enabled(cfg.spelling.auto_restore);
     main_window.set_auto_restore(cfg.spelling.auto_restore);
     main_window.set_auto_restore_english(cfg.spelling.auto_restore_english);
     main_window.set_allow_foreign_consonants(cfg.spelling.allow_foreign_consonants);
@@ -1922,7 +1922,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         window.set_startup_mode_index(0);
         window.set_short_w(default_cfg.general.short_w);
         window.set_bracket_brackets(default_cfg.general.bracket_brackets);
-        window.set_spelling_enabled(default_cfg.spelling.enabled);
+        window.set_spelling_enabled(default_cfg.spelling.auto_restore);
         window.set_auto_restore(default_cfg.spelling.auto_restore);
         window.set_auto_restore_english(default_cfg.spelling.auto_restore_english);
         window.set_allow_foreign_consonants(default_cfg.spelling.allow_foreign_consonants);

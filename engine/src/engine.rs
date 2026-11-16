@@ -109,7 +109,7 @@ fn is_valid_vietnamese_initial(initial: &[Letter], first_vowel: char, allow_fore
             let c0 = initial[0].c.to_ascii_lowercase();
             match c0 {
                 'j' | 'w' | 'z' => allow_foreign,
-                'k' => matches!(fv, 'e' | 'i' | 'y'),
+                'k' => matches!(fv, 'e' | 'i' | 'y' | 'o' | 'ô') || allow_foreign,
                 'c' => !matches!(fv, 'e' | 'i' | 'y'),
                 'q' => fv == 'u',
                 'g' => fv != 'e',
@@ -119,6 +119,7 @@ fn is_valid_vietnamese_initial(initial: &[Letter], first_vowel: char, allow_fore
         2 => {
             let c0 = initial[0].c.to_ascii_lowercase();
             let c1 = initial[1].c.to_ascii_lowercase();
+            let is_d0 = initial[0].is_dstroke || initial[0].c == 'đ' || initial[0].c == 'Đ';
             match (c0, c1) {
                 ('g', 'h') => matches!(fv, 'e' | 'i'),
                 ('n', 'g') => !matches!(fv, 'e' | 'i'),
@@ -130,6 +131,25 @@ fn is_valid_vietnamese_initial(initial: &[Letter], first_vowel: char, allow_fore
                 | ('q', 'u')
                 | ('t', 'h')
                 | ('t', 'r') => true,
+                ('c', 'r')
+                | ('k', 'p')
+                | ('d', 'r')
+                | ('k', 'l')
+                | ('p', 'l')
+                | ('b', 'l')
+                | ('b', 'r')
+                | ('p', 'r')
+                | ('f', 'r') => true,
+                _ if is_d0 && (c1 == 'c' || c1 == 'r') => {
+                    if c1 == 'r' {
+                        true
+                    } else {
+                        is_valid_vietnamese_initial(&initial[1..], first_vowel, allow_foreign)
+                    }
+                }
+                ('k', _) | ('v', 'c') => {
+                    is_valid_vietnamese_initial(&initial[1..], first_vowel, allow_foreign)
+                }
                 _ => false,
             }
         }
@@ -137,9 +157,21 @@ fn is_valid_vietnamese_initial(initial: &[Letter], first_vowel: char, allow_fore
             let c0 = initial[0].c.to_ascii_lowercase();
             let c1 = initial[1].c.to_ascii_lowercase();
             let c2 = initial[2].c.to_ascii_lowercase();
-            c0 == 'n' && c1 == 'g' && c2 == 'h' && matches!(fv, 'e' | 'i')
+            if c0 == 'n' && c1 == 'g' && c2 == 'h' {
+                matches!(fv, 'e' | 'i')
+            } else if c0 == 'k' {
+                is_valid_vietnamese_initial(&initial[1..], first_vowel, allow_foreign)
+            } else {
+                false
+            }
         }
-        _ => false,
+        _ => {
+            if initial[0].c.to_ascii_lowercase() == 'k' {
+                is_valid_vietnamese_initial(&initial[1..], first_vowel, allow_foreign)
+            } else {
+                false
+            }
+        }
     }
 }
 

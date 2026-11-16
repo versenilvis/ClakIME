@@ -30,6 +30,33 @@ fn telex_basic() {
     assert_eq!(t("uw"), "ư");
     assert_eq!(t("dd"), "đ");
 }
+
+#[test]
+fn test_informal_abbreviations_and_loanwords() {
+    // telex conversion
+    assert_eq!(t("kos"), "kó");
+    assert_eq!(t("kcos"), "kcó");
+    assert_eq!(t("ddcuj"), "đcụ");
+    assert_eq!(t("klaf"), "klà");
+    assert_eq!(t("kphari"), "kphải");
+    assert_eq!(t("croong"), "crông");
+    assert_eq!(t("kpaang"), "kpâng");
+    assert_eq!(t("kpawng"), "kpăng");
+    assert_eq!(t("ddrawk"), "đrăk");
+    assert_eq!(t("drawk"), "drăk");
+
+    // auto restore with spelling check
+    assert_eq!(convert_telex_auto_restore("kos", true, false), "kó");
+    assert_eq!(convert_telex_auto_restore("kcos", true, false), "kcó");
+    assert_eq!(convert_telex_auto_restore("ddcuj", true, false), "đcụ");
+    assert_eq!(convert_telex_auto_restore("klaf", true, false), "klà");
+    assert_eq!(convert_telex_auto_restore("kphari", true, false), "kphải");
+    assert_eq!(convert_telex_auto_restore("croong", true, false), "crông");
+    assert_eq!(convert_telex_auto_restore("kpaang", true, false), "kpâng");
+    assert_eq!(convert_telex_auto_restore("kpawng", true, false), "kpăng");
+    assert_eq!(convert_telex_auto_restore("ddrawk", true, false), "đrăk");
+    assert_eq!(convert_telex_auto_restore("drawk", true, false), "drăk");
+}
 #[test]
 fn telex_compound() {
     assert_eq!(t("aws"), "ắ");

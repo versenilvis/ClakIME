@@ -130,7 +130,7 @@ export component TabGeneral inherits VerticalLayout {
 
     SettingItem {
         title: "Tự sửa chính tả khi gõ sai";
-        subtitle: "Tự động nhận diện và sửa lỗi đảo phím khi gõ nhanh";
+        subtitle: "Tự động nhận diện và sửa lỗi đảo phím khi gõ nhanh (VD: khngo -> không). Ctrl Z để quay lại";
         is-wide: root.is-wide;
         checked <=> root.autocorrect;
         toggled => { root.changed(); }
@@ -146,23 +146,18 @@ export component TabGeneral inherits VerticalLayout {
 
     SettingItem {
         title: "Kiểm tra chính tả";
-        subtitle: "Ngăn từ sai quy tắc tiếng Việt";
-        is-wide: root.is-wide;
-        checked <=> root.spelling_enabled;
-        toggled => { root.changed(); }
-    }
-
-    SettingItem {
-        title: "Tự phục hồi khi sai (Auto Restore)";
-        subtitle: "Trả về chuỗi gốc khi từ không hợp lệ";
+        subtitle: "Ngăn từ sai quy tắc tiếng Việt và tự khôi phục từ tiếng Anh. Tắt để gõ các từ như \"ôkê\", \"kó\", \"kcó\"";
         is-wide: root.is-wide;
         checked <=> root.auto_restore;
-        toggled => { root.changed(); }
+        toggled => {
+            root.spelling_enabled = root.auto_restore;
+            root.changed();
+        }
     }
 
     SettingItem {
         title: "Tự động sửa từ tiếng Anh";
-        subtitle: "Tự khôi phục từ tiếng Anh có phím lặp (vd: miss, boss, pass)";
+        subtitle: "Tự khôi phục từ tiếng Anh có phím lặp (vd: m-i-s-s -> miss thay vì m-i-s-s-s)";
         is-wide: root.is-wide;
         checked <=> root.auto_restore_english;
         toggled => { root.changed(); }
@@ -170,7 +165,7 @@ export component TabGeneral inherits VerticalLayout {
 
     SettingItem {
         title: "Dấu kiểu mới (oà, uý)";
-        subtitle: "Chuẩn hiện đại theo bộ giáo dục";
+        subtitle: "kiểu mới đặt ở nguyên âm sau theo ngữ âm học";
         is-wide: root.is-wide;
         checked <=> root.modern_tone;
         toggled => { root.changed(); }
@@ -178,7 +173,7 @@ export component TabGeneral inherits VerticalLayout {
 
     SettingItem {
         title: "Cho phép z, f, w, j làm phụ âm";
-        subtitle: "Gõ được các từ mượn hoặc biến thể như zui zẻ, fải, wa, júp...";
+        subtitle: "Gõ được các từ mượn hoặc biến thể như \"zui zẻ\", \"fải\", \"wuỷ\", \"júp\"...";
         is-wide: root.is-wide;
         checked <=> root.allow_foreign_consonants;
         toggled => { root.changed(); }

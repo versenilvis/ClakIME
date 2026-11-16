@@ -448,6 +448,18 @@ pub fn is_valid_cvc_with_options(s: &str, allow_foreign: bool) -> bool {
 
     let (fc, vo, lc) = split_cvc(s);
 
+    // initial consonant cannot contain vowels (except i in gi, u in qu)
+    let has_invalid_vowel_in_fc = fc.iter().enumerate().any(|(i, &c)| {
+        if is_vowel(c) {
+            !(i == 1 && ((fc[0] == 'g' && c == 'i') || (fc[0] == 'q' && c == 'u')))
+        } else {
+            false
+        }
+    });
+    if has_invalid_vowel_in_fc {
+        return false;
+    }
+
     // gi + i (+ consonant) → invalid: gi digraph requires a different vowel
     // exception: "gìn" (in "giữ gìn") is standard vietnamese with lc = 'n'
     // qu + u (+ consonant) → invalid: qu digraph requires a different vowel
@@ -463,7 +475,7 @@ pub fn is_valid_cvc_with_options(s: &str, allow_foreign: bool) -> bool {
     // iê, iêu).  Pattern from x-unikey's isValidCV.
     if fc.len() == 1 && fc[0] == 'k' && !vo.is_empty() {
         let first_vowel = vo[0];
-        if !matches!(first_vowel, 'e' | 'ê' | 'i' | 'y') {
+        if !matches!(first_vowel, 'e' | 'ê' | 'i' | 'y' | 'o' | 'ô') && !allow_foreign {
             return false;
         }
     }
@@ -517,7 +529,39 @@ pub fn is_valid_cvc_with_options(s: &str, allow_foreign: bool) -> bool {
         if allow_foreign && fc.len() == 1 && matches!(fc[0], 'f' | 'j' | 'w' | 'z') {
             1u16 << 0
         } else {
-            let m = lookup_mask(FC_ROWS, &fc, !vo.is_empty(), true);
+            let mut m = lookup_mask(FC_ROWS, &fc, !vo.is_empty(), true);
+            if m == 0 && fc.len() >= 2 {
+                if matches!(
+                    (fc[0], fc[1]),
+                    ('c', 'r')
+                        | ('k', 'p')
+                        | ('d', 'r')
+                        | ('đ', 'r')
+                        | ('k', 'l')
+                        | ('p', 'l')
+                        | ('b', 'l')
+                        | ('b', 'r')
+                        | ('p', 'r')
+                        | ('f', 'r')
+                ) {
+                    m = 1u16 << 0;
+                } else if fc[0] == 'k'
+                    || (fc[0] == 'đ' && fc[1] == 'c')
+                    || (fc[0] == 'v' && fc[1] == 'c')
+                {
+                    let tail_start = if fc.len() >= 3 && fc[0] == 'k' {
+                        let t2 = lookup_mask(FC_ROWS, &fc[1..], !vo.is_empty(), true);
+                        if t2 != 0 {
+                            1
+                        } else {
+                            fc.len() - 1
+                        }
+                    } else {
+                        fc.len() - 1
+                    };
+                    m = lookup_mask(FC_ROWS, &fc[tail_start..], !vo.is_empty(), true);
+                }
+            }
             if m == 0 {
                 return false;
             }
