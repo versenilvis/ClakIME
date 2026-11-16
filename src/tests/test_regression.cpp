@@ -110,6 +110,46 @@ TEST_F(RegressionCorpusTest, test_regression_address_bar_without_autocomplete_se
     EXPECT_EQ(ic.commits.back(), "đ");
 }
 
+TEST_F(RegressionCorpusTest, test_regression_address_bar_mid_word_retoning) {
+    MockInputContext ic(instance_->inputContextManager(), "google-chrome");
+    ic.setUrlCapability(true);
+    ime::ClakState state(engine_.get(), &ic);
+
+    size_t uinput_bs_sent = 0;
+    uinput::UinputTool::instance().setMockHandler([&](size_t count, uint32_t, uint32_t, uint32_t) {
+        uinput_bs_sent = count;
+        return true;
+    });
+
+    // cursor placed at position 2 after "mo" in "mot cau dung de go thu"
+    ic.setSurrounding("mot cau dung de go thu", 2, 2);
+    EXPECT_FALSE(state.isAutofillCertain(ic.surroundingText()));
+
+    // type 'o' to compose "mô"
+    ic.typeChar('o', &state);
+    EXPECT_EQ(uinput_bs_sent, 2u);
+    EXPECT_TRUE(state.isDeleting());
+    ic.sendCleanBackspace(&state);
+    ic.sendCleanBackspace(&state);
+    EXPECT_FALSE(state.isDeleting());
+    ASSERT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "ô");
+
+    // updated surrounding after committing "ô": "môt cau dung de go thu" at cursor 3
+    std::string text_after_o = "môt cau dung de go thu";
+    size_t cur_after_o = 3;
+    ic.setSurrounding(text_after_o, cur_after_o, cur_after_o);
+
+    // type 'j' to compose "mộ"
+    ic.typeChar('j', &state);
+    EXPECT_EQ(uinput_bs_sent, 2u);
+    EXPECT_TRUE(state.isDeleting());
+    ic.sendCleanBackspace(&state);
+    ic.sendCleanBackspace(&state);
+    EXPECT_FALSE(state.isDeleting());
+    EXPECT_EQ(ic.commits.back(), "ộ");
+}
+
 TEST_F(RegressionCorpusTest, test_regression_hyprland_stale_selection_during_retoning) {
     // hyprland/niri temporary mid-word selection must not be detected as address bar autocomplete
     MockInputContext ic(instance_->inputContextManager(), "google-chrome");

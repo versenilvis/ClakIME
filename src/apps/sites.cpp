@@ -114,7 +114,7 @@ public:
 class AddressBarProfile : public AppProfile {
 public:
     std::string name() const override { return "address-bar"; }
-    bool allowsSurroundingText() const override { return false; }
+    bool allowsSurroundingText() const override { return true; }
     bool forcesUinput() const override { return true; }
     bool allowsAutofillHeuristic() const override { return true; }
     UinputPacing uinputPacing() const override {
