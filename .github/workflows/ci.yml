@@ -163,7 +163,7 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ matrix.distro }}-build-${{ hashFiles('**/Cargo.lock', '**/CMakeLists.txt') }}
+          key: ${{ matrix.distro }}-build-${{ hashFiles('Cargo.lock', 'CMakeLists.txt', 'src/tests/CMakeLists.txt') }}
           restore-keys: |
             ${{ matrix.distro }}-build-
 
