@@ -166,7 +166,7 @@ fn is_valid_vietnamese_initial(initial: &[Letter], first_vowel: char, allow_fore
             }
         }
         _ => {
-            if initial[0].c.to_ascii_lowercase() == 'k' {
+            if initial[0].c.eq_ignore_ascii_case(&'k') {
                 is_valid_vietnamese_initial(&initial[1..], first_vowel, allow_foreign)
             } else {
                 false
@@ -213,7 +213,9 @@ fn tone_vowel_index(ls: &[Letter], modern: bool, allow_foreign: bool) -> Option<
         .take_while(|lt| lt.c.is_ascii_digit())
         .count();
     let initial_slice = &ls[digit_prefix_len..start];
-    if !initial_slice.is_empty() && !is_valid_vietnamese_initial(initial_slice, ls[start].c, allow_foreign) {
+    if !initial_slice.is_empty()
+        && !is_valid_vietnamese_initial(initial_slice, ls[start].c, allow_foreign)
+    {
         return None;
     }
     if end + 1 < ls.len() && !is_valid_vietnamese_coda(&ls[end + 1..]) {

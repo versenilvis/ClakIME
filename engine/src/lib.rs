@@ -205,8 +205,7 @@ impl ClakCore {
             } else if is_foreign_initial {
                 spelling::is_valid_cvc_with_options(&composed, true)
             } else {
-                self.dict_known(&composed.to_lowercase())
-                    || is_informal_or_loanword(&composed)
+                self.dict_known(&composed.to_lowercase()) || is_informal_or_loanword(&composed)
             }
         } else {
             spelling::is_valid_cvc_with_options(&composed, self.allow_foreign_consonants)
@@ -233,7 +232,10 @@ pub fn starts_with_foreign_initial(s: &str) -> bool {
 }
 
 pub(crate) fn is_informal_or_loanword(s: &str) -> bool {
-    let lower: String = s.chars().map(|c| c.to_lowercase().next().unwrap_or(c)).collect();
+    let lower: String = s
+        .chars()
+        .map(|c| c.to_lowercase().next().unwrap_or(c))
+        .collect();
     if lower == "ôkê" || lower == "oke" {
         return true;
     }
@@ -393,7 +395,9 @@ pub(crate) fn should_auto_restore(
 
     // skip all-uppercase acronyms with vietnamese characters unless english word
     let is_all_upper = input.len() >= 2
-        && input.chars().all(|c| !c.is_alphabetic() || c.is_uppercase())
+        && input
+            .chars()
+            .all(|c| !c.is_alphabetic() || c.is_uppercase())
         && input.chars().any(|c| c.is_uppercase());
     if is_all_upper && !is_en {
         return false;

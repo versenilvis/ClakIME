@@ -1192,15 +1192,31 @@ fn check_can_rollback() -> (bool, bool, String, Option<String>) {
             .args(["-Q", "clak-bin"])
             .output()
             .ok()
-            .and_then(|o| if o.status.success() { String::from_utf8(o.stdout).ok() } else { None })
+            .and_then(|o| {
+                if o.status.success() {
+                    String::from_utf8(o.stdout).ok()
+                } else {
+                    None
+                }
+            })
             .or_else(|| {
                 std::process::Command::new("pacman")
                     .args(["-Q", "clak"])
                     .output()
                     .ok()
-                    .and_then(|o| if o.status.success() { String::from_utf8(o.stdout).ok() } else { None })
+                    .and_then(|o| {
+                        if o.status.success() {
+                            String::from_utf8(o.stdout).ok()
+                        } else {
+                            None
+                        }
+                    })
             })
-            .and_then(|out| out.split_whitespace().nth(1).map(|v| v.split('-').next().unwrap_or("").to_string()))
+            .and_then(|out| {
+                out.split_whitespace()
+                    .nth(1)
+                    .map(|v| v.split('-').next().unwrap_or("").to_string())
+            })
             .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
 
         let mut candidates: Vec<String> = Vec::new();
@@ -1214,7 +1230,9 @@ fn check_can_rollback() -> (bool, bool, String, Option<String>) {
                             if let Some(rest) = fname.strip_prefix(prefix) {
                                 if let Some(dash_idx) = rest.find('-') {
                                     let v_str = &rest[..dash_idx];
-                                    if v_str.chars().all(|c| c.is_ascii_digit() || c == '.') && v_str.contains('.') {
+                                    if v_str.chars().all(|c| c.is_ascii_digit() || c == '.')
+                                        && v_str.contains('.')
+                                    {
                                         candidates.push(v_str.to_string());
                                     }
                                 }
@@ -1229,19 +1247,33 @@ fn check_can_rollback() -> (bool, bool, String, Option<String>) {
         // sort semver descending and find latest version strictly less than current
         let parse_semver = |v: &str| -> (u32, u32, u32) {
             let mut parts = v.split('.').filter_map(|s| s.parse::<u32>().ok());
-            (parts.next().unwrap_or(0), parts.next().unwrap_or(0), parts.next().unwrap_or(0))
+            (
+                parts.next().unwrap_or(0),
+                parts.next().unwrap_or(0),
+                parts.next().unwrap_or(0),
+            )
         };
 
-        candidates.sort_by(|a, b| parse_semver(b).cmp(&parse_semver(a)));
+        candidates.sort_by_key(|b| std::cmp::Reverse(parse_semver(b)));
         candidates.dedup();
 
         let cur_parsed = parse_semver(&cur_pkg_ver);
         for cand in candidates {
             if parse_semver(&cand) < cur_parsed {
-                return (true, true, format!("Bản trước trong cache: v{}", cand), None);
+                return (
+                    true,
+                    true,
+                    format!("Bản trước trong cache: v{}", cand),
+                    None,
+                );
             }
         }
-        return (true, false, "Không có gói cũ hơn trong cache pacman/AUR".to_string(), None);
+        return (
+            true,
+            false,
+            "Không có gói cũ hơn trong cache pacman/AUR".to_string(),
+            None,
+        );
     }
 
     // check local backup
@@ -1252,7 +1284,12 @@ fn check_can_rollback() -> (bool, bool, String, Option<String>) {
         if let Ok(prev_ver) = std::fs::read_to_string(&version_prev_file) {
             let ver = prev_ver.trim();
             if !ver.is_empty() {
-                return (false, true, format!("Bản trước: {}", ver), Some(ver.to_string()));
+                return (
+                    false,
+                    true,
+                    format!("Bản trước: {}", ver),
+                    Some(ver.to_string()),
+                );
             }
         }
     }
@@ -1263,7 +1300,12 @@ fn check_can_rollback() -> (bool, bool, String, Option<String>) {
         if let Ok(prev_ver) = std::fs::read_to_string(&standalone_prev) {
             let ver = prev_ver.trim();
             if !ver.is_empty() {
-                return (false, false, format!("Bản trước: {}", ver), Some(ver.to_string()));
+                return (
+                    false,
+                    false,
+                    format!("Bản trước: {}", ver),
+                    Some(ver.to_string()),
+                );
             }
         }
     }
@@ -1279,7 +1321,11 @@ struct VersionItem {
     is_pacman_pkg: bool,
 }
 
-fn fetch_available_versions(home: &str, is_pacman: bool, prev_backup_ver: Option<&str>) -> Vec<VersionItem> {
+fn fetch_available_versions(
+    home: &str,
+    is_pacman: bool,
+    prev_backup_ver: Option<&str>,
+) -> Vec<VersionItem> {
     let cur_pkg_ver = env!("CARGO_PKG_VERSION");
 
     let mut items = vec![VersionItem {
@@ -1292,7 +1338,11 @@ fn fetch_available_versions(home: &str, is_pacman: bool, prev_backup_ver: Option
     let parse_semver = |v: &str| -> (u32, u32, u32) {
         let trimmed = v.trim_start_matches('v');
         let mut parts = trimmed.split('.').filter_map(|s| s.parse::<u32>().ok());
-        (parts.next().unwrap_or(0), parts.next().unwrap_or(0), parts.next().unwrap_or(0))
+        (
+            parts.next().unwrap_or(0),
+            parts.next().unwrap_or(0),
+            parts.next().unwrap_or(0),
+        )
     };
     let cur_parsed = parse_semver(cur_pkg_ver);
 
@@ -1318,7 +1368,11 @@ fn fetch_available_versions(home: &str, is_pacman: bool, prev_backup_ver: Option
                                     let v_str = &rest[..dash_idx];
                                     let sem = parse_semver(v_str);
                                     if sem < cur_parsed && sem >= (0, 7, 0) {
-                                        found.push((sem, format!("v{}", v_str), entry.path().to_string_lossy().to_string()));
+                                        found.push((
+                                            sem,
+                                            format!("v{}", v_str),
+                                            entry.path().to_string_lossy().to_string(),
+                                        ));
                                     }
                                 }
                                 break;
@@ -1409,7 +1463,10 @@ fn fetch_available_versions(home: &str, is_pacman: bool, prev_backup_ver: Option
     if let Ok(releases) = serde_json::from_str::<Vec<serde_json::Value>>(&json_str) {
         for r in releases {
             let is_draft = r.get("draft").and_then(|v| v.as_bool()).unwrap_or(false);
-            let is_prerelease = r.get("prerelease").and_then(|v| v.as_bool()).unwrap_or(false);
+            let is_prerelease = r
+                .get("prerelease")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             if is_draft || is_prerelease {
                 continue;
             }
@@ -1423,12 +1480,16 @@ fn fetch_available_versions(home: &str, is_pacman: bool, prev_backup_ver: Option
                 continue;
             }
 
-            let has_tarball = r.get("assets").and_then(|v| v.as_array()).map(|arr| {
-                arr.iter().any(|a| {
-                    let name = a.get("name").and_then(|n| n.as_str()).unwrap_or("");
-                    name.contains("x86_64") && name.ends_with(".tar.gz")
+            let has_tarball = r
+                .get("assets")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter().any(|a| {
+                        let name = a.get("name").and_then(|n| n.as_str()).unwrap_or("");
+                        name.contains("x86_64") && name.ends_with(".tar.gz")
+                    })
                 })
-            }).unwrap_or(false);
+                .unwrap_or(false);
 
             if !has_tarball {
                 continue;
@@ -1489,7 +1550,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let home_dir = std::env::var("HOME").unwrap_or_default();
     let version_items = fetch_available_versions(&home_dir, is_pacman, prev_backup_ver.as_deref());
-    let slint_versions: Vec<slint::SharedString> = version_items.iter().map(|item| item.label.as_str().into()).collect();
+    let slint_versions: Vec<slint::SharedString> = version_items
+        .iter()
+        .map(|item| item.label.as_str().into())
+        .collect();
     let model = std::rc::Rc::new(slint::VecModel::from(slint_versions));
     main_window.set_available_versions(model.clone().into());
     let method_idx = match cfg.general.method.as_str() {
