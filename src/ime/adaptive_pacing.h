@@ -50,6 +50,8 @@ public:
 
     void setEnabled(bool enabled);
     bool isEnabled() const;
+    void setCustomMode(bool custom);
+    bool isCustomMode() const;
 
     // configure base floor from preset or user settings
     void configureGroup(PacingGroup group, uint32_t floor_delay_ms, uint32_t floor_gap_ms,
@@ -102,6 +104,7 @@ private:
     const GroupState& getGroup(PacingGroup group) const;
 
     bool enabled_{true};
+    bool custom_mode_{false};
     GroupState web_draftjs_;
     GroupState terminal_uinput_;
     GroupState heavy_app_;

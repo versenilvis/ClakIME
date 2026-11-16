@@ -89,6 +89,14 @@ bool AdaptivePacingEngine::isEnabled() const {
     return enabled_;
 }
 
+void AdaptivePacingEngine::setCustomMode(bool custom) {
+    custom_mode_ = custom;
+}
+
+bool AdaptivePacingEngine::isCustomMode() const {
+    return custom_mode_;
+}
+
 AdaptivePacingEngine::GroupState& AdaptivePacingEngine::getGroup(PacingGroup group) {
     switch (group) {
         case PacingGroup::WebDraftJs:
@@ -252,7 +260,7 @@ void AdaptivePacingEngine::onIncident(PacingGroup group, IncidentType incident, 
 }
 
 void AdaptivePacingEngine::observeTimerDrift(PacingGroup group, uint64_t deadline_us, uint64_t fired_at_us) {
-    if (!enabled_ || fired_at_us <= deadline_us || isSimpleBackoffMode() || utils::clakGetEnv("CLAK_PINNED_DELAY_MS")) {
+    if (!enabled_ || custom_mode_ || fired_at_us <= deadline_us || isSimpleBackoffMode() || utils::clakGetEnv("CLAK_PINNED_DELAY_MS")) {
         return;
     }
     uint64_t drift_us = fired_at_us - deadline_us;

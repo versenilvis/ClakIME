@@ -967,19 +967,28 @@ bool ClakState::handleKey(const fcitx::Key& key) {
 
     pacing_engine_.setEnabled(adaptive_enabled);
 
+    bool is_custom_preset = (cfg && clak_config_get_pacing_preset(cfg) == 3);
+    pacing_engine_.setCustomMode(is_custom_preset);
+
     bool is_terminal = ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal);
     pacing::PacingGroup pgroup = pacing::AdaptivePacingEngine::classify(app, site, is_address_bar, is_draftjs, is_terminal);
     if (cfg) {
+        uint32_t term_delay = clak_config_get_terminal_delay_ms(cfg);
+        uint32_t term_gap = clak_config_get_terminal_gap_ms(cfg);
+        uint32_t term_ceiling = is_custom_preset ? std::min(24u, term_delay + 4u) : 30u;
         pacing_engine_.configureGroup(pacing::PacingGroup::TerminalUinput,
-            clak_config_get_terminal_delay_ms(cfg), clak_config_get_terminal_gap_ms(cfg), 30, 10);
+            term_delay, term_gap, term_ceiling, 10);
         uint32_t draft_delay = clak_config_get_draftjs_delay_ms(cfg);
         uint32_t draft_gap = clak_config_get_draftjs_gap_ms(cfg);
-        uint32_t draft_ceiling = std::max(60u, draft_delay + 20u);
-        uint32_t draft_gap_ceiling = std::max(20u, draft_gap + 10u);
+        uint32_t draft_ceiling = is_custom_preset ? std::min(32u, draft_delay + 6u) : std::max(60u, draft_delay + 20u);
+        uint32_t draft_gap_ceiling = is_custom_preset ? std::min(12u, draft_gap + 4u) : std::max(20u, draft_gap + 10u);
         pacing_engine_.configureGroup(pacing::PacingGroup::WebDraftJs,
             draft_delay, draft_gap, draft_ceiling, draft_gap_ceiling);
+        uint32_t heavy_delay = clak_config_get_heavy_app_delay_ms(cfg);
+        uint32_t heavy_gap = clak_config_get_heavy_app_gap_ms(cfg);
+        uint32_t heavy_ceiling = is_custom_preset ? std::min(28u, heavy_delay + 4u) : 35u;
         pacing_engine_.configureGroup(pacing::PacingGroup::HeavyApp,
-            clak_config_get_heavy_app_delay_ms(cfg), clak_config_get_heavy_app_gap_ms(cfg), 35, 12);
+            heavy_delay, heavy_gap, heavy_ceiling, 12);
         pacing_engine_.configureGroup(pacing::PacingGroup::SteamCEF,
             4, 3, 18, 4);
         pacing_engine_.configureGroup(pacing::PacingGroup::Default,

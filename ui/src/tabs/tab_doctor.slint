@@ -73,7 +73,7 @@ export component TabDoctor inherits VerticalLayout {
                 Text {
                     text: "Môi trường gõ phím";
                     color: Theme.text-primary;
-                    font-size: 15px;
+                    font-size: root.is-wide ? 16px : 14px;
                     font-weight: 600;
                     vertical-alignment: center;
                 }
@@ -134,7 +134,7 @@ export component TabDoctor inherits VerticalLayout {
             }
 
             Text {
-                text: root.has_scanned ? ("Lần quét gần nhất: " + root.last_scanned) : "Chưa thực hiện chẩn đoán trong phiên làm việc này";
+                text: root.has_scanned ? (root.is-wide ? ("Lần quét gần nhất: " + root.last_scanned) : ("Lần quét: " + root.last_scanned)) : "Chưa thực hiện chẩn đoán trong phiên làm việc này";
                 color: Theme.text-muted;
                 font-size: 11px;
                 font-weight: Theme.text-weight;
@@ -150,7 +150,7 @@ export component TabDoctor inherits VerticalLayout {
 
                 if root.has_scanned && root.has_fixable_issues: ActionButton {
                     is-wide: root.is-wide;
-                    text: root.is_fixing ? "Đang xử lý..." : "Tự động sửa lỗi & Cân chỉnh";
+                    text: root.is_fixing ? "Đang xử lý..." : (root.is-wide ? "Tự động sửa lỗi & Cân chỉnh" : "Sửa lỗi & Cân chỉnh");
                     primary: true;
                     enabled: !root.is_fixing && !root.is_scanning;
                     clicked => { root.auto_fix_requested(); }
@@ -231,6 +231,7 @@ export component TabDoctor inherits VerticalLayout {
                 alignment: center;
 
                 ActionButton {
+                    is-wide: root.is-wide;
                     text: root.is_reloading ? "Đang nạp lại..." : "Khởi động lại Fcitx5";
                     primary: true;
                     enabled: !root.is_reloading && !root.is_scanning;
@@ -290,6 +291,7 @@ export component TabDoctor inherits VerticalLayout {
                 alignment: center;
 
                 ActionButton {
+                    is-wide: root.is-wide;
                     text: "Kích hoạt ngay";
                     primary: true;
                     enabled: !root.is_scanning;
@@ -349,6 +351,7 @@ export component TabDoctor inherits VerticalLayout {
                 alignment: center;
 
                 ActionButton {
+                    is-wide: root.is-wide;
                     text: root.is_reloading ? "Đang xử lý..." : "Nạp & Kích hoạt 1-Click";
                     primary: true;
                     enabled: !root.is_reloading && !root.is_scanning;
@@ -408,6 +411,7 @@ export component TabDoctor inherits VerticalLayout {
                 alignment: center;
 
                 ActionButton {
+                    is-wide: root.is-wide;
                     text: "Sửa xung đột ngay";
                     primary: true;
                     enabled: !root.is_scanning && !root.is_fixing;
@@ -467,6 +471,7 @@ export component TabDoctor inherits VerticalLayout {
                 alignment: center;
 
                 ActionButton {
+                    is-wide: root.is-wide;
                     text: "Bật tự khởi động";
                     primary: true;
                     enabled: !root.is_scanning && !root.is_fixing;
@@ -526,6 +531,7 @@ export component TabDoctor inherits VerticalLayout {
                 alignment: center;
 
                 ActionButton {
+                    is-wide: root.is-wide;
                     text: "Cấp quyền 1-Click";
                     primary: true;
                     enabled: !root.is_scanning && !root.is_fixing;
@@ -585,6 +591,7 @@ export component TabDoctor inherits VerticalLayout {
                 alignment: center;
 
                 ActionButton {
+                    is-wide: root.is-wide;
                     text: "Tối ưu WPS 1-Click";
                     primary: true;
                     enabled: !root.is_scanning;
@@ -644,6 +651,7 @@ export component TabDoctor inherits VerticalLayout {
                 alignment: center;
 
                 ActionButton {
+                    is-wide: root.is-wide;
                     text: "Tối ưu JetBrains 1-Click";
                     primary: true;
                     enabled: !root.is_scanning;
@@ -703,6 +711,7 @@ export component TabDoctor inherits VerticalLayout {
                 alignment: center;
 
                 ActionButton {
+                    is-wide: root.is-wide;
                     text: "Chuyển sang Clak 1-Click";
                     primary: true;
                     enabled: !root.is_scanning;
@@ -720,20 +729,20 @@ export component TabDoctor inherits VerticalLayout {
         border-color: transparent;
 
         HorizontalLayout {
-            padding-left: 14px;
-            padding-right: 14px;
-            padding-top: 10px;
-            padding-bottom: 10px;
+            padding-left: root.is-wide ? 16px : 12px;
+            padding-right: root.is-wide ? 16px : 12px;
+            padding-top: root.is-wide ? 12px : 8px;
+            padding-bottom: root.is-wide ? 12px : 8px;
             alignment: space-between;
-            spacing: 12px;
+            spacing: root.is-wide ? 12px : 8px;
 
             VerticalLayout {
                 alignment: center;
-                width: 24px;
+                width: root.is-wide ? 24px : 20px;
                 Image {
                     source: @image-url("../../assets/icons/activity.svg");
-                    width: 18px;
-                    height: 18px;
+                    width: root.is-wide ? 18px : 16px;
+                    height: root.is-wide ? 18px : 16px;
                     colorize: #a78bfa;
                 }
             }
@@ -746,14 +755,14 @@ export component TabDoctor inherits VerticalLayout {
                 Text {
                     text: "Cân chỉnh độ trễ tối ưu cho thiết bị";
                     color: #a78bfa;
-                    font-size: 13px;
+                    font-size: root.is-wide ? 14px : 13px;
                     font-weight: 600;
                 }
 
                 Text {
                     text: root.pacing_tune_description != "" ? root.pacing_tune_description : "Hồ sơ độ trễ hiện tại chưa đồng bộ với tần số quét màn hình và độ trễ uinput đo được. Nhấp để tự cân chỉnh ngay.";
                     color: Theme.text-muted;
-                    font-size: 12px;
+                    font-size: root.is-wide ? 12px : 11px;
                     wrap: word-wrap;
                 }
             }
@@ -762,6 +771,7 @@ export component TabDoctor inherits VerticalLayout {
                 alignment: center;
 
                 ActionButton {
+                    is-wide: root.is-wide;
                     text: "Tự cân chỉnh độ trễ";
                     primary: true;
                     enabled: !root.is_scanning && !root.is_fixing;
