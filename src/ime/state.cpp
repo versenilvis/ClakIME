@@ -2,7 +2,6 @@
 #include "engine.h"
 #include "config/config.h"
 #include "config/sites.h"
-#include "window/window_info.h"
 #include "de/kde.h"
 #include "uinput/uinput.h"
 #include "utils/log.h"

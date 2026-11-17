@@ -4,7 +4,6 @@
 #include <fcitx/inputcontext.h>
 #include <string>
 #include <cstdint>
-#include "apps/app_profile.h"
 #include "surrounding_verifier.h"
 
 namespace clak {

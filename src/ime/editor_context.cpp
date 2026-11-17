@@ -1,6 +1,5 @@
 #include "editor_context.h"
 #include "window/window_info.h"
-#include "apps/apps.h"
 #include "apps/browser.h"
 #include "apps/steam.h"
 #include "apps/sites.h"
@@ -8,7 +7,6 @@
 #include "de/kde.h"
 #include "config/config.h"
 #include "config/sites.h"
-#include "core.h"
 #include <string_view>
 #include <algorithm>
 #include <cctype>

@@ -1,6 +1,5 @@
 #include "hotkey_handler.h"
 #include "engine.h"
-#include "utils/log.h"
 #include "utils/text_utils.h"
 #include "core.h"
 #include <fcitx-utils/keysym.h>
