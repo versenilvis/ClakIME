@@ -19,27 +19,20 @@
 #include <fcitx-utils/utf8.h>
 #include <dlfcn.h>
 
-namespace {
-// dynamically resolve custom im info if supported by host fcitx5 version
-void showInputMethodInfo(fcitx::Instance* instance, fcitx::InputContext* ic, const std::string& info) {
-    if (!instance || !ic) return;
-    using ShowCustomFn = void (*)(fcitx::Instance*, fcitx::InputContext*, const std::string&);
-    static auto showCustom = reinterpret_cast<ShowCustomFn>(
-        dlsym(RTLD_DEFAULT, "_ZN5fcitx8Instance32showCustomInputMethodInformationEPNS_12InputContextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE")
-    );
-    if (showCustom) {
-        showCustom(instance, ic, info);
-    } else {
-        instance->showInputMethodInformation(ic);
-    }
-}
-} // namespace
-
 namespace clak {
 namespace ime {
 
 ClakState::ClakState(ClakEngine* engine, fcitx::InputContext* ic)
-    : engine_(engine), ic_(ic) {
+    : engine_(engine),
+      ic_(ic),
+      editor_context_(ic, verifier_),
+      hotkey_handler_(
+          engine,
+          ic,
+          [this](const std::string& text) { doCommitString(text); },
+          [this](bool force) { reset(force); },
+          [this]() { return currentProfile(); }
+      ) {
     int method = (engine_ && engine_->config()) ? clak_config_get_method(engine_->config()) : CLAK_METHOD_TELEX;
     rust_session_ = clak_session_new(method);
     syncConfig();
@@ -68,8 +61,8 @@ void ClakState::flushCollisionStats() {
 void ClakState::onDeactivate() {
     flushCollisionStats();
     surr_cursor_underflow_count_ = 0;
-    cursor_tracked_ = false;
-    last_tracked_text_.clear();
+    caret_tracker_.reset();
+    hotkey_handler_.reset();
     if (!isDeleting()) {
         verifier_.reset(/*hard_reset=*/true);
         bool is_terminal = (ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal)) ||
@@ -97,9 +90,7 @@ void ClakState::reset(bool force) {
                        " pending='" + pendingCommitString() + "' app=" + app + " site='" + site + "')");
         return;
     }
-    if (shift_press_time_us_ > 0) {
-        shift_mouse_clicked_ = true;
-    }
+    hotkey_handler_.onReset();
     uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
     if (!force) {
         // guard against false reset from web apps within 50ms post-commit window
@@ -125,9 +116,7 @@ void ClakState::reset(bool force) {
                            " missing_rtt=" + std::to_string(collision_stats_.missing_rtt_count));
             collision_stats_ = {};
         }
-        last_autofix_original_.clear();
-        last_autofix_converted_chars_ = 0;
-        last_autofix_time_us_ = 0;
+        hotkey_handler_.clearAutofix();
         last_key_time_us_ = 0;
         last_key_interval_us_ = 0;
     }
@@ -184,145 +173,17 @@ void ClakState::reset(bool force) {
     if (surr_lag_timer_) {
         surr_lag_timer_.reset();
     }
-    cached_site_.clear();
-    last_site_check_us_ = 0;
+    editor_context_.reset();
     if (rust_session_) {
         clak_session_reset(rust_session_, force);
     }
 }
 
 void ClakState::resetHard() {
-    cursor_tracked_ = false;
-    last_tracked_text_.clear();
+    caret_tracker_.reset();
+    hotkey_handler_.onMouseClicked();
     verifier_.reset(/*hard_reset=*/true);
     reset(/*force=*/true);
-}
-
-std::string ClakState::appKey() {
-    if (ic_ && !ic_->program().empty() && !de::isDesktopShell(ic_->program())) {
-        return ic_->program();
-    }
-    bool has_term_cap = ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal);
-    platform::WindowInfo win = platform::getActiveWindow();
-    if (!win.win_class.empty() && !de::isDesktopShell(win.win_class)) {
-        if (!has_term_cap || apps::isTerminalApp(win.win_class)) {
-            return win.win_class;
-        }
-    }
-    if (has_term_cap) {
-        return "terminal";
-    }
-    if (ic_ && !ic_->program().empty() && !de::isDesktopShell(ic_->program())) {
-        return ic_->program();
-    }
-    return "default";
-}
-
-std::string ClakState::activeSite() {
-    uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
-    if (now_us - last_site_check_us_ < config::kCacheCheckIntervalUs && !cached_site_.empty()) {
-        return cached_site_;
-    }
-    last_site_check_us_ = now_us;
-    std::string fallback = (ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal))
-                                ? "terminal"
-                                : ((ic_ && !ic_->program().empty() && !de::isDesktopShell(ic_->program())) ? ic_->program() : "");
-    platform::WindowInfo win = platform::getActiveWindow(fallback);
-    std::string new_site = config::extractDomain(win.win_class, win.win_title);
-    if (!new_site.empty() && !cached_site_.empty() && new_site != cached_site_) {
-        // clear rich text and draftjs editor flags when switching sites
-        verifier_.setDraftJsEditor(false);
-        verifier_.setRichTextEditor(false);
-        verifier_.setCanvasEditor(false);
-    }
-    cached_site_ = new_site;
-    return cached_site_;
-}
-
-bool ClakState::isBrowser() const {
-    std::string app = const_cast<ClakState*>(this)->appKey();
-    return apps::isBrowserApp(app);
-}
-
-bool ClakState::isGecko() const {
-    std::string app = const_cast<ClakState*>(this)->appKey();
-    return apps::isGeckoApp(app);
-}
-
-bool ClakState::isSteam() const {
-    std::string app = const_cast<ClakState*>(this)->appKey();
-    return apps::isSteamApp(app);
-}
-
-bool ClakState::isDraftJsEditor() const {
-    std::string site = const_cast<ClakState*>(this)->activeSite();
-    if (apps::isClaudeSite(site)) {
-        bool is_multiline = (ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Multiline));
-        if (!is_multiline && ic_ && ic_->surroundingText().isValid() &&
-            ic_->surroundingText().text().find('\n') != std::string::npos) {
-            is_multiline = true;
-        }
-        // claude chat composer is multiline and works reliably with surrounding text
-        // only the search bar (single-line input) exhibits draftjs controlled behavior
-        return !is_multiline;
-    }
-    return verifier_.isDraftJsEditor(site);
-}
-
-bool ClakState::looksLikeUrlAutofill(const fcitx::SurroundingText& surr) {
-    if (!surr.isValid()) return false;
-    const std::string& text = surr.text();
-    if (text.empty()) return false;
-
-    unsigned int cursor = surr.cursor();
-    unsigned int anchor = surr.anchor();
-    if (cursor == anchor) return false;
-
-    unsigned int sel_start = std::min(anchor, cursor);
-    unsigned int sel_end = std::max(anchor, cursor);
-    if (sel_start == 0 || sel_end != text.size()) return false;
-
-    for (size_t i = 0; i < text.size(); ++i) {
-        unsigned char c = static_cast<unsigned char>(text[i]);
-        // url bar autofill contains printable ascii without whitespace
-        if (c < 0x21 || c > 0x7e) return false;
-    }
-
-    if (text.find(":/") != std::string::npos || text.rfind("about:", 0) == 0) {
-        return true;
-    }
-    if (text.find("localhost") != std::string::npos) {
-        return true;
-    }
-    if (text.rfind("www.", 0) == 0) {
-        return true;
-    }
-
-    // require established address-bar evidence (recognized tld before path or port)
-    size_t host_end = text.find_first_of("/:?#");
-    std::string host = (host_end == std::string::npos) ? text : text.substr(0, host_end);
-    if (host.empty() || host.front() == '.' || host.back() == '.') {
-        return false;
-    }
-
-    static const std::vector<std::string> tlds = {
-        ".com", ".org", ".net", ".edu", ".gov", ".mil", ".io", ".dev", ".app",
-        ".ai", ".vn", ".me", ".co", ".info", ".xyz", ".biz", ".tv", ".cc",
-        ".to", ".so", ".online", ".site", ".top", ".pro", ".uk", ".us",
-        ".de", ".fr", ".jp", ".cn", ".ru", ".ca", ".au", ".in"
-    };
-
-    for (const auto& tld : tlds) {
-        if (host.size() > tld.size() &&
-            host.compare(host.size() - tld.size(), tld.size(), tld) == 0) {
-            char before = host[host.size() - tld.size() - 1];
-            if (isalnum(before) || before == '-') {
-                return true;
-            }
-        }
-    }
-
-    return false;
 }
 
 apps::AppProfile* ClakState::currentProfile() {
@@ -930,29 +791,10 @@ bool ClakState::handleKey(const fcitx::Key& key) {
     }
 
     if (valid_surr) {
-        size_t total_chars = utils::utf8CharCount(surr.text());
-        if (!cursor_tracked_ || surr.text() != last_tracked_text_) {
-            tracked_cursor_ = surr.cursor();
-            last_tracked_text_ = surr.text();
-            last_surr_cursor_ = surr.cursor();
-            cursor_tracked_ = true;
-        }
-        if (tracked_cursor_ > total_chars) {
-            tracked_cursor_ = total_chars;
-        }
         surr_text = surr.text().c_str();
-        if (surr.cursor() != surr.anchor()) {
-            cursor = surr.cursor();
-            anchor = surr.anchor();
-            tracked_cursor_ = surr.cursor();
-            last_surr_cursor_ = surr.cursor();
-        } else {
-            cursor = tracked_cursor_;
-            anchor = tracked_cursor_;
-        }
+        caret_tracker_.resolveEffectiveOffsets(surr, cursor, anchor);
     } else {
-        cursor_tracked_ = false;
-        last_tracked_text_.clear();
+        caret_tracker_.reset();
         surr_text = nullptr;
         cursor = 0;
         anchor = 0;
@@ -1104,8 +946,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
     }
 
     if (cmds.count == 1 && cmds.commands[0].cmd_type == CLAK_CMD_FORWARD_KEY) {
-        last_autofix_original_.clear();
-        last_autofix_time_us_ = 0;
+        hotkey_handler_.clearAutofix();
         verifier_.clearPending();
         if (valid_surr) {
             last_text_len_ = surr.cursor() + 1;
@@ -1127,14 +968,11 @@ bool ClakState::handleKey(const fcitx::Key& key) {
     const char* af_del = clak_session_last_autofix_delete(rust_session_);
     const char* af_com = clak_session_last_autofix_commit(rust_session_);
     if (af_del && af_del[0] != '\0' && af_com) {
-        last_autofix_original_ = af_del;
-        last_autofix_converted_chars_ = utils::utf8CharCount(af_com);
-        last_autofix_time_us_ = fcitx::now(CLOCK_MONOTONIC);
+        hotkey_handler_.recordAutofix(af_del, utils::utf8CharCount(af_com), fcitx::now(CLOCK_MONOTONIC));
         utils::clakLog("handleKey: autocorrect applied: '" + std::string(af_del) +
                        "' -> '" + std::string(af_com) + "' (tap Shift to undo)");
     } else {
-        last_autofix_original_.clear();
-        last_autofix_time_us_ = 0;
+        hotkey_handler_.clearAutofix();
     }
     executeSessionCommands(cmds);
     last_text_len_ = 0;
@@ -1149,158 +987,29 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
 
     std::string app = appKey();
     const auto& key = keyEvent.key();
-    std::string key_str = fcitx::Key::keySymToUTF8(key.sym());
+
+    if (repeat_handler_.heldKey().sym() != 0 && keyEvent.isRelease()) {
+        repeat_handler_.cancel();
+    }
+    syncConfig();
+
+    if (hotkey_handler_.handleKeyEvent(keyEvent, app)) {
+        return;
+    }
+    if (keyEvent.isRelease()) {
+        return;
+    }
 
     bool is_ctrl = key.states().test(fcitx::KeyState::Ctrl);
     bool is_shift = key.states().test(fcitx::KeyState::Shift);
     bool is_alt = key.states().test(fcitx::KeyState::Alt);
     bool is_super = key.states().test(fcitx::KeyState::Super);
-    bool is_ctrl_sym = (key.sym() == FcitxKey_Control_L || key.sym() == FcitxKey_Control_R);
-    bool is_shift_sym = (key.sym() == FcitxKey_Shift_L || key.sym() == FcitxKey_Shift_R);
-    bool is_alt_sym = (key.sym() == FcitxKey_Alt_L || key.sym() == FcitxKey_Alt_R);
-    char* sc_c = engine_->config() ? clak_config_get_toggle_shortcut(engine_->config()) : nullptr;
-    std::string raw_shortcut = sc_c ? sc_c : "ctrl_shift";
-    if (sc_c) clak_free_string(sc_c);
-
-    std::string shortcut = "";
-    for (char c : raw_shortcut) {
-        if (c == '+' || c == ' ' || c == '-') {
-            if (!shortcut.empty() && shortcut.back() != '_') shortcut.push_back('_');
-        } else {
-            shortcut.push_back(std::tolower(static_cast<unsigned char>(c)));
-        }
-    }
-    if (shortcut.empty()) shortcut = "ctrl_shift";
-
-    if (keyEvent.isRelease()) {
-        if (repeat_handler_.heldKey().sym() != 0) {
-            repeat_handler_.cancel();
-        }
-        if (is_shift_sym) {
-            uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
-            uint64_t hold_time_us = (shift_press_time_us_ > 0) ? (now_us - shift_press_time_us_) : 0;
-            bool single_tap = (shift_press_time_us_ > 0) && (hold_time_us < 350000) && !shift_other_key_pressed_ && !shift_mouse_clicked_;
-            utils::clakLog("shift release: hold_ms=" + std::to_string(hold_time_us / 1000) +
-                           " single_tap=" + std::to_string(single_tap) +
-                           " other_key=" + std::to_string(shift_other_key_pressed_) +
-                           " mouse=" + std::to_string(shift_mouse_clicked_) +
-                           " armed=" + std::to_string(ctrl_shift_armed_ || alt_shift_armed_));
-            shift_press_time_us_ = 0;
-            shift_other_key_pressed_ = false;
-            shift_mouse_clicked_ = false;
-
-            if (single_tap && !ctrl_shift_armed_ && !alt_shift_armed_) {
-                if (triggerShiftAutoFix()) {
-                    return;
-                }
-            }
-        }
-        if (shortcut == "ctrl_shift") {
-            if (ctrl_shift_armed_ && (is_shift_sym || is_ctrl_sym)) {
-                engine_->toggleAppEnabled(app);
-                reset(/*force=*/true);
-                ic_->updateUserInterface(fcitx::UserInterfaceComponent::StatusArea, true);
-                if (engine_->instance() && std::string(ic_->frontend()) != "mock") {
-                    showInputMethodInfo(engine_->instance(), ic_, engine_->isAppEnabled(app) ? "VI" : "EN");
-                }
-                ctrl_shift_armed_ = false;
-                ctrl_pressed_first_ = false;
-            } else if (is_ctrl_sym) {
-                ctrl_pressed_first_ = false;
-            }
-        } else if (shortcut == "alt_shift") {
-            if (alt_shift_armed_ && (is_shift_sym || is_alt_sym)) {
-                engine_->toggleAppEnabled(app);
-                reset(/*force=*/true);
-                ic_->updateUserInterface(fcitx::UserInterfaceComponent::StatusArea, true);
-                if (engine_->instance() && std::string(ic_->frontend()) != "mock") {
-                    showInputMethodInfo(engine_->instance(), ic_, engine_->isAppEnabled(app) ? "VI" : "EN");
-                }
-                alt_shift_armed_ = false;
-                alt_pressed_first_ = false;
-            } else if (is_alt_sym) {
-                alt_pressed_first_ = false;
-            }
-        }
-        return;
-    }
-
-    syncConfig();
-
-    if (is_shift_sym) {
-        if (shift_press_time_us_ == 0) {
-            shift_press_time_us_ = fcitx::now(CLOCK_MONOTONIC);
-            shift_other_key_pressed_ = false;
-            shift_mouse_clicked_ = false;
-        }
-    } else {
-        shift_other_key_pressed_ = true;
-    }
-
-    utils::clakLog("keyEvent: sym=" + std::to_string(key.sym()) + " ('" + key_str + "') app='" + app +
-                   "' term_cap=" + std::to_string(ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal)) +
-                   " enabled=" + std::to_string(engine_->isAppEnabled(app)) +
-                   " ctrl=" + std::to_string(is_ctrl) + " shift=" + std::to_string(is_shift) +
-                   " alt=" + std::to_string(is_alt) + " super=" + std::to_string(is_super) +
-                   " shortcut='" + shortcut + "'");
-
-    bool match_toggle = false;
-    if (shortcut == "alt_z" && is_alt && !is_ctrl && (key.sym() == FcitxKey_z || key.sym() == FcitxKey_Z)) {
-        match_toggle = true;
-    } else if (shortcut == "super_space" && is_super && (key.sym() == FcitxKey_space || key.sym() == FcitxKey_KP_Space)) {
-        match_toggle = true;
-    } else if (shortcut == "ctrl_space" && is_ctrl && !is_shift && !is_alt && (key.sym() == FcitxKey_space || key.sym() == FcitxKey_KP_Space)) {
-        match_toggle = true;
-    } else if (shortcut == "shift_space" && is_shift && !is_ctrl && !is_alt && (key.sym() == FcitxKey_space || key.sym() == FcitxKey_KP_Space)) {
-        match_toggle = true;
-    } else if (shortcut == "alt_space" && is_alt && !is_ctrl && (key.sym() == FcitxKey_space || key.sym() == FcitxKey_KP_Space)) {
-        match_toggle = true;
-    }
-
-    if (match_toggle) {
-        engine_->toggleAppEnabled(app);
-        reset(/*force=*/true);
-        ic_->updateUserInterface(fcitx::UserInterfaceComponent::StatusArea, true);
-        if (engine_->instance() && std::string(ic_->frontend()) != "mock") {
-            showInputMethodInfo(engine_->instance(), ic_, engine_->isAppEnabled(app) ? "VI" : "EN");
-        }
-        keyEvent.filterAndAccept();
-        return;
-    }
-
-    if (shortcut == "ctrl_shift") {
-        if (ctrl_shift_armed_) {
-            if (!is_ctrl_sym && !is_shift_sym) {
-                ctrl_shift_armed_ = false;
-            }
-        } else if (is_ctrl_sym && !is_shift && !is_alt && !is_super) {
-            ctrl_pressed_first_ = true;
-        } else if (is_shift_sym && ctrl_pressed_first_ && is_ctrl) {
-            ctrl_shift_armed_ = true;
-            ctrl_pressed_first_ = false;
-        } else {
-            ctrl_pressed_first_ = false;
-        }
-    } else if (shortcut == "alt_shift") {
-        if (alt_shift_armed_) {
-            if (!is_alt_sym && !is_shift_sym) {
-                alt_shift_armed_ = false;
-            }
-        } else if (is_alt_sym && !is_shift && !is_ctrl && !is_super) {
-            alt_pressed_first_ = true;
-        } else if (is_shift_sym && alt_pressed_first_ && is_alt) {
-            alt_shift_armed_ = true;
-            alt_pressed_first_ = false;
-        } else {
-            alt_pressed_first_ = false;
-        }
-    }
-
     bool has_ctrl_alt = is_ctrl || is_alt || is_super;
     uint32_t sym = key.sym();
     if (sym == 0 || sym == FcitxKey_None) {
         return;
     }
+    std::string key_str = fcitx::Key::keySymToUTF8(key.sym());
 
     if (!engine_->isAppEnabled(app)) {
         reset(/*force=*/true);
@@ -1334,43 +1043,9 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
     // ctrl+z undoes recent autocorrect or autofix
     bool is_ctrl_z = is_ctrl && !is_alt && !is_super && !key.states().test(fcitx::KeyState::Shift) &&
                      (sym == FcitxKey_z || sym == FcitxKey_Z);
-    if (is_ctrl_z && !last_autofix_original_.empty() && last_autofix_time_us_ > 0 &&
-        (fcitx::now(CLOCK_MONOTONIC) - last_autofix_time_us_ < 5000000)) {
-        size_t converted_chars = last_autofix_converted_chars_;
-        std::string restore_text = last_autofix_original_;
-        last_autofix_original_.clear();
-        last_autofix_converted_chars_ = 0;
-        last_autofix_time_us_ = 0;
-
+    if (is_ctrl_z && hotkey_handler_.tryUndo(ic_)) {
         repeat_handler_.cancel();
         reset(/*force=*/true);
-
-        bool has_surrounding = ic_->capabilityFlags().test(fcitx::CapabilityFlag::SurroundingText);
-        const auto& surr = ic_->surroundingText();
-        bool valid_surr = has_surrounding && surr.isValid() &&
-                          surr.cursor() <= surr.text().size() &&
-                          !verifier_.isCanvasEditor() &&
-                          !verifier_.isRichTextEditor();
-        bool use_surrounding = valid_surr && currentProfile()->allowsSurroundingText();
-
-        if (converted_chars > 0) {
-            if (currentProfile()->erasesWithCommittedDel()) {
-                std::string del_str(converted_chars, '\x7f');
-                del_str += restore_text;
-                doCommitString(del_str);
-            } else if (use_surrounding && surr.cursor() >= converted_chars) {
-                ic_->deleteSurroundingText(-static_cast<int>(converted_chars),
-                                           static_cast<unsigned int>(converted_chars));
-                doCommitString(restore_text);
-            } else {
-                for (size_t i = 0; i < converted_chars; ++i) {
-                    ic_->forwardKey(fcitx::Key(FcitxKey_BackSpace));
-                }
-                doCommitString(restore_text);
-            }
-            utils::clakLog("keyEvent: Ctrl+Z undo autocorrect restored '" + restore_text + "'");
-        }
-
         keyEvent.filterAndAccept();
         return;
     }
@@ -1407,33 +1082,8 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
         return;
     }
 
-    if (is_cursor_move && !is_shift && !has_ctrl_alt && ic_) {
-        const auto& surr = ic_->surroundingText();
-        if (surr.isValid()) {
-            size_t total_chars = utils::utf8CharCount(surr.text());
-            if (!cursor_tracked_ || surr.text() != last_tracked_text_) {
-                tracked_cursor_ = surr.cursor();
-                last_tracked_text_ = surr.text();
-                last_surr_cursor_ = surr.cursor();
-                cursor_tracked_ = true;
-            }
-            if (sym == FcitxKey_Home) {
-                tracked_cursor_ = 0;
-            } else if (sym == FcitxKey_End) {
-                tracked_cursor_ = total_chars;
-            } else if (sym == FcitxKey_Left) {
-                if (tracked_cursor_ > 0) {
-                    tracked_cursor_--;
-                }
-            } else if (sym == FcitxKey_Right) {
-                if (tracked_cursor_ < total_chars) {
-                    tracked_cursor_++;
-                }
-            }
-        }
-    } else if (has_ctrl_alt || is_special_nav) {
-        cursor_tracked_ = false;
-        last_tracked_text_.clear();
+    if (ic_) {
+        caret_tracker_.onKeyEvent(sym, is_cursor_move, is_shift, has_ctrl_alt, is_special_nav, ic_->surroundingText());
     }
 
     if (has_ctrl_alt || is_cursor_move || is_special_nav) {
@@ -1584,123 +1234,6 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
     } else {
         repeat_handler_.cancel();
     }
-}
-
-bool ClakState::triggerShiftAutoFix() {
-    if (!engine_->config() || !clak_config_get_shift_autofix(engine_->config())) {
-        utils::clakLog("triggerShiftAutoFix: shift_autofix is disabled in config");
-        return false;
-    }
-    if (!ic_) {
-        return false;
-    }
-    if (ic_->capabilityFlags().test(fcitx::CapabilityFlag::Password)) {
-        utils::clakLog("triggerShiftAutoFix: password field, skipping");
-        return false;
-    }
-
-    const auto& surr = ic_->surroundingText();
-    uint64_t now_us = fcitx::now(CLOCK_MONOTONIC);
-    unsigned int cur = surr.isValid() ? surr.cursor() : 0;
-    unsigned int anch = surr.isValid() ? surr.anchor() : 0;
-    bool is_address_bar = (currentProfile() && currentProfile()->name() == "address-bar") ||
-                          (ic_->capabilityFlags().test(fcitx::CapabilityFlag::Url));
-    utils::clakLog("triggerShiftAutoFix: cur=" + std::to_string(cur) + " anch=" + std::to_string(anch) +
-                   " text_len=" + std::to_string(surr.isValid() ? surr.text().size() : 0) +
-                   " is_addr_bar=" + std::to_string(is_address_bar));
-
-    // quick undo check within 2s of previous autofix
-    if (!last_autofix_original_.empty() && last_autofix_time_us_ > 0 &&
-        (now_us - last_autofix_time_us_ < 2000000)) {
-        utils::clakLog("triggerShiftAutoFix: undo requested to restore '" + last_autofix_original_ + "'");
-        size_t converted_chars = last_autofix_converted_chars_;
-        std::string restore_text = last_autofix_original_;
-        last_autofix_original_.clear();
-        last_autofix_converted_chars_ = 0;
-        last_autofix_time_us_ = 0;
-
-        if (converted_chars > 0) {
-            if (cur >= converted_chars) {
-                ic_->deleteSurroundingText(-static_cast<int>(converted_chars), converted_chars);
-            }
-            doCommitString(restore_text);
-            return true;
-        }
-    }
-
-    int method = clak_config_get_method(engine_->config());
-
-    // selection mode: surrounding selection or primary selection fallback
-    std::string selected;
-    if (surr.isValid() && cur != anch) {
-        selected = utils::extractSelection(surr.text(), cur, anch);
-    } else if (is_address_bar || !surr.isValid()) {
-#if CLAK_HAVE_FCITX5_CLIPBOARD
-        if (engine_ && engine_->instance()) {
-            auto* cb = engine_->instance()->addonManager().addon("clipboard");
-            if (cb) {
-                try {
-                    selected = cb->call<fcitx::IClipboard::primary>(ic_);
-                } catch (...) {
-                    selected.clear();
-                }
-            }
-        }
-#endif
-        if (!selected.empty()) {
-            utils::clakLog("triggerShiftAutoFix: retrieved primary selection: '" + selected + "'");
-        }
-    }
-
-    if (!selected.empty()) {
-        int changed = 0;
-        char* fixed = clak_autofix_text(selected.c_str(), method, 1, &changed);
-        if (fixed) {
-            std::string fixed_str = fixed;
-            clak_free_string(fixed);
-
-            if (changed != 0 && fixed_str != selected) {
-                last_autofix_original_ = selected;
-                last_autofix_converted_chars_ = utils::utf8CharCount(fixed_str);
-                last_autofix_time_us_ = now_us;
-
-                utils::clakLog("triggerShiftAutoFix (selection): '" + selected + "' -> '" + fixed_str + "'");
-                // commit string replaces selection directly in wayland and x11
-                doCommitString(fixed_str);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    // word-before-cursor mode: cursor == anchor and cur > 0
-    if (surr.isValid() && cur > 0) {
-        std::string wordBefore = utils::extractWordBeforeCursor(surr.text(), cur);
-        if (wordBefore.empty()) {
-            return false;
-        }
-        int changed = 0;
-        char* fixed = clak_autofix_text(wordBefore.c_str(), method, 1, &changed);
-        if (!fixed) {
-            return false;
-        }
-        std::string fixed_str = fixed;
-        clak_free_string(fixed);
-
-        if (changed != 0 && fixed_str != wordBefore) {
-            size_t word_chars = utils::utf8CharCount(wordBefore);
-            last_autofix_original_ = wordBefore;
-            last_autofix_converted_chars_ = utils::utf8CharCount(fixed_str);
-            last_autofix_time_us_ = now_us;
-
-            utils::clakLog("triggerShiftAutoFix (word-before): '" + wordBefore + "' -> '" + fixed_str + "'");
-            ic_->deleteSurroundingText(-static_cast<int>(word_chars), word_chars);
-            doCommitString(fixed_str);
-            return true;
-        }
-    }
-
-    return false;
 }
 
 } // namespace ime

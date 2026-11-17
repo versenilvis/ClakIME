@@ -12,6 +12,9 @@
 #include "surrounding_verifier.h"
 #include "key_buffer.h"
 #include "adaptive_pacing.h"
+#include "caret_tracker.h"
+#include "editor_context.h"
+#include "hotkey_handler.h"
 #include "apps/app_profile.h"
 
 namespace clak {
@@ -28,20 +31,20 @@ public:
   void keyEvent(fcitx::KeyEvent& keyEvent);
   void reset(bool force = false);
   void resetHard();
-  bool isBrowser() const;
-  bool isGecko() const;
-  bool isSteam() const;
-  std::string appKey();
+  bool isBrowser() const { return editor_context_.isBrowser(); }
+  bool isGecko() const { return editor_context_.isGecko(); }
+  bool isSteam() const { return editor_context_.isSteam(); }
+  std::string appKey() { return editor_context_.appKey(); }
   void syncConfig();
   bool shouldUseUinput(bool use_surrounding, uint32_t action_type, const fcitx::SurroundingText& surr);
   bool isAutofillCertain(const fcitx::SurroundingText& surr);
-  static bool looksLikeUrlAutofill(const fcitx::SurroundingText& surr);
+  static bool looksLikeUrlAutofill(const fcitx::SurroundingText& surr) { return EditorContextDetector::looksLikeUrlAutofill(surr); }
 
   bool isDeleting() const { return rust_session_ ? clak_session_is_deleting(rust_session_) : false; }
   bool isSelectionDeletion() const { return is_selection_deletion_; }
   uint64_t safetyTimerTime() const { return safety_timer_ ? safety_timer_->time() : 0; }
   bool isRichTextEditor() const { return verifier_.isRichTextEditor(); }
-  bool isDraftJsEditor() const;
+  bool isDraftJsEditor() const { return const_cast<EditorContextDetector&>(editor_context_).isDraftJsEditor(); }
   int mismatchCount() const { return verifier_.mismatchCount(); }
   size_t expectedBackspaces() const { return rust_session_ ? clak_session_expected_backspaces(rust_session_) : 0; }
   size_t bufferedKeysCount() const {
@@ -76,9 +79,9 @@ private:
   void executeSessionCommands(const ClakSessionCommandList& list);
   void handleSafetyTimeout();
   bool handleKey(const fcitx::Key& key);
-  bool triggerShiftAutoFix();
+  bool triggerShiftAutoFix() { return hotkey_handler_.triggerShiftAutoFix(); }
   void replayBufferedKeys(const std::string& initial_batch = "");
-  std::string activeSite();
+  std::string activeSite() { return editor_context_.activeSite(); }
   void doCommitString(const std::string& text);
   void doCommitDirect(const std::string& text);
   void forwardBackspacePressRelease(size_t count);
@@ -113,9 +116,6 @@ private:
   size_t last_text_len_{0};
   size_t last_surr_cursor_{0};
   size_t last_surr_text_len_{0};
-  size_t tracked_cursor_{0};
-  bool cursor_tracked_{false};
-  std::string last_tracked_text_;
   uint32_t surr_keystroke_count_{0};
   size_t vscode_invalid_surr_count_{0};
   bool word_used_uinput_{false};
@@ -133,28 +133,17 @@ private:
   uint64_t last_key_time_us_{0};
   uint64_t last_key_interval_us_{0};
   uint64_t last_uinput_finish_time_us_{0};
-
-  uint64_t last_site_check_us_{0};
-  std::string cached_site_;
-  bool ctrl_pressed_first_{false};
-  bool ctrl_shift_armed_{false};
-  bool alt_pressed_first_{false};
-  bool alt_shift_armed_{false};
   uint64_t last_selection_time_us_{0};
   bool address_bar_has_space_{false};
-
-  uint64_t shift_press_time_us_{0};
-  bool shift_other_key_pressed_{false};
-  bool shift_mouse_clicked_{false};
-  uint64_t last_autofix_time_us_{0};
-  std::string last_autofix_original_;
-  size_t last_autofix_converted_chars_{0};
 
   RepeatHandler repeat_handler_;
   ModalHandler modal_handler_;
   SurroundingVerifier verifier_;
   KeyBuffer key_buffer_;
   pacing::AdaptivePacingEngine pacing_engine_;
+  CaretTracker caret_tracker_;
+  EditorContextDetector editor_context_;
+  HotkeyHandler hotkey_handler_;
 
   std::unique_ptr<apps::AppProfile> profile_;
   std::string profile_app_;

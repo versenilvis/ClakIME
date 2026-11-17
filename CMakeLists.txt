@@ -178,6 +178,9 @@ set(CLAK_SOURCES
     src/ime/surrounding_verifier.cpp
     src/ime/key_buffer.cpp
     src/ime/adaptive_pacing.cpp
+    src/ime/caret_tracker.cpp
+    src/ime/editor_context.cpp
+    src/ime/hotkey_handler.cpp
     src/ime/state.cpp
     src/engine.cpp
 )
