@@ -396,9 +396,9 @@ fn vni_marks_traditional() {
     assert_eq!(vt("u7"), "ư");
     assert_eq!(vt("uo7"), "ươ");
     assert_eq!(vt("u7o7"), "ươ");
-    assert_eq!(vt("thuo73"), "thưở");
-    assert_eq!(vt("thu7o73"), "thưở");
-    assert_eq!(vt("huo7"), "hươ");
+    assert_eq!(vt("thuo73"), "thuở");
+    assert_eq!(vt("thu7o73"), "thuở");
+    assert_eq!(vt("huo7"), "huơ");
     assert_eq!(vt("hu77o7"), "huơ");
     assert_eq!(vt("thu77o73"), "thuở");
     assert_eq!(vt("THU77O73"), "THUỞ");
@@ -637,9 +637,9 @@ fn teipvni_vni_marks() {
     assert_eq!(tv("u7"), "ư");
     assert_eq!(tv("uo7"), "ươ");
     assert_eq!(tv("u7o7"), "ươ");
-    assert_eq!(tv("thuo73"), "thưở");
-    assert_eq!(tv("thu7o73"), "thưở");
-    assert_eq!(tv("huo7"), "hươ");
+    assert_eq!(tv("thuo73"), "thuở");
+    assert_eq!(tv("thu7o73"), "thuở");
+    assert_eq!(tv("huo7"), "huơ");
     assert_eq!(tv("hu77o7"), "huơ");
     assert_eq!(tv("thu77o73"), "thuở");
     assert_eq!(tv("THU77O73"), "THUỞ");

@@ -60,6 +60,45 @@ pub struct ClakCore {
 
 pub type ClakEngine = ClakCore;
 
+pub fn is_open_short_vowel_with_onset(s: &str) -> bool {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.len() < 2 {
+        return false;
+    }
+    let last = chars[chars.len() - 1];
+    let is_short_vowel = matches!(
+        last,
+        'ă' | 'ằ'
+            | 'ắ'
+            | 'ẳ'
+            | 'ẵ'
+            | 'ặ'
+            | 'â'
+            | 'ầ'
+            | 'ấ'
+            | 'ẩ'
+            | 'ẫ'
+            | 'ậ'
+            | 'Ă'
+            | 'Ằ'
+            | 'Ắ'
+            | 'Ẳ'
+            | 'Ẵ'
+            | 'Ặ'
+            | 'Â'
+            | 'Ầ'
+            | 'Ấ'
+            | 'Ẩ'
+            | 'Ẫ'
+            | 'Ậ'
+    );
+    if !is_short_vowel {
+        return false;
+    }
+    let prev = chars[chars.len() - 2];
+    !crate::spelling::is_vowel(prev)
+}
+
 impl ClakCore {
     pub fn new(method: Method) -> Self {
         ClakCore {
@@ -201,11 +240,17 @@ impl ClakCore {
             self.allow_foreign_consonants && starts_with_foreign_initial(&composed);
         let known = if self.dict {
             if is_en && !is_foreign_initial {
-                self.is_exact_dict_word(&composed)
+                if self.auto_restore_english {
+                    self.is_exact_dict_word(&composed)
+                } else {
+                    self.is_exact_dict_word(&composed) || is_open_short_vowel_with_onset(&composed)
+                }
             } else if is_foreign_initial {
                 spelling::is_valid_cvc_with_options(&composed, true)
             } else {
-                self.dict_known(&composed.to_lowercase()) || is_informal_or_loanword(&composed)
+                self.dict_known(&composed.to_lowercase())
+                    || is_informal_or_loanword(&composed)
+                    || is_open_short_vowel_with_onset(&composed)
             }
         } else {
             spelling::is_valid_cvc_with_options(&composed, self.allow_foreign_consonants)

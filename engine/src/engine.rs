@@ -34,9 +34,34 @@ impl Letter {
     }
 }
 
+fn should_collapse_open_uo(ls: &[Letter], u_idx: usize) -> bool {
+    if u_idx + 1 >= ls.len() {
+        return false;
+    }
+    let next = &ls[u_idx + 1];
+    if !next.is_vowel || next.c != 'o' || next.variant != 2 {
+        return false;
+    }
+    // cluster must be open (no consonants or vowels following 'o')
+    if u_idx + 2 < ls.len() {
+        return false;
+    }
+    let onset: Vec<char> = ls[..u_idx]
+        .iter()
+        .map(|l| l.c.to_ascii_lowercase())
+        .collect();
+    match onset.as_slice() {
+        ['t', 'h'] => true, // thuơ, thuở
+        ['h'] => true,      // huơ, huở
+        ['k', 'h'] => true, // khuơ, khuở
+        ['q'] => true,      // quơ, quở (when q is onset consonant and u is vowel)
+        _ => false,
+    }
+}
+
 fn emit(ls: &[Letter]) -> String {
     let mut out = String::with_capacity(ls.len() * 3);
-    for lt in ls {
+    for (i, lt) in ls.iter().enumerate() {
         if lt.is_dstroke {
             out.push_str(if lt.upper {
                 tables::D_STROKE_UP
@@ -44,7 +69,12 @@ fn emit(ls: &[Letter]) -> String {
                 tables::D_STROKE_LO
             });
         } else if lt.is_vowel {
-            out.push_str(tables::vowel_utf8(lt.c, lt.variant, lt.tone, lt.upper));
+            let variant = if lt.c == 'u' && lt.variant == 2 && should_collapse_open_uo(ls, i) {
+                0
+            } else {
+                lt.variant
+            };
+            out.push_str(tables::vowel_utf8(lt.c, variant, lt.tone, lt.upper));
         } else {
             out.push(if lt.upper {
                 lt.c.to_ascii_uppercase()

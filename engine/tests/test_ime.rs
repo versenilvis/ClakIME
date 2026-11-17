@@ -1190,9 +1190,7 @@ fn test_decompose_to_vni_roundtrip() {
             "quả",
             "ươ",
             "thuở",
-            "thưở",
             "huơ",
-            "hươ",
             "quơ",
             "THUỞ",
             "HUƠ",
@@ -1200,8 +1198,6 @@ fn test_decompose_to_vni_roundtrip() {
             assert_eq!(core.transform(&decompose_to_vni(w)), w, "word {w}");
         }
     }
-    assert_ne!(decompose_to_vni("thuở"), decompose_to_vni("thưở"));
-    assert_ne!(decompose_to_vni("huơ"), decompose_to_vni("hươ"));
 
     // editing a seeded uơ word keeps plain u intact across both VNI methods
     for method in [Method::Vni, Method::TeipVni] {
