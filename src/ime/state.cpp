@@ -68,6 +68,8 @@ void ClakState::flushCollisionStats() {
 void ClakState::onDeactivate() {
     flushCollisionStats();
     surr_cursor_underflow_count_ = 0;
+    cursor_tracked_ = false;
+    last_tracked_text_.clear();
     if (!isDeleting()) {
         verifier_.reset(/*hard_reset=*/true);
         bool is_terminal = (ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal)) ||
@@ -190,6 +192,8 @@ void ClakState::reset(bool force) {
 }
 
 void ClakState::resetHard() {
+    cursor_tracked_ = false;
+    last_tracked_text_.clear();
     verifier_.reset(/*hard_reset=*/true);
     reset(/*force=*/true);
 }
@@ -926,10 +930,29 @@ bool ClakState::handleKey(const fcitx::Key& key) {
     }
 
     if (valid_surr) {
+        size_t total_chars = utils::utf8CharCount(surr.text());
+        if (!cursor_tracked_ || surr.text() != last_tracked_text_) {
+            tracked_cursor_ = surr.cursor();
+            last_tracked_text_ = surr.text();
+            last_surr_cursor_ = surr.cursor();
+            cursor_tracked_ = true;
+        }
+        if (tracked_cursor_ > total_chars) {
+            tracked_cursor_ = total_chars;
+        }
         surr_text = surr.text().c_str();
-        cursor = surr.cursor();
-        anchor = surr.anchor();
+        if (surr.cursor() != surr.anchor()) {
+            cursor = surr.cursor();
+            anchor = surr.anchor();
+            tracked_cursor_ = surr.cursor();
+            last_surr_cursor_ = surr.cursor();
+        } else {
+            cursor = tracked_cursor_;
+            anchor = tracked_cursor_;
+        }
     } else {
+        cursor_tracked_ = false;
+        last_tracked_text_.clear();
         surr_text = nullptr;
         cursor = 0;
         anchor = 0;
@@ -1382,6 +1405,35 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
         }
         finishUinputDeletion(rtt_us);
         return;
+    }
+
+    if (is_cursor_move && !is_shift && !has_ctrl_alt && ic_) {
+        const auto& surr = ic_->surroundingText();
+        if (surr.isValid()) {
+            size_t total_chars = utils::utf8CharCount(surr.text());
+            if (!cursor_tracked_ || surr.text() != last_tracked_text_) {
+                tracked_cursor_ = surr.cursor();
+                last_tracked_text_ = surr.text();
+                last_surr_cursor_ = surr.cursor();
+                cursor_tracked_ = true;
+            }
+            if (sym == FcitxKey_Home) {
+                tracked_cursor_ = 0;
+            } else if (sym == FcitxKey_End) {
+                tracked_cursor_ = total_chars;
+            } else if (sym == FcitxKey_Left) {
+                if (tracked_cursor_ > 0) {
+                    tracked_cursor_--;
+                }
+            } else if (sym == FcitxKey_Right) {
+                if (tracked_cursor_ < total_chars) {
+                    tracked_cursor_++;
+                }
+            }
+        }
+    } else if (has_ctrl_alt || is_special_nav) {
+        cursor_tracked_ = false;
+        last_tracked_text_.clear();
     }
 
     if (has_ctrl_alt || is_cursor_move || is_special_nav) {

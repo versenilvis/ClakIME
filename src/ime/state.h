@@ -113,6 +113,9 @@ private:
   size_t last_text_len_{0};
   size_t last_surr_cursor_{0};
   size_t last_surr_text_len_{0};
+  size_t tracked_cursor_{0};
+  bool cursor_tracked_{false};
+  std::string last_tracked_text_;
   uint32_t surr_keystroke_count_{0};
   size_t vscode_invalid_surr_count_{0};
   bool word_used_uinput_{false};

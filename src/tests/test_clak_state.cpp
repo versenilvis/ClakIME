@@ -1170,5 +1170,192 @@ TEST_F(ClakStateTest, GivenPasswordField_BypassesIMEAndPassthroughKeys) {
     EXPECT_TRUE(filtered);
 }
 
+TEST_F(ClakStateTest, GivenReset_ClearsKeyBuffer) {
+    MockInputContext ic(instance_->inputContextManager(), "test-app");
+    ime::ClakState state(engine_.get(), &ic);
+    state.reset(/*force=*/false);
+    EXPECT_EQ(state.bufferedKeysCount(), 0u);
+    state.onDeactivate();
+    EXPECT_EQ(state.bufferedKeysCount(), 0u);
+}
+
+TEST_F(ClakStateTest, GivenAddressBarSite_ClassifiedAsAddressBarProfile) {
+    platform::setMockActiveWindow(platform::WindowInfo{"helium", "Facebook - Helium", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "helium");
+    ime::ClakState state(engine_.get(), &ic);
+    ic.setSurrounding("https://facebook.com/search", 8, 27);
+    ic.setUrlCapability(true);
+    EXPECT_EQ(state.currentProfile()->name(), "address-bar");
+}
+
+TEST_F(ClakStateTest, AddressBar_NavigationOrDistantTyping_NeverEmitsCorruptDecomposedKeys) {
+    platform::setMockActiveWindow(platform::WindowInfo{"helium", "Helium", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "helium");
+    ic.setUrlCapability(true);
+    ime::ClakState state(engine_.get(), &ic);
+
+    size_t uinput_bs = 0;
+    std::string committed_text = "";
+    uinput::UinputTool::instance().setMockHandler([&](size_t count, uint32_t, uint32_t, uint32_t) {
+        uinput_bs = count;
+        return true;
+    });
+    ic.on_commit = [&](const std::string& text) {
+        committed_text += text;
+    };
+
+    ic.setSurrounding("một cau de thu", 3, 3);
+    ic.sendKey(FcitxKey_Right, fcitx::KeyStates(), false, &state);
+
+    ic.typeChar('a', &state);
+    EXPECT_EQ(uinput_bs, 0u);
+    EXPECT_NE(committed_text, "ootja");
+
+    // typing tone key 'x' after navigation must not seed 'một' and emit backspaces
+    ic.sendKey(FcitxKey_Right, fcitx::KeyStates(), false, &state);
+    uinput_bs = 0;
+    committed_text = "";
+    ic.typeChar('x', &state);
+    EXPECT_EQ(uinput_bs, 0u);
+    EXPECT_NE(committed_text, "ỗt");
+
+    // navigate to 'mot' and type o-j: 'o' transforms to 'môt', then 'j' transforms to 'một'
+    ic.setSurrounding("mot cau de thu", 3, 3);
+    uinput_bs = 0;
+    committed_text = "";
+    ic.typeChar('o', &state);
+    while (state.isDeleting()) {
+        ic.sendCleanBackspace(&state);
+    }
+    EXPECT_EQ(committed_text, "ôt");
+
+    // client text buffer now contains 'môt', typing 'j' produces 'một'
+    committed_text = "";
+    ic.setSurrounding("môt cau de thu", 3, 3);
+    ic.typeChar('j', &state);
+    EXPECT_GT(uinput_bs, 0u);
+    while (state.isDeleting()) {
+        ic.sendCleanBackspace(&state);
+    }
+    EXPECT_EQ(committed_text, "ột");
+}
+
+TEST_F(ClakStateTest, AddressBar_Thieu_Backspace_S_ProducesThieuSac) {
+    platform::setMockActiveWindow(platform::WindowInfo{"helium", "Helium", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "helium");
+    ic.setUrlCapability(true);
+    ime::ClakState state(engine_.get(), &ic);
+
+    size_t uinput_bs = 0;
+    std::string committed_text = "";
+    uinput::UinputTool::instance().setMockHandler([&](size_t count, uint32_t, uint32_t, uint32_t) {
+        uinput_bs = count;
+        return true;
+    });
+    ic.on_commit = [&](const std::string& text) {
+        committed_text += text;
+    };
+
+    // type "thieeu "
+    ic.setSurrounding("", 0, 0);
+    ic.typeString("thieeu ", &state);
+    while (state.isDeleting()) {
+        ic.sendCleanBackspace(&state);
+    }
+
+    // user backspaces the trailing space
+    ic.setSurrounding("thiêu", 5, 5);
+    ic.sendKey(FcitxKey_BackSpace, fcitx::KeyStates(), false, &state);
+
+    // typing 's' uncommits "thiêu" and re-tones to "thiếu" via uinput
+    committed_text = "";
+    uinput_bs = 0;
+    ic.typeChar('s', &state);
+    EXPECT_GT(uinput_bs, 0u);
+    while (state.isDeleting()) {
+        ic.sendCleanBackspace(&state);
+    }
+    EXPECT_EQ(committed_text, "ếu");
+}
+
+TEST_F(ClakStateTest, AddressBar_HeliumThreadsTab_NeverClassifiedAsDraftJs) {
+    platform::setMockActiveWindow(platform::WindowInfo{"helium", "Threads - Helium", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "helium");
+    ic.setUrlCapability(true);
+    ic.setSurrounding("thiêu", 5, 5);
+    ime::ClakState state(engine_.get(), &ic);
+
+    EXPECT_EQ(state.currentProfile()->name(), "address-bar");
+}
+
+TEST_F(ClakStateTest, AddressBar_RightArrow_X_NeverCorruptsToCauaau) {
+    platform::setMockActiveWindow(platform::WindowInfo{"helium", "Helium", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "helium");
+    ic.setUrlCapability(true);
+    ime::ClakState state(engine_.get(), &ic);
+
+    size_t uinput_bs = 0;
+    std::string committed_text = "";
+    uinput::UinputTool::instance().setMockHandler([&](size_t count, uint32_t, uint32_t, uint32_t) {
+        uinput_bs = count;
+        return true;
+    });
+    ic.on_commit = [&](const std::string& text) {
+        committed_text += text;
+    };
+
+    // user is at 'một caua go thu', presses Right Arrow to move to 'go'
+    ic.setSurrounding("một caua go thu", 8, 8);
+    ic.sendKey(FcitxKey_Right, fcitx::KeyStates(), false, &state);
+
+    // type 'x' after arrow movement must not seed 'caua' and emit backspaces
+    ic.typeChar('x', &state);
+    EXPECT_EQ(uinput_bs, 0u);
+    EXPECT_NE(committed_text, "cẫu");
+    EXPECT_NE(committed_text, "ẫu");
+}
+
+TEST_F(ClakStateTest, AddressBar_MouseClick_NeverEmitsOotjfng) {
+    platform::setMockActiveWindow(platform::WindowInfo{"helium", "Helium", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "helium");
+    ic.setUrlCapability(true);
+    ime::ClakState state(engine_.get(), &ic);
+
+    size_t uinput_bs = 0;
+    std::string committed_text = "";
+    uinput::UinputTool::instance().setMockHandler([&](size_t count, uint32_t, uint32_t, uint32_t) {
+        uinput_bs = count;
+        return true;
+    });
+    ic.on_commit = [&](const std::string& text) {
+        committed_text += text;
+    };
+
+    // user types 'o' then 'j' at 'mot' -> transforms to 'một'
+    ic.setSurrounding("mot cau dung de go thu", 3, 3);
+    ic.typeChar('o', &state);
+    while (state.isDeleting()) {
+        ic.sendCleanBackspace(&state);
+    }
+    ic.setSurrounding("môt cau dung de go thu", 3, 3);
+    committed_text = "";
+    ic.typeChar('j', &state);
+    while (state.isDeleting()) {
+        ic.sendCleanBackspace(&state);
+    }
+    EXPECT_EQ(committed_text, "ột");
+
+    // user clicks mouse elsewhere
+    state.reset(/*force=*/true);
+
+    // typing 'f' after mouse click must never emit decomposed 'ootjf'
+    committed_text = "";
+    uinput_bs = 0;
+    ic.typeChar('f', &state);
+    EXPECT_EQ(uinput_bs, 0u);
+    EXPECT_NE(committed_text, "ootjf");
+    EXPECT_NE(committed_text, "ootjfng");
+}
+
 } // namespace test
 } // namespace clak

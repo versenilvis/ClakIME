@@ -182,11 +182,19 @@ impl ClakContext {
                     if let Some(text) = surrounding_text {
                         let chars: Vec<char> = text.chars().collect();
                         let cur = std::cmp::min(chars.len(), cursor);
+                        let before_cur: String = chars[..cur].iter().collect();
+                        let before_cur_trimmed = before_cur.trim_end_matches(' ');
                         if cur > 0 && chars[cur - 1] == ' ' {
                             let before_sp: String = chars[..cur - 1].iter().collect();
                             if before_sp.ends_with(&cand_com) {
                                 matched = true;
                             }
+                        }
+                        if !matched
+                            && (before_cur.ends_with(&cand_com)
+                                || before_cur_trimmed.ends_with(&cand_com))
+                        {
+                            matched = true;
                         }
                     } else {
                         matched = true;
@@ -195,7 +203,9 @@ impl ClakContext {
                     if matched {
                         self.raw_buffer = cand_raw;
                         self.last_composed = cand_com;
-                        self.just_deleted = false;
+                        self.just_deleted = true;
+                        self.last_replace_time = Some(std::time::Instant::now());
+                        self.last_replace_cursor = Some(cursor.saturating_sub(1));
                         self.stale_surr = None;
                         return self.forward();
                     }
@@ -523,16 +533,34 @@ impl ClakContext {
             };
 
             let before_cur = &text[..cur_byte];
+            let before_cur_trimmed = before_cur.trim_end_matches(' ');
+            let word = if let Some(last_break_pos) =
+                before_cur_trimmed.rfind(|c: char| is_word_break(c as u32))
+            {
+                let ch_len = before_cur_trimmed[last_break_pos..]
+                    .chars()
+                    .next()
+                    .map(|c| c.len_utf8())
+                    .unwrap_or(1);
+                &before_cur_trimmed[last_break_pos + ch_len..]
+            } else {
+                before_cur_trimmed
+            };
+
             let mut matches_last = !self.last_composed.is_empty()
                 && (before_cur.ends_with(&self.last_composed)
+                    || before_cur_trimmed.ends_with(&self.last_composed)
                     || (!self.prev_composed.is_empty()
-                        && before_cur.ends_with(&self.prev_composed))
-                    || (!self.raw_buffer.is_empty() && before_cur.ends_with(&self.raw_buffer)));
+                        && (before_cur.ends_with(&self.prev_composed)
+                            || before_cur_trimmed.ends_with(&self.prev_composed)))
+                    || (!self.raw_buffer.is_empty()
+                        && (before_cur.ends_with(&self.raw_buffer)
+                            || before_cur_trimmed.ends_with(&self.raw_buffer))));
 
-            if !matches_last && !self.last_composed.is_empty() {
+            if !matches_last && !self.last_composed.is_empty() && !word.is_empty() {
                 for i in (1..self.last_composed.len()).rev() {
                     if let Some(prefix) = self.last_composed.get(..i) {
-                        if !prefix.is_empty() && before_cur.ends_with(prefix) {
+                        if word == prefix {
                             matches_last = true;
                             break;
                         }
@@ -540,10 +568,10 @@ impl ClakContext {
                 }
             }
 
-            if !matches_last && !self.prev_composed.is_empty() {
+            if !matches_last && !self.prev_composed.is_empty() && !word.is_empty() {
                 for i in (1..self.prev_composed.len()).rev() {
                     if let Some(prefix) = self.prev_composed.get(..i) {
-                        if !prefix.is_empty() && before_cur.ends_with(prefix) {
+                        if word == prefix {
                             matches_last = true;
                             break;
                         }
@@ -551,10 +579,10 @@ impl ClakContext {
                 }
             }
 
-            if !matches_last && !self.raw_buffer.is_empty() {
+            if !matches_last && !self.raw_buffer.is_empty() && !word.is_empty() {
                 for i in (1..self.raw_buffer.len()).rev() {
                     if let Some(prefix) = self.raw_buffer.get(..i) {
-                        if !prefix.is_empty() && before_cur.ends_with(prefix) {
+                        if word == prefix {
                             matches_last = true;
                             break;
                         }
@@ -562,49 +590,33 @@ impl ClakContext {
                 }
             }
 
-            if !matches_last && !self.raw_buffer.is_empty() && cur_byte > 0 {
-                let word = if let Some(last_break_pos) =
-                    before_cur.rfind(|c: char| is_word_break(c as u32))
-                {
-                    let ch_len = before_cur[last_break_pos..]
-                        .chars()
-                        .next()
-                        .map(|c| c.len_utf8())
-                        .unwrap_or(1);
-                    &before_cur[last_break_pos + ch_len..]
+            if !matches_last && !self.raw_buffer.is_empty() && !word.is_empty() {
+                let word_telex = decompose_to_raw(word, self.engine.method());
+                if self.raw_buffer.starts_with(&word_telex) || self.raw_buffer.starts_with(word) {
+                    matches_last = true;
                 } else {
-                    before_cur
-                };
-                if !word.is_empty() {
-                    let word_telex = decompose_to_raw(word, self.engine.method());
-                    if self.raw_buffer.starts_with(&word_telex) || self.raw_buffer.starts_with(word)
-                    {
-                        matches_last = true;
-                    } else {
-                        // match unaccented base only when replacement occurred recently in same word
-                        let window_limit = std::cmp::max(
-                            self.max_surr_window_chars,
-                            self.raw_buffer.chars().count().saturating_add(2),
-                        );
-                        let is_stale_lag = match (self.last_replace_time, self.last_replace_cursor)
+                    // match unaccented base only when replacement occurred recently in same word
+                    let window_limit = std::cmp::max(
+                        self.max_surr_window_chars,
+                        self.raw_buffer.chars().count().saturating_add(2),
+                    );
+                    let is_stale_lag = match (self.last_replace_time, self.last_replace_cursor) {
+                        (Some(t), Some(c)) => {
+                            t.elapsed().as_millis() <= self.max_surr_lag_ms as u128
+                                && cursor >= c
+                                && (cursor - c) <= window_limit
+                        }
+                        _ => false,
+                    };
+                    if is_stale_lag {
+                        let word_base = to_base_ascii(word);
+                        let composed_base = to_base_ascii(&self.last_composed);
+                        if !word_base.is_empty()
+                            && (composed_base == word_base
+                                || composed_base.starts_with(&word_base)
+                                || word_base.starts_with(&composed_base))
                         {
-                            (Some(t), Some(c)) => {
-                                t.elapsed().as_millis() <= self.max_surr_lag_ms as u128
-                                    && cursor >= c
-                                    && (cursor - c) <= window_limit
-                            }
-                            _ => false,
-                        };
-                        if is_stale_lag {
-                            let word_base = to_base_ascii(word);
-                            let composed_base = to_base_ascii(&self.last_composed);
-                            if !word_base.is_empty()
-                                && (composed_base == word_base
-                                    || composed_base.starts_with(&word_base)
-                                    || word_base.starts_with(&composed_base))
-                            {
-                                matches_last = true;
-                            }
+                            matches_last = true;
                         }
                     }
                 }
@@ -621,6 +633,9 @@ impl ClakContext {
                 if is_single_line && sel_start == 0 && sel_end == char_count {
                     self.typed_over_selection = true;
                 }
+            } else if !self.typed_over_selection && !matches_last && !self.last_composed.is_empty()
+            {
+                self.reset();
             }
 
             // word seeding from surrounding text, the part left of the cursor is what gets recomposed
@@ -638,9 +653,11 @@ impl ClakContext {
                     .unwrap_or(false),
                 _ => false,
             };
+            let can_seed_autocomplete =
+                has_autocomplete && is_single_line && sel_start == cursor && sel_end == char_count;
             if !is_stale
-                && !has_autocomplete
-                && cursor == anchor
+                && (!has_autocomplete || can_seed_autocomplete)
+                && (cursor == anchor || can_seed_autocomplete)
                 && self.last_composed.is_empty()
                 && cur_byte > 0
                 && is_seed_key
@@ -659,8 +676,22 @@ impl ClakContext {
                     before_cur
                 };
                 if !old_word.is_empty() && old_word.chars().all(|c| c.is_alphabetic()) {
-                    self.raw_buffer = decompose_to_raw(old_word, self.engine.method());
-                    self.last_composed = old_word.to_string();
+                    let seeded_raw = decompose_to_raw(old_word, self.engine.method());
+                    let mut test_buf = seeded_raw.clone();
+                    test_buf.push_str(key_str);
+                    let transformed = self.engine.transform(&test_buf);
+                    let (del, added) = compare_and_split(old_word, &transformed);
+                    let degrades_to_raw = old_word != seeded_raw && transformed == test_buf;
+                    let emits_corrupt_seq = del.chars().count() > 0
+                        && (added.contains("ootj") || added.contains("moot") || added.contains("otoj"));
+                    let old_was_accented = old_word.chars().any(|c| !c.is_ascii());
+                    let destroys_accent = old_was_accented
+                        && del.chars().count() > 0
+                        && (!crate::spelling::is_valid_cvc(&transformed) || transformed == test_buf);
+                    if !degrades_to_raw && !emits_corrupt_seq && !destroys_accent {
+                        self.raw_buffer = seeded_raw;
+                        self.last_composed = old_word.to_string();
+                    }
                 }
             }
         } else {
@@ -734,6 +765,11 @@ impl ClakContext {
         self.raw_buffer.push_str(key_str_to_use);
         let new_word = self.engine.transform(&self.raw_buffer);
         let (deleted_part, added_part) = compare_and_split(&self.last_composed, &new_word);
+
+        if added_part.contains("ootj") || added_part.contains("moot") || added_part.contains("otoj") || added_part.contains("motoj") {
+            self.reset();
+            return self.forward();
+        }
 
         if deleted_part.is_empty() && added_part == key_str {
             self.prev_composed = std::mem::replace(&mut self.last_composed, new_word);
