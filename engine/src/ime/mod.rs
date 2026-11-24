@@ -43,6 +43,8 @@ pub struct ClakContext {
     pub last_replace_cursor: Option<usize>,
     pub max_surr_lag_ms: u64,
     pub max_surr_window_chars: usize,
+    pub last_macro_expansion: Option<(String, String, std::time::Instant)>,
+    pub last_autocorrect: Option<(String, String, std::time::Instant)>,
 }
 
 impl ClakContext {
@@ -78,6 +80,8 @@ impl ClakContext {
             last_replace_cursor: None,
             max_surr_lag_ms: 200,
             max_surr_window_chars: 8,
+            last_macro_expansion: None,
+            last_autocorrect: None,
         }
     }
 
@@ -127,6 +131,8 @@ impl ClakContext {
         self.in_identifier = false;
         self.last_replace_time = None;
         self.last_replace_cursor = None;
+        self.last_macro_expansion = None;
+        self.last_autocorrect = None;
     }
 
     pub fn process_key(
@@ -152,6 +158,10 @@ impl ClakContext {
         if key_sym == 0xff08 {
             return self.handle_backspace(surrounding_text, cursor, anchor);
         }
+
+        // any key other than backspace invalidates pending macro or autocorrect undo
+        self.last_macro_expansion = None;
+        self.last_autocorrect = None;
 
         // handle enter or tab
         if key_sym == 0xff0d || key_sym == 0xff09 {
@@ -210,6 +220,68 @@ impl ClakContext {
         anchor: usize,
     ) -> ImeAction {
         self.sentence_cap_state = SentenceCapState::Normal;
+
+        // undo macro expansion if backspaced immediately
+        if let Some((raw_with_boundary, expanded_with_boundary, time)) =
+            self.last_macro_expansion.take()
+        {
+            if time.elapsed().as_millis() <= 3000 {
+                let matches_surr = match surrounding_text {
+                    Some(text) => {
+                        let chars: Vec<char> = text.chars().collect();
+                        let cur = std::cmp::min(chars.len(), cursor);
+                        let before_cur: String = chars[..cur].iter().collect();
+                        before_cur.ends_with(&expanded_with_boundary)
+                    }
+                    None => true,
+                };
+                if matches_surr {
+                    let del_count = expanded_with_boundary.chars().count();
+                    self.reset();
+                    self.just_deleted = true;
+                    if raw_with_boundary.ends_with(' ') {
+                        let trimmed = &raw_with_boundary[..raw_with_boundary.len() - 1];
+                        self.uncommit_candidate = Some((
+                            trimmed.to_string(),
+                            trimmed.to_string(),
+                            std::time::Instant::now(),
+                        ));
+                    }
+                    return self.replace(del_count, &expanded_with_boundary, &raw_with_boundary);
+                }
+            }
+        }
+
+        // undo autocorrect if backspaced immediately
+        if let Some((orig_with_boundary, corrected_with_boundary, time)) =
+            self.last_autocorrect.take()
+        {
+            if time.elapsed().as_millis() <= 3000 {
+                let matches_surr = match surrounding_text {
+                    Some(text) => {
+                        let chars: Vec<char> = text.chars().collect();
+                        let cur = std::cmp::min(chars.len(), cursor);
+                        let before_cur: String = chars[..cur].iter().collect();
+                        before_cur.ends_with(&corrected_with_boundary)
+                    }
+                    None => true,
+                };
+                if matches_surr {
+                    let del_count = corrected_with_boundary.chars().count();
+                    self.reset();
+                    self.just_deleted = true;
+                    if orig_with_boundary.ends_with(' ') {
+                        let trimmed = &orig_with_boundary[..orig_with_boundary.len() - 1];
+                        self.uncommit_candidate = Some((
+                            trimmed.to_string(),
+                            trimmed.to_string(),
+                            std::time::Instant::now(),
+                        ));
+                    }
+                    return self.replace(del_count, &corrected_with_boundary, &orig_with_boundary);
+                }
+            }
+        }
 
         // pass through backspace inside identifier token
         if self.in_identifier {
@@ -290,12 +362,18 @@ impl ClakContext {
                 let del_count = self.last_composed.chars().count();
                 let del_str = self.last_composed.clone();
                 let mut commit_text = replacement;
-                if key_sym == 0xff09 {
-                    commit_text.push('\t');
-                } else {
-                    commit_text.push('\n');
-                }
+                let boundary = if key_sym == 0xff09 { "\t" } else { "\n" };
+                commit_text.push_str(boundary);
+                let mut raw_with_boundary = del_str.clone();
+                raw_with_boundary.push_str(boundary);
+                self.uncommit_candidate = None;
                 self.reset();
+                self.last_macro_expansion = Some((
+                    raw_with_boundary,
+                    commit_text.clone(),
+                    std::time::Instant::now(),
+                ));
+                self.last_autocorrect = None;
                 self.just_deleted = false;
                 self.stale_surr = None;
                 return self.replace(del_count, &del_str, &commit_text);
@@ -381,8 +459,16 @@ impl ClakContext {
                 let del_str = self.last_composed.clone();
                 let mut commit_text = replacement;
                 commit_text.push_str(key_str);
+                let mut raw_with_boundary = del_str.clone();
+                raw_with_boundary.push_str(key_str);
                 self.uncommit_candidate = None;
                 self.reset();
+                self.last_macro_expansion = Some((
+                    raw_with_boundary,
+                    commit_text.clone(),
+                    std::time::Instant::now(),
+                ));
+                self.last_autocorrect = None;
                 self.just_deleted = false;
                 self.stale_surr = None;
                 return self.replace(del_count, &del_str, &commit_text);
@@ -422,6 +508,12 @@ impl ClakContext {
                 commit_text.push_str(key_str);
                 self.uncommit_candidate = None;
                 self.reset();
+                self.last_autocorrect = Some((
+                    orig_text.clone(),
+                    commit_text.clone(),
+                    std::time::Instant::now(),
+                ));
+                self.last_macro_expansion = None;
                 self.just_deleted = false;
                 self.stale_surr = None;
                 self.commit_buf = CString::new(commit_text).unwrap_or_default();

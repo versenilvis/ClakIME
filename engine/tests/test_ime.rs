@@ -809,6 +809,67 @@ fn test_macro_case_title_case_multiword() {
     assert_eq!(commit, "Hồ Chí Minh ");
 }
 #[test]
+fn test_macro_undo_on_backspace() {
+    let mut ctx = ClakContext::new(Method::Telex);
+    ctx.macros.insert("k".to_string(), "không".to_string());
+    ctx.process_key(b'k' as u32, "k", false, None, 0, 0);
+    let act = ctx.process_key(0x20, " ", false, None, 1, 1);
+    assert_eq!(act.action_type, ACTION_REPLACE);
+    let commit = unsafe { CStr::from_ptr(act.commit_str).to_str().unwrap() };
+    assert_eq!(commit, "không ");
+
+    // immediate backspace undoes macro expansion and restores raw trigger with space
+    let act_bs = ctx.process_key(0xff08, "", false, None, 6, 6);
+    assert_eq!(act_bs.action_type, ACTION_REPLACE);
+    assert_eq!(act_bs.delete_count, 6);
+    let commit_bs = unsafe { CStr::from_ptr(act_bs.commit_str).to_str().unwrap() };
+    assert_eq!(commit_bs, "k ");
+
+    // subsequent backspace does not undo macro again
+    let act_bs2 = ctx.process_key(0xff08, "", false, None, 2, 2);
+    assert_eq!(act_bs2.action_type, ACTION_FORWARD);
+}
+
+#[test]
+fn test_macro_undo_cleared_on_subsequent_key() {
+    let mut ctx = ClakContext::new(Method::Telex);
+    ctx.macros.insert("k".to_string(), "không".to_string());
+    ctx.process_key(b'k' as u32, "k", false, None, 0, 0);
+    ctx.process_key(0x20, " ", false, None, 1, 1);
+
+    // type another letter
+    ctx.process_key(b'a' as u32, "a", false, None, 6, 6);
+
+    // backspace now deletes 'a', does not undo macro
+    let act = ctx.process_key(0xff08, "", false, None, 7, 7);
+    assert_eq!(act.action_type, ACTION_FORWARD);
+}
+
+#[test]
+fn test_autocorrect_undo_on_backspace() {
+    let mut ctx = ClakContext::new(Method::Telex);
+    ctx.autocorrect = true;
+    for ch in "nheiuef".chars() {
+        ctx.process_key(ch as u32, &ch.to_string(), false, None, 0, 0);
+    }
+    let act = ctx.process_key(0x20, " ", false, None, 7, 7);
+    assert_eq!(act.action_type, ACTION_AUTOCORRECT);
+    let commit = unsafe { CStr::from_ptr(act.commit_str).to_str().unwrap() };
+    assert_eq!(commit, "nhiều ");
+
+    // immediate backspace undoes autocorrect and restores orig text
+    let act_bs = ctx.process_key(0xff08, "", false, None, 7, 7);
+    assert_eq!(act_bs.action_type, ACTION_REPLACE);
+    assert_eq!(act_bs.delete_count, 6);
+    let commit_bs = unsafe { CStr::from_ptr(act_bs.commit_str).to_str().unwrap() };
+    assert_eq!(commit_bs, "nheiuef ");
+
+    // subsequent backspace does normal uncommit or editing
+    let act_bs2 = ctx.process_key(0xff08, "", false, None, 8, 8);
+    assert_eq!(act_bs2.action_type, ACTION_FORWARD);
+}
+
+#[test]
 fn test_zero_width_filtering_surrounding() {
     use clak_engine::ime::surrounding::{extract_word_immediate, extract_word_trimmed};
     assert_eq!(extract_word_immediate("\u{200b}dong"), "dong");
@@ -1068,9 +1129,12 @@ fn test_smart_autocorrect_action_and_no_backspace_hijack() {
     assert_eq!(commit, "nhiều ");
     assert_eq!(del, "nheiuef ");
 
-    // backspace after space is NOT hijacked (normal backspace behavior)
-    let act_bs = ctx.process_key(0xff08, "", false, None, 0, 0);
-    assert_eq!(act_bs.action_type, ACTION_FORWARD);
+    // backspace immediately after autocorrect reverts to original scrambled word
+    let act_bs = ctx.process_key(0xff08, "", false, None, 7, 7);
+    assert_eq!(act_bs.action_type, ACTION_REPLACE);
+    assert_eq!(act_bs.delete_count, 6);
+    let commit_undo = unsafe { CStr::from_ptr(act_bs.commit_str).to_str().unwrap() };
+    assert_eq!(commit_undo, "nheiuef ");
 }
 
 #[test]

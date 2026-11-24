@@ -811,7 +811,7 @@ TEST_F(ClakStateTest, GivenAutocorrect_CtrlZUndoesAndRestoresOriginalWord) {
     EXPECT_EQ(ic.commits.back(), "nheìue ");
 }
 
-TEST_F(ClakStateTest, GivenAutocorrect_BackspaceAfterSpaceIsNotHijacked) {
+TEST_F(ClakStateTest, GivenAutocorrect_BackspaceAfterSpaceRevertsToOriginal) {
     clak_config_set_autocorrect(const_cast<ClakConfig*>(engine_->config()), true);
 
     MockInputContext ic(instance_->inputContextManager(), "test-app");
@@ -825,16 +825,14 @@ TEST_F(ClakStateTest, GivenAutocorrect_BackspaceAfterSpaceIsNotHijacked) {
     EXPECT_EQ(ic.commits.back(), "nhiều ");
     ic.setSurrounding("nhiều ", 6, 6);
 
-    // backspace after space should behave normally (delete the space character, not hijack to restore)
+    // backspace immediately after autocorrect reverts to original text
     ic.clearHistory();
     ic.sendKey(FcitxKey_BackSpace, fcitx::KeyStates(), false, &state);
     ic.sendKey(FcitxKey_BackSpace, fcitx::KeyStates(), true, &state);
 
-    // must not commit original scrambled word
-    for (const auto& c : ic.commits) {
-        EXPECT_NE(c, "nheiuef ");
-        EXPECT_NE(c, "nheiuef");
-    }
+    // reverts to original text
+    EXPECT_FALSE(ic.commits.empty());
+    EXPECT_EQ(ic.commits.back(), "nheiuef ");
 }
 
 TEST_F(ClakStateTest, GivenSpaceAfterWord_WhenBackspacedAndToneKeyTyped_ResumesWord) {
