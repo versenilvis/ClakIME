@@ -1,5 +1,5 @@
 use crate::ime::decomposing::{decompose_to_raw, to_base_ascii};
-use crate::ime::typing_features::is_word_break;
+use crate::ime::typing_features::{is_word_break, is_zero_width};
 use crate::Method;
 
 pub fn parse_surrounding_meta(
@@ -23,27 +23,29 @@ pub fn parse_surrounding_meta(
 }
 
 pub fn extract_word_trimmed<'a>(before_cur: &'a str) -> &'a str {
-    let trimmed = before_cur.trim_end_matches(' ');
+    let trimmed = before_cur.trim_end_matches(|c: char| c == ' ' || is_zero_width(c));
+    let trimmed = trimmed.trim_start_matches(is_zero_width);
     if let Some(last_break_pos) = trimmed.rfind(|c: char| is_word_break(c as u32)) {
         let ch_len = trimmed[last_break_pos..]
             .chars()
             .next()
             .map(|c| c.len_utf8())
             .unwrap_or(1);
-        &trimmed[last_break_pos + ch_len..]
+        trimmed[last_break_pos + ch_len..].trim_matches(is_zero_width)
     } else {
         trimmed
     }
 }
 
 pub fn extract_word_immediate<'a>(before_cur: &'a str) -> &'a str {
+    let before_cur = before_cur.trim_start_matches(is_zero_width);
     if let Some(last_break_pos) = before_cur.rfind(|c: char| is_word_break(c as u32)) {
         let ch_len = before_cur[last_break_pos..]
             .chars()
             .next()
             .map(|c| c.len_utf8())
             .unwrap_or(1);
-        &before_cur[last_break_pos + ch_len..]
+        before_cur[last_break_pos + ch_len..].trim_matches(is_zero_width)
     } else {
         before_cur
     }
@@ -72,15 +74,16 @@ pub fn matches_last_composed_or_prefix(
     max_surr_lag_ms: u64,
     max_surr_window_chars: usize,
 ) -> bool {
-    let before_cur_trimmed = before_cur.trim_end_matches(' ');
+    let before_cur_clean = before_cur.trim_matches(is_zero_width);
+    let before_cur_trimmed = before_cur_clean.trim_end_matches(' ');
     let mut matched = !last_composed.is_empty()
-        && (before_cur.ends_with(last_composed)
+        && (before_cur_clean.ends_with(last_composed)
             || before_cur_trimmed.ends_with(last_composed)
             || (!prev_composed.is_empty()
-                && (before_cur.ends_with(prev_composed)
+                && (before_cur_clean.ends_with(prev_composed)
                     || before_cur_trimmed.ends_with(prev_composed)))
             || (!raw_buffer.is_empty()
-                && (before_cur.ends_with(raw_buffer)
+                && (before_cur_clean.ends_with(raw_buffer)
                     || before_cur_trimmed.ends_with(raw_buffer))));
 
     if !matched && !last_composed.is_empty() && !word.is_empty() {

@@ -31,6 +31,10 @@ pub fn to_title_case(s: &str) -> String {
     result
 }
 
+pub fn is_zero_width(c: char) -> bool {
+    matches!(c, '\u{200b}' | '\u{200c}' | '\u{200d}' | '\u{feff}')
+}
+
 pub fn match_macro(macros: &HashMap<String, String>, target: &str) -> Option<String> {
     if target.is_empty() {
         return None;
@@ -76,6 +80,10 @@ pub fn is_word_break(ucs4: u32) -> bool {
         || ucs4 == '\n' as u32
         || ucs4 == '\r' as u32
         || ucs4 == 0
+        || ucs4 == 0x200b
+        || ucs4 == 0x200c
+        || ucs4 == 0x200d
+        || ucs4 == 0xfeff
         || (58..=64).contains(&ucs4)
         || (33..=47).contains(&ucs4)
         || (91..=96).contains(&ucs4)

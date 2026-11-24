@@ -808,6 +808,15 @@ fn test_macro_case_title_case_multiword() {
     let commit = unsafe { CStr::from_ptr(act.commit_str).to_str().unwrap() };
     assert_eq!(commit, "Hồ Chí Minh ");
 }
+#[test]
+fn test_zero_width_filtering_surrounding() {
+    use clak_engine::ime::surrounding::{extract_word_immediate, extract_word_trimmed};
+    assert_eq!(extract_word_immediate("\u{200b}dong"), "dong");
+    assert_eq!(extract_word_trimmed("\u{200b}dong "), "dong");
+    assert_eq!(extract_word_immediate("\u{200b}"), "");
+    assert_eq!(extract_word_immediate("\u{feff}tieng"), "tieng");
+}
+
 
 #[test]
 fn test_macro_enter_trigger() {

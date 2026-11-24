@@ -10,6 +10,7 @@
 #include "config/config.h"
 #include "de/kde.h"
 #include "apps/terminal.h"
+#include "utils/text_utils.h"
 
 namespace clak {
 namespace test {
@@ -1759,6 +1760,18 @@ TEST_F(RegressionCorpusTest, test_regression_kde_konsole_case_and_wayland_app_id
     EXPECT_EQ(state.currentProfile()->name(), "Terminal-Uinput");
     EXPECT_TRUE(state.currentProfile()->forcesUinput());
     EXPECT_FALSE(state.currentProfile()->erasesWithCommittedDel());
+}
+
+TEST_F(RegressionCorpusTest, test_regression_extract_word_zero_width_filtering) {
+    // editors like voz xenforo or notion insert zero-width characters into empty fields
+    std::string text_zwsp = "\u200bdong";
+    EXPECT_EQ(utils::extractWordBeforeCursor(text_zwsp, 5), "dong");
+
+    std::string text_empty_zwsp = "\u200b";
+    EXPECT_EQ(utils::extractWordBeforeCursor(text_empty_zwsp, 1), "");
+
+    std::string text_zwnbsp = "\ufefftieng";
+    EXPECT_EQ(utils::extractWordBeforeCursor(text_zwnbsp, 6), "tieng");
 }
 
 } // namespace test

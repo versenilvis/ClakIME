@@ -39,7 +39,7 @@ std::string extractWordBeforeCursor(const std::string& text, size_t cursor_chars
         const std::string& ch = chars[start - 1];
         if (ch.size() == 1) {
             char c = ch[0];
-            if (c <= 32 || c == '.' || c == ',' || c == ';' || c == ':' ||
+            if (static_cast<unsigned char>(c) <= 32 || c == '.' || c == ',' || c == ';' || c == ':' ||
                 c == '?' || c == '!' || c == '/' || c == '\\' || c == '(' ||
                 c == ')' || c == '[' || c == ']' || c == '{' || c == '}' ||
                 c == '<' || c == '>' || c == '"' || c == '\'' || c == '`' ||
@@ -48,6 +48,8 @@ std::string extractWordBeforeCursor(const std::string& text, size_t cursor_chars
                 c == '=' || c == '|') {
                 break;
             }
+        } else if (ch == "\u200b" || ch == "\u200c" || ch == "\u200d" || ch == "\ufeff") {
+            break;
         }
         start--;
     }
