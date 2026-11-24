@@ -8,6 +8,29 @@ pub enum SentenceCapState {
     Normal,
 }
 
+pub fn to_title_case(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut start_of_word = true;
+    for c in s.chars() {
+        if c.is_alphabetic() {
+            if start_of_word {
+                for up in c.to_uppercase() {
+                    result.push(up);
+                }
+                start_of_word = false;
+            } else {
+                for low in c.to_lowercase() {
+                    result.push(low);
+                }
+            }
+        } else {
+            start_of_word = true;
+            result.push(c);
+        }
+    }
+    result
+}
+
 pub fn match_macro(macros: &HashMap<String, String>, target: &str) -> Option<String> {
     if target.is_empty() {
         return None;
@@ -37,12 +60,7 @@ pub fn match_macro(macros: &HashMap<String, String>, target: &str) -> Option<Str
             if is_all_upper {
                 return Some(repl.to_uppercase());
             } else if is_capitalized {
-                let mut repl_chars = repl.chars();
-                let formatted = match repl_chars.next() {
-                    Some(f) => f.to_uppercase().collect::<String>() + repl_chars.as_str(),
-                    None => String::new(),
-                };
-                return Some(formatted);
+                return Some(to_title_case(repl));
             } else {
                 return Some(repl.clone());
             }

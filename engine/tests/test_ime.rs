@@ -796,6 +796,20 @@ fn test_macro_case_capitalized() {
 }
 
 #[test]
+fn test_macro_case_title_case_multiword() {
+    let mut ctx = ClakContext::new(Method::Telex);
+    ctx.macros.insert("hcm".to_string(), "hồ chí minh".to_string());
+    ctx.process_key(b'H' as u32, "H", false, None, 0, 0);
+    ctx.process_key(b'c' as u32, "c", false, None, 1, 1);
+    ctx.process_key(b'm' as u32, "m", false, None, 2, 2);
+    let act = ctx.process_key(0x20, " ", false, None, 3, 3);
+    assert_eq!(act.action_type, ACTION_REPLACE);
+    assert_eq!(act.delete_count, 3);
+    let commit = unsafe { CStr::from_ptr(act.commit_str).to_str().unwrap() };
+    assert_eq!(commit, "Hồ Chí Minh ");
+}
+
+#[test]
 fn test_macro_enter_trigger() {
     let mut ctx = ClakContext::new(Method::Telex);
     ctx.macros.insert("vn".to_string(), "Việt Nam".to_string());
