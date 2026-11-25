@@ -65,7 +65,6 @@ export component SocialBadge inherits Rectangle {
     callback clicked();
 
     height: root.is-wide ? 34px : 28px;
-    background: transparent;
 
     badge_ta := TouchArea {
         mouse-cursor: pointer;
@@ -137,15 +136,12 @@ export component Sidebar inherits Rectangle {
     width: root.is-wide ? 250px : 210px;
     horizontal-stretch: 0;
     background: Theme.sidebar-bg;
-    border-width: 0px;
-    border-color: transparent;
     clip: true;
 
     VerticalLayout {
         width: 100%;
         height: 100%;
         padding: 0px;
-        spacing: 0px;
 
         // banner hinh anh kem gradient lam mo phia duoi
         Rectangle {
@@ -161,8 +157,6 @@ export component Sidebar inherits Rectangle {
             }
 
             Rectangle {
-                width: parent.width;
-                height: parent.height;
                 background: @linear-gradient(180deg, #00000000 0%, #00000000 45%, #0000000e 50%, #00000033 56%, #00000064 62%, #0000009b 69%, #000000cd 77%, #000000f1 86%, #000000ff 94%, #000000ff 98%, Theme.sidebar-bg 100%);
             }
 
@@ -215,7 +209,6 @@ export component Sidebar inherits Rectangle {
                 }
 
                 VerticalLayout {
-                    spacing: 0px;
 
                     tab0 := NavTab {
                         is-wide: root.is-wide;
@@ -303,7 +296,6 @@ export component Sidebar inherits Rectangle {
                     is-wide: root.is-wide;
                     icon: @image-url("../../assets/icons/github.svg");
                     watermark: @image-url("../../assets/icons/github-watermark.svg");
-                    watermark-offset-x: 10px;
                     watermark-offset-y: 3px;
                     clicked => { root.open-url("https://github.com/versenilvis"); }
                 }
@@ -313,7 +305,6 @@ export component Sidebar inherits Rectangle {
                     icon: @image-url("../../assets/icons/x.svg");
                     watermark: @image-url("../../assets/icons/x-watermark.svg");
                     watermark-offset-x: 17px;
-                    watermark-offset-y: 0px;
                     clicked => { root.open-url("https://x.com/versenilvis"); }
                 }
 

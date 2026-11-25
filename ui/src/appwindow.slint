@@ -162,8 +162,6 @@ export component MainWindow inherits Window {
 
     forward-focus: fs;
     fs := FocusScope {
-        width: 100%;
-        height: 100%;
         key-pressed(event) => {
             if (root.is_recording_shortcut) {
                 if (event.text == Key.Escape) {
@@ -204,8 +202,6 @@ export component MainWindow inherits Window {
                 if (root.profile_needs_setup || root.addon_needs_load) && root.selected_tab != 4: Rectangle {
                     border-radius: Theme.radius-md;
                     background: #3b82f6.with-alpha(0.12);
-                    border-width: 0px;
-                    border-color: transparent;
 
                     HorizontalLayout {
                         padding-left: 14px;
@@ -276,8 +272,6 @@ export component MainWindow inherits Window {
                 if !root.profile_needs_setup && (root.wps_needs_fix || root.jetbrains_needs_fix) && root.selected_tab != 4: Rectangle {
                     border-radius: Theme.radius-md;
                     background: #8b5cf6.with-alpha(0.12);
-                    border-width: 0px;
-                    border-color: transparent;
 
                     HorizontalLayout {
                         padding-left: 14px;
@@ -519,7 +513,6 @@ export component MainWindow inherits Window {
                                 is-wide: root.is-wide;
                                 text: "Hủy";
                                 destructive: true;
-                                enabled: true;
                                 clicked => { root.cancel_requested(); }
                             }
 

@@ -14,7 +14,6 @@ export component ToggleSwitch {
         background: root.checked
             ? (ta.pressed ? #fff : (ta.has-hover ? #fff : #ffffff))
             : (ta.has-hover ? #242424 : #1a1a1a);
-        border-width: 0px;
 
         animate background {
             duration: 180ms;
@@ -36,7 +35,6 @@ export component ToggleSwitch {
             height: root.is-wide ? 20px : 16px;
             border-radius: root.is-wide ? 10px : 8px;
             background: root.checked ? #0a0a0a : (ta.pressed ? #d8d8d8 : #ffffff);
-            border-width: 0px;
 
             animate x, width {
                 duration: 180ms;
@@ -55,7 +53,6 @@ export component Divider inherits Rectangle {
     in property <length> pad-y: 0px;
 
     height: 0px;
-    background: transparent;
 }
 
 // tieu de section: chu nho hon, day hon va mau gray
@@ -64,7 +61,6 @@ export component SectionHeader inherits VerticalLayout {
     in property <bool> show-divider: false;
     in property <bool> is-wide: false;
 
-    spacing: 0px;
     padding: 0px;
 
     HorizontalLayout {
@@ -88,8 +84,6 @@ export component Card inherits Rectangle {
     in property <length> pad: 0px;
     in property <length> spacing: 0px;
 
-    background: transparent;
-    border-width: 0px;
 
     VerticalLayout {
         alignment: start;

@@ -31,7 +31,6 @@ export component TabGeneral inherits VerticalLayout {
 
     SectionHeader {
         title: "KIỂU GÕ";
-        show-divider: false;
         is-wide: root.is-wide;
     }
 
@@ -198,7 +197,6 @@ export component TabGeneral inherits VerticalLayout {
             preferred-height: root.is-wide ? 160px : 60px;
             background: #121214;
             border-radius: 8px;
-            border-width: 0px;
 
             // chu chim / placeholder mo
             if input.text == "": Text {

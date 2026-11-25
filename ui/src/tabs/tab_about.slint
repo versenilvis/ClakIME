@@ -40,15 +40,12 @@ export component TabAbout inherits VerticalLayout {
 
     SectionHeader {
         title: "CẬP NHẬT";
-        show-divider: false;
         is-wide: root.is-wide;
     }
 
     if root.reload_needed: Rectangle {
         border-radius: Theme.radius-md;
         background: #f59e0b.with-alpha(0.12);
-        border-width: 0px;
-        border-color: transparent;
 
         HorizontalLayout {
             padding-left: 14px;
@@ -409,13 +406,10 @@ export component TabAbout inherits VerticalLayout {
         Rectangle {
             height: 124px;
             background: #0d0d0f;
-            border-width: 0px;
-            border-color: transparent;
             border-radius: Theme.radius-sm;
 
             VerticalLayout {
                 padding: 6px;
-                spacing: 0px;
 
                 HorizontalLayout {
                     padding-left: 12px;
