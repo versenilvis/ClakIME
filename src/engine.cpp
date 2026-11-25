@@ -33,7 +33,7 @@ ClakEngine::ClakEngine(fcitx::Instance* instance)
           return new ime::ClakState(this, &ic);
       }) {
     instance_->inputContextManager().registerProperty("clakState", &factory_);
-    instance_->userInterfaceManager().registerAction("clak-settings", &settings_action_);
+    initTrayActions();
     // pre-warm uinput device so kernel and libinput enumerate it before first use
     uinput::UinputTool::instance();
     loadConfig();
@@ -47,7 +47,7 @@ ClakEngine::ClakEngine(fcitx::Instance* instance)
 }
 
 ClakEngine::~ClakEngine() {
-    instance_->userInterfaceManager().unregisterAction(&settings_action_);
+    unregisterTrayActions();
     if (mouse_tracker_) {
         mouse_tracker_.reset();
     }
@@ -84,7 +84,12 @@ void ClakEngine::loadConfig() {
     config_ = clak_config_load();
     config_version_++;
     if (config_) {
-        global_enabled_ = (clak_config_get_startup_mode(config_) == 0);
+        int startup = clak_config_get_startup_mode(config_);
+        if (!initial_config_loaded_ || startup != last_startup_mode_) {
+            global_enabled_ = (startup == 0);
+            last_startup_mode_ = startup;
+            initial_config_loaded_ = true;
+        }
         bool debug_log = clak_config_get_debug_log(config_);
         const char* env = getenv("CLAK_LOG");
         if (!env) {
@@ -98,6 +103,141 @@ void ClakEngine::loadConfig() {
         utils::clakLog("config loaded: version=" + std::to_string(config_version_) +
                        " startup=" + (global_enabled_ ? "vietnamese" : "english") +
                        " mode=" + pacing_mode);
+        if (auto* last_ic = instance_->lastFocusedInputContext()) {
+            syncTrayActions(last_ic);
+            last_ic->updateUserInterface(fcitx::UserInterfaceComponent::StatusArea, true);
+        }
+    }
+}
+
+namespace {
+
+constexpr const char* kMethodNames[] = {"Telex", "VNI", "VIQR", "Telex + VNI"};
+constexpr int kMethodCount = 4;
+
+} // namespace
+
+std::string ClakEngine::resolveAppKey(fcitx::InputContext* ic) {
+    if (!ic) return "default";
+    auto* state = ic->propertyFor(&factory_);
+    std::string app = state ? state->appKey() : ic->program();
+    return app.empty() ? "default" : app;
+}
+
+void ClakEngine::initTrayActions() {
+    auto& ui = instance_->userInterfaceManager();
+
+    // match ngosen and lotus: avoid checkable radio flags and colons in labels
+    toggle_vi_action_.setCheckable(false);
+    toggle_vi_action_.setShortText("✔ Tiếng Việt");
+    toggle_vi_action_.setLongText("Bật hoặc tắt chế độ gõ Tiếng Việt");
+    tray_connections_.emplace_back(
+        toggle_vi_action_.connect<fcitx::SimpleAction::Activated>([this](fcitx::InputContext* ic) {
+            auto* target_ic = ic ? ic : instance_->lastFocusedInputContext();
+            std::string app = resolveAppKey(target_ic);
+            toggleAppEnabled(app);
+            if (target_ic) {
+                if (auto* state = target_ic->propertyFor(&factory_)) {
+                    state->reset(/*force=*/false);
+                }
+            }
+            syncTrayActions(target_ic);
+            if (target_ic) {
+                target_ic->updateUserInterface(fcitx::UserInterfaceComponent::StatusArea, true);
+            }
+        }));
+    ui.registerAction("clak-toggle-vi", &toggle_vi_action_);
+
+    method_action_.setCheckable(false);
+    method_action_.setShortText("Kiểu gõ (Telex)");
+    method_action_.setLongText("Bấm để chuyển vòng kiểu gõ (Telex / VNI / VIQR / Telex + VNI)");
+    tray_connections_.emplace_back(
+        method_action_.connect<fcitx::SimpleAction::Activated>([this](fcitx::InputContext* ic) {
+            applyAndSaveTrayConfig(ic, [](ClakConfig* cfg) {
+                int cur = clak_config_get_method(cfg);
+                int next = (cur + 1) % kMethodCount;
+                clak_config_set_method(cfg, next);
+            });
+        }));
+    ui.registerAction("clak-method", &method_action_);
+
+    spelling_action_.setCheckable(false);
+    spelling_action_.setShortText("✔ Chính tả");
+    spelling_action_.setLongText("Ngăn từ sai quy tắc tiếng Việt và tự khôi phục từ tiếng Anh");
+    tray_connections_.emplace_back(
+        spelling_action_.connect<fcitx::SimpleAction::Activated>([this](fcitx::InputContext* ic) {
+            applyAndSaveTrayConfig(ic, [](ClakConfig* cfg) {
+                bool next = !clak_config_get_spelling(cfg);
+                clak_config_set_spelling(cfg, next);
+                clak_config_set_auto_restore(cfg, next);
+            });
+        }));
+    ui.registerAction("clak-spelling", &spelling_action_);
+
+    autocorrect_action_.setCheckable(false);
+    autocorrect_action_.setShortText("✔ Tự sửa");
+    autocorrect_action_.setLongText("Tự động sửa lỗi đảo phím khi gõ nhanh");
+    tray_connections_.emplace_back(
+        autocorrect_action_.connect<fcitx::SimpleAction::Activated>([this](fcitx::InputContext* ic) {
+            applyAndSaveTrayConfig(ic, [](ClakConfig* cfg) {
+                bool next = !clak_config_get_autocorrect(cfg);
+                clak_config_set_autocorrect(cfg, next);
+            });
+        }));
+    ui.registerAction("clak-autocorrect", &autocorrect_action_);
+
+    ui.registerAction("clak-settings", &settings_action_);
+}
+
+void ClakEngine::unregisterTrayActions() {
+    tray_connections_.clear();
+    auto& ui = instance_->userInterfaceManager();
+    ui.unregisterAction(&toggle_vi_action_);
+    ui.unregisterAction(&method_action_);
+    ui.unregisterAction(&spelling_action_);
+    ui.unregisterAction(&autocorrect_action_);
+    ui.unregisterAction(&settings_action_);
+}
+
+void ClakEngine::syncTrayActions(fcitx::InputContext* ic) {
+    std::string app = resolveAppKey(ic);
+    bool vi = isAppEnabled(app);
+    toggle_vi_action_.setShortText(vi ? "✔ Tiếng Việt" : "✖ Tiếng Anh");
+    toggle_vi_action_.update(ic);
+
+    int method = config_ ? clak_config_get_method(config_) : 0;
+    if (method < 0 || method >= kMethodCount) {
+        method = 0;
+    }
+    method_action_.setShortText(std::string("Kiểu gõ (") + kMethodNames[method] + ")");
+    method_action_.update(ic);
+
+    bool spelling = config_ ? clak_config_get_spelling(config_) : true;
+    spelling_action_.setShortText(spelling ? "✔ Chính tả" : "✖ Chính tả");
+    spelling_action_.update(ic);
+
+    bool autocorrect = config_ ? clak_config_get_autocorrect(config_) : true;
+    autocorrect_action_.setShortText(autocorrect ? "✔ Tự sửa" : "✖ Tự sửa");
+    autocorrect_action_.update(ic);
+
+    settings_action_.update(ic);
+}
+
+void ClakEngine::applyAndSaveTrayConfig(fcitx::InputContext* ic, const std::function<void(ClakConfig*)>& mutator) {
+    if (!config_) return;
+    mutator(config_);
+    config_version_++;
+    clak_config_save_toml(config_);
+
+    auto* target_ic = ic ? ic : instance_->lastFocusedInputContext();
+    if (target_ic) {
+        if (auto* state = target_ic->propertyFor(&factory_)) {
+            state->syncConfig();
+        }
+    }
+    syncTrayActions(target_ic);
+    if (target_ic) {
+        target_ic->updateUserInterface(fcitx::UserInterfaceComponent::StatusArea, true);
     }
 }
 
@@ -158,6 +298,10 @@ void ClakEngine::toggleAppEnabled(const std::string& app) {
         global_enabled_ = next;
     }
     utils::clakLog("toggled input state for app '" + app + "' -> " + (next ? "VI" : "EN"));
+    if (instance_) {
+        toggle_vi_action_.setShortText(next ? "✔ Tiếng Việt" : "✖ Tiếng Anh");
+        toggle_vi_action_.update(instance_->lastFocusedInputContext());
+    }
 }
 
 void ClakEngine::setAppEnabled(const std::string& app, bool enabled) {
@@ -168,6 +312,10 @@ void ClakEngine::setAppEnabled(const std::string& app, bool enabled) {
         app_states_[app] = enabled;
     } else {
         global_enabled_ = enabled;
+    }
+    if (instance_) {
+        toggle_vi_action_.setShortText(enabled ? "✔ Tiếng Việt" : "✖ Tiếng Anh");
+        toggle_vi_action_.update(instance_->lastFocusedInputContext());
     }
 }
 
@@ -215,8 +363,13 @@ void ClakEngine::activate(const fcitx::InputMethodEntry& entry, fcitx::InputCont
     platform::clearWindowCache();
     auto* ic = event.inputContext();
     if (ic) {
+        ic->statusArea().clearGroup(fcitx::StatusGroup::InputMethod);
+        ic->statusArea().addAction(fcitx::StatusGroup::InputMethod, &toggle_vi_action_);
+        ic->statusArea().addAction(fcitx::StatusGroup::InputMethod, &method_action_);
+        ic->statusArea().addAction(fcitx::StatusGroup::InputMethod, &spelling_action_);
+        ic->statusArea().addAction(fcitx::StatusGroup::InputMethod, &autocorrect_action_);
         ic->statusArea().addAction(fcitx::StatusGroup::InputMethod, &settings_action_);
-        settings_action_.update(ic);
+        syncTrayActions(ic);
         ic->updateUserInterface(fcitx::UserInterfaceComponent::StatusArea);
     }
     auto* state = ic ? ic->propertyFor(&factory_) : nullptr;

@@ -11,6 +11,9 @@
 #include <fcitx/userinterfacemanager.h>
 #include <fcitx-config/configuration.h>
 #include <fcitx-config/option.h>
+#include <fcitx-utils/signals.h>
+#include <functional>
+#include <vector>
 #include "ime/state.h"
 
 namespace clak {
@@ -88,9 +91,22 @@ private:
     std::unordered_map<std::string, bool> app_states_;
     std::unordered_map<std::string, RuntimeAppQuirks> app_quirks_;
     bool global_enabled_{true};
+    bool initial_config_loaded_{false};
+    int last_startup_mode_{-1};
     uint64_t config_version_{0};
     std::unique_ptr<mouse::MouseTracker> mouse_tracker_;
+    fcitx::SimpleAction toggle_vi_action_;
+    fcitx::SimpleAction method_action_;
+    fcitx::SimpleAction spelling_action_;
+    fcitx::SimpleAction autocorrect_action_;
     ClakSettingsAction settings_action_;
+    std::vector<fcitx::ScopedConnection> tray_connections_;
+
+    void initTrayActions();
+    void unregisterTrayActions();
+    void syncTrayActions(fcitx::InputContext* ic);
+    void applyAndSaveTrayConfig(fcitx::InputContext* ic, const std::function<void(ClakConfig*)>& mutator);
+    std::string resolveAppKey(fcitx::InputContext* ic);
     ClakFcitxConfig fcitx_config_;
     uint64_t last_replacement_check_us_{0};
     bool binary_replaced_{false};

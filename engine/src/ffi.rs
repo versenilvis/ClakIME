@@ -597,6 +597,22 @@ pub unsafe extern "C" fn clak_config_set_spelling(cfg: *mut config::ClakConfig, 
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_config_get_spelling(cfg: *const config::ClakConfig) -> bool {
+    if cfg.is_null() {
+        return true;
+    }
+    (*cfg).spelling.enabled
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_config_get_auto_restore(cfg: *const config::ClakConfig) -> bool {
+    if cfg.is_null() {
+        return true;
+    }
+    (*cfg).spelling.auto_restore
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn clak_config_get_startup_mode(cfg: *const config::ClakConfig) -> i32 {
     if cfg.is_null() {
         return 0;
@@ -618,6 +634,56 @@ pub unsafe extern "C" fn clak_config_get_method(cfg: *const config::ClakConfig) 
         "viqr" => 2,
         "teip_vni" => 3,
         _ => 0,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_config_set_method(cfg: *mut config::ClakConfig, method: i32) {
+    if !cfg.is_null() {
+        let name = match method {
+            1 => "vni",
+            2 => "viqr",
+            3 => "teip_vni",
+            _ => "telex",
+        };
+        unsafe { (*cfg).general.method = name.to_string() };
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_config_get_charset(cfg: *const config::ClakConfig) -> i32 {
+    if cfg.is_null() {
+        return 0;
+    }
+    if (*cfg).general.charset == "decomposed" {
+        1
+    } else {
+        0
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_config_set_charset(cfg: *mut config::ClakConfig, charset: i32) {
+    if !cfg.is_null() {
+        let name = if charset == 1 { "decomposed" } else { "unicode" };
+        unsafe { (*cfg).general.charset = name.to_string() };
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn clak_config_save_toml(cfg: *const config::ClakConfig) -> bool {
+    if cfg.is_null() {
+        return false;
+    }
+    let path = config::config_path();
+    if let Some(parent) = path.parent() {
+        if std::fs::create_dir_all(parent).is_err() {
+            return false;
+        }
+    }
+    match toml::to_string_pretty(unsafe { &*cfg }) {
+        Ok(content) => std::fs::write(path, content).is_ok(),
+        Err(_) => false,
     }
 }
 

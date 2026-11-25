@@ -1394,5 +1394,70 @@ TEST_F(ClakStateTest, AddressBar_MouseClick_NeverEmitsOotjfng) {
     EXPECT_NE(committed_text, "ootjfng");
 }
 
+TEST_F(ClakStateTest, GivenTrayActions_WhenActivated_PopulatesMenuAndTogglesSettings) {
+    platform::setMockActiveWindow(platform::WindowInfo{"kitty", "kitty", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "kitty");
+
+    std::string tmp_cfg = "/tmp/clak_test_tray_cfg_" + std::to_string(getpid());
+    const char* prev_xdg = std::getenv("XDG_CONFIG_HOME");
+    std::string saved_xdg = prev_xdg ? prev_xdg : "";
+    bool had_xdg = (prev_xdg != nullptr);
+    setenv("XDG_CONFIG_HOME", tmp_cfg.c_str(), 1);
+
+    fcitx::InputMethodEntry dummy_entry("clak", "Clak", "vi", "clak");
+    fcitx::InputContextEvent activate_ev(&ic, fcitx::EventType::InputContextFocusIn);
+    engine_->activate(dummy_entry, activate_ev);
+
+    auto actions = ic.statusArea().actions(fcitx::StatusGroup::InputMethod);
+    ASSERT_GE(actions.size(), 5u);
+
+    auto& ui = instance_->userInterfaceManager();
+    auto* toggle_vi = ui.lookupAction("clak-toggle-vi");
+    auto* method_act = ui.lookupAction("clak-method");
+    auto* spelling = ui.lookupAction("clak-spelling");
+    auto* autocorrect = ui.lookupAction("clak-autocorrect");
+    ASSERT_NE(toggle_vi, nullptr);
+    ASSERT_NE(method_act, nullptr);
+    ASSERT_NE(spelling, nullptr);
+    ASSERT_NE(autocorrect, nullptr);
+
+    EXPECT_FALSE(toggle_vi->isCheckable());
+    EXPECT_EQ(toggle_vi->shortText(&ic), "✔ Tiếng Việt");
+    EXPECT_EQ(engine_->subModeLabelImpl(dummy_entry, ic), "VI");
+    toggle_vi->activate(&ic);
+    EXPECT_EQ(toggle_vi->shortText(&ic), "✖ Tiếng Anh");
+    EXPECT_EQ(engine_->subModeLabelImpl(dummy_entry, ic), "EN");
+    toggle_vi->activate(&ic);
+    EXPECT_EQ(toggle_vi->shortText(&ic), "✔ Tiếng Việt");
+
+    int expected_next_method = (clak_config_get_method(engine_->config()) + 1) % 4;
+    method_act->activate(&ic);
+    EXPECT_EQ(clak_config_get_method(engine_->config()), expected_next_method);
+
+    bool before_spelling = clak_config_get_spelling(engine_->config());
+    spelling->activate(&ic);
+    EXPECT_EQ(clak_config_get_spelling(engine_->config()), !before_spelling);
+    EXPECT_EQ(clak_config_get_auto_restore(engine_->config()), !before_spelling);
+
+    bool before_autocorrect = clak_config_get_autocorrect(engine_->config());
+    autocorrect->activate(&ic);
+    EXPECT_EQ(clak_config_get_autocorrect(engine_->config()), !before_autocorrect);
+
+    ClakConfig* reloaded = clak_config_load();
+    ASSERT_NE(reloaded, nullptr);
+    EXPECT_EQ(clak_config_get_method(reloaded), expected_next_method);
+    EXPECT_EQ(clak_config_get_spelling(reloaded), !before_spelling);
+    EXPECT_EQ(clak_config_get_autocorrect(reloaded), !before_autocorrect);
+    clak_config_free(reloaded);
+
+    if (had_xdg) {
+        setenv("XDG_CONFIG_HOME", saved_xdg.c_str(), 1);
+    } else {
+        unsetenv("XDG_CONFIG_HOME");
+    }
+    std::string rm_cmd = "rm -rf " + tmp_cfg;
+    (void)system(rm_cmd.c_str());
+}
+
 } // namespace test
 } // namespace clak
