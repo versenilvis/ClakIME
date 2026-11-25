@@ -1423,15 +1423,15 @@ TEST_F(ClakStateTest, GivenTrayActions_WhenActivated_PopulatesMenuAndTogglesSett
 
     EXPECT_FALSE(toggle_vi->isCheckable());
     EXPECT_EQ(toggle_vi->shortText(&ic), "Tiếng Việt");
-    EXPECT_EQ(toggle_vi->icon(&ic), "clak-tray-on");
+    EXPECT_EQ(toggle_vi->icon(&ic), "clak-tray-vi-on");
     EXPECT_EQ(engine_->subModeLabelImpl(dummy_entry, ic), "VI");
     toggle_vi->activate(&ic);
     EXPECT_EQ(toggle_vi->shortText(&ic), "Tiếng Việt");
-    EXPECT_EQ(toggle_vi->icon(&ic), "clak-tray-off");
+    EXPECT_EQ(toggle_vi->icon(&ic), "clak-tray-vi-off");
     EXPECT_EQ(engine_->subModeLabelImpl(dummy_entry, ic), "EN");
     toggle_vi->activate(&ic);
     EXPECT_EQ(toggle_vi->shortText(&ic), "Tiếng Việt");
-    EXPECT_EQ(toggle_vi->icon(&ic), "clak-tray-on");
+    EXPECT_EQ(toggle_vi->icon(&ic), "clak-tray-vi-on");
 
     EXPECT_EQ(method_act->icon(&ic), "clak-tray-keyboard");
     int expected_next_method = (clak_config_get_method(engine_->config()) + 1) % 4;
@@ -1439,17 +1439,17 @@ TEST_F(ClakStateTest, GivenTrayActions_WhenActivated_PopulatesMenuAndTogglesSett
     EXPECT_EQ(clak_config_get_method(engine_->config()), expected_next_method);
 
     bool before_spelling = clak_config_get_spelling(engine_->config());
-    EXPECT_EQ(spelling->icon(&ic), before_spelling ? "clak-tray-on" : "clak-tray-off");
+    EXPECT_EQ(spelling->icon(&ic), before_spelling ? "clak-tray-spelling-on" : "clak-tray-spelling-off");
     spelling->activate(&ic);
     EXPECT_EQ(clak_config_get_spelling(engine_->config()), !before_spelling);
     EXPECT_EQ(clak_config_get_auto_restore(engine_->config()), !before_spelling);
-    EXPECT_EQ(spelling->icon(&ic), !before_spelling ? "clak-tray-on" : "clak-tray-off");
+    EXPECT_EQ(spelling->icon(&ic), !before_spelling ? "clak-tray-spelling-on" : "clak-tray-spelling-off");
 
     bool before_autocorrect = clak_config_get_autocorrect(engine_->config());
-    EXPECT_EQ(autocorrect->icon(&ic), before_autocorrect ? "clak-tray-on" : "clak-tray-off");
+    EXPECT_EQ(autocorrect->icon(&ic), before_autocorrect ? "clak-tray-autocorrect-on" : "clak-tray-autocorrect-off");
     autocorrect->activate(&ic);
     EXPECT_EQ(clak_config_get_autocorrect(engine_->config()), !before_autocorrect);
-    EXPECT_EQ(autocorrect->icon(&ic), !before_autocorrect ? "clak-tray-on" : "clak-tray-off");
+    EXPECT_EQ(autocorrect->icon(&ic), !before_autocorrect ? "clak-tray-autocorrect-on" : "clak-tray-autocorrect-off");
 
     ClakConfig* reloaded = clak_config_load();
     ASSERT_NE(reloaded, nullptr);
