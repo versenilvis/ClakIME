@@ -101,9 +101,11 @@ private:
     fcitx::SimpleAction autocorrect_action_;
     ClakSettingsAction settings_action_;
     std::vector<fcitx::ScopedConnection> tray_connections_;
+    std::vector<std::unique_ptr<fcitx::HandlerTableEntry<fcitx::EventHandler>>> event_watchers_;
 
     void initTrayActions();
     void unregisterTrayActions();
+    void attachTrayActions(fcitx::InputContext* ic);
     void syncTrayActions(fcitx::InputContext* ic);
     void applyAndSaveTrayConfig(fcitx::InputContext* ic, const std::function<void(ClakConfig*)>& mutator);
     std::string resolveAppKey(fcitx::InputContext* ic);

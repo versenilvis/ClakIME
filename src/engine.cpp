@@ -34,6 +34,17 @@ ClakEngine::ClakEngine(fcitx::Instance* instance)
       }) {
   instance_->inputContextManager().registerProperty("clakState", &factory_);
   initTrayActions();
+
+  // re-add tray actions whenever any IC gains focus so they don't vanish between windows
+  event_watchers_.emplace_back(
+    instance_->watchEvent<fcitx::EventType::InputContextFocusIn>(
+      fcitx::EventWatcherPhase::Default,
+      [this](fcitx::FocusInEvent& e) {
+        auto* ic = e.inputContext();
+        if (!ic) return;
+        if (instance_->inputMethodEngine(ic) != this) return;
+        attachTrayActions(ic);
+      }));
   // pre-warm uinput device so kernel and libinput enumerate it before first use
   uinput::UinputTool::instance();
   loadConfig();
@@ -198,6 +209,7 @@ void ClakEngine::initTrayActions() {
 }
 
 void ClakEngine::unregisterTrayActions() {
+  event_watchers_.clear();
   tray_connections_.clear();
   auto& ui = instance_->userInterfaceManager();
   ui.unregisterAction(&toggle_vi_action_);
@@ -205,6 +217,18 @@ void ClakEngine::unregisterTrayActions() {
   ui.unregisterAction(&spelling_action_);
   ui.unregisterAction(&autocorrect_action_);
   ui.unregisterAction(&settings_action_);
+}
+
+void ClakEngine::attachTrayActions(fcitx::InputContext* ic) {
+  if (!ic) return;
+  ic->statusArea().clearGroup(fcitx::StatusGroup::InputMethod);
+  ic->statusArea().addAction(fcitx::StatusGroup::InputMethod, &toggle_vi_action_);
+  ic->statusArea().addAction(fcitx::StatusGroup::InputMethod, &method_action_);
+  ic->statusArea().addAction(fcitx::StatusGroup::InputMethod, &spelling_action_);
+  ic->statusArea().addAction(fcitx::StatusGroup::InputMethod, &autocorrect_action_);
+  ic->statusArea().addAction(fcitx::StatusGroup::InputMethod, &settings_action_);
+  syncTrayActions(ic);
+  ic->updateUserInterface(fcitx::UserInterfaceComponent::StatusArea);
 }
 
 void ClakEngine::syncTrayActions(fcitx::InputContext* ic) {
@@ -371,16 +395,7 @@ void ClakEngine::activate(const fcitx::InputMethodEntry& entry, fcitx::InputCont
   FCITX_UNUSED(entry);
   platform::clearWindowCache();
   auto* ic = event.inputContext();
-  if (ic) {
-    ic->statusArea().clearGroup(fcitx::StatusGroup::InputMethod);
-    ic->statusArea().addAction(fcitx::StatusGroup::InputMethod, &toggle_vi_action_);
-    ic->statusArea().addAction(fcitx::StatusGroup::InputMethod, &method_action_);
-    ic->statusArea().addAction(fcitx::StatusGroup::InputMethod, &spelling_action_);
-    ic->statusArea().addAction(fcitx::StatusGroup::InputMethod, &autocorrect_action_);
-    ic->statusArea().addAction(fcitx::StatusGroup::InputMethod, &settings_action_);
-    syncTrayActions(ic);
-    ic->updateUserInterface(fcitx::UserInterfaceComponent::StatusArea);
-  }
+  attachTrayActions(ic);
   auto* state = ic ? ic->propertyFor(&factory_) : nullptr;
   std::string app = state ? state->appKey() : (ic ? ic->program() : "");
   utils::clakLog("engine::activate: ic program='" + (ic ? ic->program() : "") + "' app='" + app + "' enabled=" + std::to_string(isAppEnabled(app)));

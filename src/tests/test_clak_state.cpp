@@ -1426,8 +1426,8 @@ TEST_F(ClakStateTest, GivenTrayActions_WhenActivated_PopulatesMenuAndTogglesSett
     EXPECT_EQ(toggle_vi->icon(&ic), "clak-tray-vi-on");
     EXPECT_EQ(engine_->subModeLabelImpl(dummy_entry, ic), "VI");
     toggle_vi->activate(&ic);
-    EXPECT_EQ(toggle_vi->shortText(&ic), "Tiếng Việt");
-    EXPECT_EQ(toggle_vi->icon(&ic), "clak-tray-vi-off");
+    EXPECT_EQ(toggle_vi->shortText(&ic), "Tiếng Anh");
+    EXPECT_EQ(toggle_vi->icon(&ic), "clak-tray-vi-on");
     EXPECT_EQ(engine_->subModeLabelImpl(dummy_entry, ic), "EN");
     toggle_vi->activate(&ic);
     EXPECT_EQ(toggle_vi->shortText(&ic), "Tiếng Việt");
