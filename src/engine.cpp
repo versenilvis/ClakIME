@@ -13,7 +13,7 @@ namespace clak {
 ClakSettingsAction::ClakSettingsAction() {
   setShortText("Cài đặt Clak...");
   setLongText("Mở bảng điều khiển cấu hình Clak");
-  setIcon("org.fcitx.Fcitx5.clak");
+  setIcon("clak-tray-settings");
 }
 
 void ClakSettingsAction::activate(fcitx::InputContext* ic) {
