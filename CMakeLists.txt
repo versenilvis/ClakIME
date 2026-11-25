@@ -156,6 +156,7 @@ add_dependencies(clak_rust_engine clak_engine_build)
 
 set(CLAK_SOURCES
     src/de/hyprland.cpp
+    src/de/sway_niri.cpp
     src/de/gnome.cpp
     src/de/kde.cpp
     src/de/keyboard_settings.cpp

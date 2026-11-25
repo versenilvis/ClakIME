@@ -5,6 +5,7 @@ add_executable(clak_cpp_tests EXCLUDE_FROM_ALL
     test_clak_state.cpp
     test_regression.cpp
     test_adaptive_pacing.cpp
+    test_window_tracker.cpp
     $<TARGET_OBJECTS:clak_core>
 )
 

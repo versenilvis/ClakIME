@@ -1,6 +1,7 @@
 #include "window/window_info.h"
 #include "window/x11_tracker.h"
 #include "de/hyprland.h"
+#include "de/sway_niri.h"
 #include "de/gnome.h"
 #include "de/kde.h"
 #include "apps/terminal.h"
@@ -50,13 +51,19 @@ WindowInfo getActiveWindow(const std::string& fallback_app) {
 
     WindowInfo info;
 
-    // 1. first try hyprland if available
-    bool hypr_ok = de::queryHyprlandActiveWindow(info);
+    // 1. try wayland compositor native ipc (hyprland, sway, niri)
+    bool compositor_ok = de::queryHyprlandActiveWindow(info);
+    if (!compositor_ok || (info.win_class.empty() && info.pid == 0)) {
+        compositor_ok = de::querySwayActiveWindow(info);
+    }
+    if (!compositor_ok || (info.win_class.empty() && info.pid == 0)) {
+        compositor_ok = de::queryNiriActiveWindow(info);
+    }
 
     bool is_temp_ctx = fallback_app.rfind("ctx_", 0) == 0;
 
-    // 2. if not on hyprland, query at-spi or x11 hierarchy
-    if (!hypr_ok || info.win_class.empty() || is_temp_ctx) {
+    // 2. if compositor ipc did not resolve, query at-spi or x11 hierarchy
+    if (!compositor_ok || info.win_class.empty() || is_temp_ctx) {
         if (de::queryAtspiActiveWindow(info) && !info.win_class.empty() && info.win_class.rfind("ctx_", 0) != 0) {
             // found active window via at-spi
         } else if (queryX11ActiveWindow(info) && !info.win_class.empty()) {
