@@ -171,6 +171,34 @@ void ClakEngine::setAppEnabled(const std::string& app, bool enabled) {
     }
 }
 
+static std::string makeQuirkKey(const std::string& app, const std::string& site) {
+    if (app.empty()) return "";
+    return site.empty() ? app : (app + "|" + site);
+}
+
+RuntimeAppQuirks ClakEngine::getAppQuirks(const std::string& app, const std::string& site) const {
+    std::string key = makeQuirkKey(app, site);
+    if (key.empty()) return {};
+    auto it = app_quirks_.find(key);
+    if (it != app_quirks_.end()) {
+        return it->second;
+    }
+    return {};
+}
+
+void ClakEngine::updateAppQuirks(const std::string& app, const std::string& site, const RuntimeAppQuirks& quirks) {
+    std::string key = makeQuirkKey(app, site);
+    if (key.empty()) return;
+    if (!quirks.is_rich_text && !quirks.is_draftjs && !quirks.is_canvas) {
+        app_quirks_.erase(key);
+        return;
+    }
+    if (app_quirks_.size() >= kMaxTrackedAppQuirks && app_quirks_.find(key) == app_quirks_.end()) {
+        app_quirks_.clear();
+    }
+    app_quirks_[key] = quirks;
+}
+
 void ClakEngine::keyEvent(const fcitx::InputMethodEntry& entry, fcitx::KeyEvent& keyEvent) {
     FCITX_UNUSED(entry);
     auto* ic = keyEvent.inputContext();

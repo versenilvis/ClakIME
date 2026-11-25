@@ -859,6 +859,45 @@ TEST_F(ClakStateTest, GivenSpaceAfterWord_WhenBackspacedAndToneKeyTyped_ResumesW
     EXPECT_EQ(ic.surroundingText().text(), "toán");
 }
 
+TEST_F(ClakStateTest, GivenAppDetectedAsRichText_WhenDeactivatedAndReactivated_PreservesQuirkInCache) {
+    platform::setMockActiveWindow(platform::WindowInfo{"obsidian", "Note - Obsidian", 1234});
+    MockInputContext ic(instance_->inputContextManager(), "obsidian");
+    ime::ClakState state(engine_.get(), &ic);
+
+    // trigger 3 consecutive surrounding mismatches (simulating rich text editor ignoring deleteSurroundingText)
+    ic.setSurrounding("d", 1, 1);
+    ic.typeChar('d', &state);
+    ic.setSurrounding("dđ", 2, 2);
+    ic.typeChar('o', &state);
+
+    ic.setSurrounding("a", 1, 1);
+    ic.typeChar('a', &state);
+    ic.setSurrounding("aâ", 2, 2);
+    ic.typeChar('n', &state);
+
+    ic.setSurrounding("e", 1, 1);
+    ic.typeChar('e', &state);
+    ic.setSurrounding("eê", 2, 2);
+    ic.typeChar('n', &state);
+
+    EXPECT_TRUE(state.isRichTextEditor());
+
+    // deactivate (window switch) normally hard-resets verifier flags; cache must restore them
+    state.onDeactivate();
+    EXPECT_FALSE(state.isRichTextEditor());
+
+    // typing on reactivation immediately restores rich text quirk and routes to uinput
+    size_t uinput_calls = 0;
+    uinput::UinputTool::instance().setMockHandler([&](size_t, uint32_t, uint32_t, uint32_t) {
+        uinput_calls++;
+        return true;
+    });
+    ic.setSurrounding("d", 1, 1);
+    ic.typeChar('d', &state);
+    EXPECT_TRUE(state.isRichTextEditor());
+    EXPECT_EQ(uinput_calls, 1u);
+}
+
 TEST_F(ClakStateTest, PropertyTest_BatchReplayMatchesSequentialReference) {
     platform::setMockActiveWindow(platform::WindowInfo{"kitty", "kitty", 1234});
 

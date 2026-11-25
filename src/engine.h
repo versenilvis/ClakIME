@@ -29,6 +29,12 @@ FCITX_CONFIGURATION(
     fcitx::ExternalOption settings{this, "settings", "Cài đặt Clak", "clak-gui"};
 );
 
+struct RuntimeAppQuirks {
+    bool is_rich_text{false};
+    bool is_draftjs{false};
+    bool is_canvas{false};
+};
+
 class ClakEngine : public fcitx::InputMethodEngineV2 {
 public:
     ClakEngine(fcitx::Instance* instance);
@@ -62,6 +68,8 @@ public:
     bool isAppEnabled(const std::string& app);
     void toggleAppEnabled(const std::string& app);
     void setAppEnabled(const std::string& app, bool enabled);
+    RuntimeAppQuirks getAppQuirks(const std::string& app, const std::string& site) const;
+    void updateAppQuirks(const std::string& app, const std::string& site, const RuntimeAppQuirks& quirks);
     void onMouseClick();
     fcitx::FactoryFor<ime::ClakState>& factory() { return factory_; }
     bool checkBinaryReplaced();
@@ -76,7 +84,9 @@ private:
     int inotify_fd_{-1};
     int inotify_wd_{-1};
     static constexpr size_t kMaxTrackedAppStates = 256;
+    static constexpr size_t kMaxTrackedAppQuirks = 64;
     std::unordered_map<std::string, bool> app_states_;
+    std::unordered_map<std::string, RuntimeAppQuirks> app_quirks_;
     bool global_enabled_{true};
     uint64_t config_version_{0};
     std::unique_ptr<mouse::MouseTracker> mouse_tracker_;

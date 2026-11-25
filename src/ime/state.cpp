@@ -62,6 +62,7 @@ void ClakState::onDeactivate() {
     surr_cursor_underflow_count_ = 0;
     caret_tracker_.reset();
     hotkey_handler_.reset();
+    applied_quirk_key_.clear();
     if (!isDeleting()) {
         verifier_.reset(/*hard_reset=*/true);
         bool is_terminal = (ic_ && ic_->capabilityFlags().test(fcitx::CapabilityFlag::Terminal)) ||
@@ -185,9 +186,51 @@ void ClakState::resetHard() {
     reset(/*force=*/true);
 }
 
+static bool shouldCacheRuntimeQuirks(const std::string& app, const std::string& site) {
+    if (app.empty()) return false;
+    if (config::isVSCodeApp(app) || config::isGeckoApp(app)) return false;
+    if (config::isMetaSite(site) || config::isMetaSite(app)) return false;
+    if (apps::isBrowserApp(app) && site.empty()) return false;
+    return true;
+}
+
+void ClakState::syncRuntimeQuirks(const std::string& app, const std::string& site) {
+    if (!engine_ || !shouldCacheRuntimeQuirks(app, site)) {
+        return;
+    }
+    std::string key = site.empty() ? app : (app + "|" + site);
+    if (applied_quirk_key_ == key) {
+        return;
+    }
+    applied_quirk_key_ = key;
+    RuntimeAppQuirks cached = engine_->getAppQuirks(app, site);
+    if (cached.is_rich_text) {
+        verifier_.setRichTextEditor(true);
+    }
+    if (cached.is_draftjs) {
+        verifier_.setDraftJsEditor(true);
+    }
+    if (cached.is_canvas) {
+        verifier_.setCanvasEditor(true);
+    }
+}
+
+void ClakState::persistRuntimeQuirks(const std::string& app, const std::string& site) {
+    if (!engine_ || !shouldCacheRuntimeQuirks(app, site)) {
+        return;
+    }
+    RuntimeAppQuirks q{
+        verifier_.isRichTextEditor(),
+        verifier_.isDraftJsEditorDirect(),
+        verifier_.isCanvasEditor()
+    };
+    engine_->updateAppQuirks(app, site, q);
+}
+
 apps::AppProfile* ClakState::currentProfile() {
     std::string app = appKey();
     std::string site = activeSite();
+    syncRuntimeQuirks(app, site);
     int app_mode = 0;
     if (engine_ && engine_->config()) {
         app_mode = clak_config_get_app_mode(engine_->config(), app.c_str());
@@ -636,6 +679,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
 
     std::string app = appKey();
     std::string site = activeSite();
+    syncRuntimeQuirks(app, site);
     bool is_meta = config::isMetaSite(site) || config::isMetaSite(app);
     bool is_draftjs = isDraftJsEditor();
     bool is_gecko = config::isGeckoApp(app);
@@ -669,6 +713,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
             verifier_.setRichTextEditor(true);
             is_draftjs = true;
         }
+        persistRuntimeQuirks(app, site);
     }
 
     bool valid_surr = has_surrounding && surr.isValid() &&
@@ -778,6 +823,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                                       fcitx::now(CLOCK_MONOTONIC),
                                       last_key_interval_us_);
         }
+        persistRuntimeQuirks(app, site);
         is_draftjs = isDraftJsEditor();
         use_surrounding = currentProfile()->allowsSurroundingText() && valid_surr && !verifier_.isRichTextEditor() && !is_draftjs;
     } else if (verifier_.isPending()) {
@@ -938,6 +984,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
                 if (isBrowser()) {
                     verifier_.setDraftJsEditor(true);
                 }
+                persistRuntimeQuirks(app, site);
             }
         } else if (surr.isValid() && surr.cursor() >= 1) {
             surr_cursor_underflow_count_ = 0;

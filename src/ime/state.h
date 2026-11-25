@@ -87,6 +87,8 @@ private:
   void forwardBackspacePressRelease(size_t count);
   bool scheduleForwardBackspaceFallback(size_t count, const std::string& commit_str, const std::string& app);
   std::string classifyGroup(const std::string& app, const std::string& site, bool is_autofill, bool used_uinput);
+  void syncRuntimeQuirks(const std::string& app, const std::string& site);
+  void persistRuntimeQuirks(const std::string& app, const std::string& site);
   void logLatency(const std::string& group, uint64_t start_us, const std::string& action_type, const std::string& layer = "");
   void logCsv(uint64_t rtt_us, const std::string& action);
 
@@ -148,6 +150,7 @@ private:
   std::unique_ptr<apps::AppProfile> profile_;
   std::string profile_app_;
   std::string profile_site_;
+  std::string applied_quirk_key_;
   bool profile_autofill_{false};
   bool profile_draftjs_{false};
   bool profile_terminal_{false};
