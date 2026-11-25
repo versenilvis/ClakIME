@@ -11,7 +11,9 @@ export component ToggleSwitch {
 
     Rectangle {
         border-radius: root.is-wide ? 13px : 11px;
-        background: root.checked ? #61ffca : (ta.has-hover ? #242424 : #1a1a1a);
+        background: root.checked
+            ? (ta.pressed ? #fff : (ta.has-hover ? #fff : #ffffff))
+            : (ta.has-hover ? #242424 : #1a1a1a);
         border-width: 0px;
 
         animate background {
