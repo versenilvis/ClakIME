@@ -359,10 +359,9 @@ pub fn run_diagnostics() -> DiagnosticReport {
                     "flatpak override --user --env=XMODIFIERS=@im=fcitx --env=QT_IM_MODULE=fcitx".to_string(),
                 ),
             });
-        } else if sandbox.flatpak_installed
+        } else if (!sandbox.flatpak_apps_detected.is_empty() || sandbox.flatpak_running_count > 0)
             && (!sandbox.flatpak_override.has_global_override
-                || (!sandbox.flatpak_override.has_fcitx_env_or_dbus
-                    && !sandbox.flatpak_apps_detected.is_empty()))
+                || !sandbox.flatpak_override.has_fcitx_env_or_dbus)
         {
             warnings.push(DiagnosticWarning {
                 title: "Flatpak thiếu cấu hình override cho Fcitx5".to_string(),

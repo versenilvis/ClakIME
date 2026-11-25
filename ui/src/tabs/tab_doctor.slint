@@ -66,71 +66,12 @@ export component TabDoctor inherits VerticalLayout {
             spacing: 3px;
             horizontal-stretch: 1;
 
-            HorizontalLayout {
-                spacing: 8px;
-                alignment: start;
-
-                Text {
-                    text: "Môi trường gõ phím";
-                    color: Theme.text-primary;
-                    font-size: root.is-wide ? 16px : 14px;
-                    font-weight: 600;
-                    vertical-alignment: center;
-                }
-
-                if root.has_scanned: VerticalLayout {
-                    alignment: center;
-
-                    Rectangle {
-                        height: 22px;
-                        border-radius: 11px;
-                        background: root.score_color.with-alpha(0.12);
-                        border-width: 0px;
-                        border-color: transparent;
-
-                        HorizontalLayout {
-                            padding-left: 8px;
-                            padding-right: 10px;
-                            spacing: 5px;
-                            alignment: center;
-
-                            VerticalLayout {
-                                alignment: center;
-
-                                if root.score_level == 0: Image {
-                                    source: @image-url("../../assets/icons/smile.svg");
-                                    width: 13px;
-                                    height: 13px;
-                                    colorize: root.score_color;
-                                }
-                                if root.score_level == 1: Image {
-                                    source: @image-url("../../assets/icons/meh.svg");
-                                    width: 13px;
-                                    height: 13px;
-                                    colorize: root.score_color;
-                                }
-                                if root.score_level == 2: Image {
-                                    source: @image-url("../../assets/icons/frown.svg");
-                                    width: 13px;
-                                    height: 13px;
-                                    colorize: root.score_color;
-                                }
-                            }
-
-                            VerticalLayout {
-                                alignment: center;
-
-                                Text {
-                                    text: root.score_text + "/100 · " + root.score_label;
-                                    color: root.score_color;
-                                    font-size: 11px;
-                                    font-weight: 600;
-                                    vertical-alignment: center;
-                                }
-                            }
-                        }
-                    }
-                }
+            Text {
+                text: "Môi trường gõ phím";
+                color: Theme.text-primary;
+                font-size: root.is-wide ? 16px : 14px;
+                font-weight: 600;
+                vertical-alignment: center;
             }
 
             Text {
@@ -847,6 +788,7 @@ export component TabDoctor inherits VerticalLayout {
                 padding: 14px;
                 padding-left: 16px;
                 padding-right: 16px;
+                padding-bottom: 20px;
                 spacing: 4px;
                 alignment: start;
 
@@ -880,6 +822,67 @@ export component TabDoctor inherits VerticalLayout {
                         font-size: 13px;
                         font-weight: line.bold ? 600 : 400;
                         wrap: word-wrap;
+                    }
+                }
+            }
+        }
+
+        // badge cham diem /100 kem khuon mat o goc tren ben phai o log
+        if !root.is_scanning && root.has_scanned: HorizontalLayout {
+            x: 0px;
+            y: 10px;
+            width: parent.width;
+            height: 24px;
+            padding-right: 14px;
+            alignment: end;
+
+            Rectangle {
+                width: score_hl.preferred-width;
+                height: 24px;
+                border-radius: 12px;
+                background: root.score_level == 0 ? #0a2018 : (root.score_level == 1 ? #1f1709 : #210c0e);
+                border-width: 1px;
+                border-color: root.score_color.with-alpha(0.28);
+
+                score_hl := HorizontalLayout {
+                    padding-left: 9px;
+                    padding-right: 10px;
+                    spacing: 5px;
+                    alignment: center;
+
+                    VerticalLayout {
+                        alignment: center;
+
+                        if root.score_level == 0: Image {
+                            source: @image-url("../../assets/icons/smile.svg");
+                            width: 13px;
+                            height: 13px;
+                            colorize: root.score_color;
+                        }
+                        if root.score_level == 1: Image {
+                            source: @image-url("../../assets/icons/meh.svg");
+                            width: 13px;
+                            height: 13px;
+                            colorize: root.score_color;
+                        }
+                        if root.score_level == 2: Image {
+                            source: @image-url("../../assets/icons/frown.svg");
+                            width: 13px;
+                            height: 13px;
+                            colorize: root.score_color;
+                        }
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+
+                        Text {
+                            text: root.score_text + "/100 · " + root.score_label;
+                            color: root.score_color;
+                            font-size: 11px;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                        }
                     }
                 }
             }
