@@ -1400,3 +1400,57 @@ fn test_typing_informal_abbreviations_and_loanwords() {
     assert_eq!(ctx.last_composed, "draf");
 }
 
+#[test]
+fn test_backspace_after_double_tone_un_tone_does_not_swallow_key() {
+    let mut cfg = clak_engine::config::ClakConfig::default();
+    cfg.spelling.enabled = true;
+    cfg.spelling.auto_restore = true;
+
+    let mut ctx = ClakContext::new(Method::Telex);
+    ctx.apply_config(&cfg);
+    let mut doc = String::new();
+
+    let apply = |doc: &mut String, ch_opt: Option<char>, act: clak_engine::ImeAction| {
+        if act.action_type == ACTION_FORWARD {
+            if let Some(ch) = ch_opt {
+                doc.push(ch);
+            } else {
+                doc.pop();
+            }
+        } else if act.action_type == ACTION_REPLACE {
+            for _ in 0..act.delete_count {
+                doc.pop();
+            }
+            let s = unsafe { CStr::from_ptr(act.commit_str).to_str().unwrap() };
+            doc.push_str(s);
+        }
+    };
+
+    for ch in "Messi".chars() {
+        let act = ctx.process_key(ch as u32, &ch.to_string(), false, None, 0, 0);
+        apply(&mut doc, Some(ch), act);
+    }
+    assert_eq!(doc, "Mesi");
+
+    // backspace 'i', then retype 's' and 'i' -> must produce "Messi" without swallowing 's'
+    let bs_act = ctx.process_key(0xff08, "", false, None, 0, 0);
+    apply(&mut doc, None, bs_act);
+    assert_eq!(doc, "Mes");
+
+    let s_act = ctx.process_key(b's' as u32, "s", false, None, 0, 0);
+    apply(&mut doc, Some('s'), s_act);
+    assert_eq!(doc, "Mess");
+
+    let i_act = ctx.process_key(b'i' as u32, "i", false, None, 0, 0);
+    apply(&mut doc, Some('i'), i_act);
+    assert_eq!(doc, "Messi");
+
+    // surrounding-seeded "Mes" followed by 's', 'i' must also produce "Messi"
+    let mut ctx_seed = ClakContext::new(Method::Telex);
+    ctx_seed.apply_config(&cfg);
+    let act1 = ctx_seed.process_key(b's' as u32, "s", false, Some("Mes"), 3, 3);
+    assert_eq!(act1.action_type, ACTION_FORWARD);
+    let act2 = ctx_seed.process_key(b'i' as u32, "i", false, Some("Mess"), 4, 4);
+    assert_eq!(act2.action_type, ACTION_FORWARD);
+    assert_eq!(ctx_seed.last_composed, "Messi");
+}

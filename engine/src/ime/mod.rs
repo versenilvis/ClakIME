@@ -343,7 +343,18 @@ impl ClakContext {
             let mut chars: Vec<char> = self.last_composed.chars().collect();
             chars.pop();
             let remaining: String = chars.into_iter().collect();
-            self.raw_buffer = decompose_to_raw(&remaining, self.engine.method());
+            let mut popped_raw = false;
+            if !self.raw_buffer.is_empty() {
+                let mut raw_try = self.raw_buffer.clone();
+                raw_try.pop();
+                if self.engine.transform(&raw_try) == remaining {
+                    self.raw_buffer = raw_try;
+                    popped_raw = true;
+                }
+            }
+            if !popped_raw {
+                self.raw_buffer = decompose_to_raw(&remaining, self.engine.method());
+            }
             self.last_composed = remaining;
             if let Some(text) = surrounding_text {
                 self.last_surr = Some((text.to_string(), cursor));
@@ -748,6 +759,25 @@ impl ClakContext {
 
         if deleted_part.is_empty() && added_part == key_str {
             self.prev_composed = std::mem::replace(&mut self.last_composed, new_word);
+            if let Some(text) = surrounding_text {
+                self.last_surr = Some((text.to_string(), cursor));
+            }
+            return self.forward();
+        }
+
+        // do not swallow a doubled literal modifier when screen word already ends with that ascii char
+        if deleted_part.is_empty()
+            && added_part.is_empty()
+            && self.last_composed.is_ascii()
+            && self
+                .last_composed
+                .to_ascii_lowercase()
+                .ends_with(&key_str_to_use.to_ascii_lowercase())
+        {
+            let mut next_composed = self.last_composed.clone();
+            next_composed.push_str(key_str_to_use);
+            self.raw_buffer.push_str(key_str_to_use);
+            self.prev_composed = std::mem::replace(&mut self.last_composed, next_composed);
             if let Some(text) = surrounding_text {
                 self.last_surr = Some((text.to_string(), cursor));
             }
