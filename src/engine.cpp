@@ -115,6 +115,12 @@ namespace {
 constexpr const char* kMethodNames[] = {"Telex", "VNI", "VIQR", "Telex + VNI"};
 constexpr int kMethodCount = 4;
 
+void setToggleActionVisual(fcitx::SimpleAction& action, const char* label, bool enabled, fcitx::InputContext* ic) {
+    action.setIcon(enabled ? "clak-tray-on" : "clak-tray-off");
+    action.setShortText(label);
+    action.update(ic);
+}
+
 } // namespace
 
 std::string ClakEngine::resolveAppKey(fcitx::InputContext* ic) {
@@ -129,7 +135,8 @@ void ClakEngine::initTrayActions() {
 
     // match ngosen and lotus: avoid checkable radio flags and colons in labels
     toggle_vi_action_.setCheckable(false);
-    toggle_vi_action_.setShortText("✔ Tiếng Việt");
+    toggle_vi_action_.setIcon("clak-tray-on");
+    toggle_vi_action_.setShortText("Tiếng Việt");
     toggle_vi_action_.setLongText("Bật hoặc tắt chế độ gõ Tiếng Việt");
     tray_connections_.emplace_back(
         toggle_vi_action_.connect<fcitx::SimpleAction::Activated>([this](fcitx::InputContext* ic) {
@@ -149,6 +156,7 @@ void ClakEngine::initTrayActions() {
     ui.registerAction("clak-toggle-vi", &toggle_vi_action_);
 
     method_action_.setCheckable(false);
+    method_action_.setIcon("clak-tray-keyboard");
     method_action_.setShortText("Kiểu gõ (Telex)");
     method_action_.setLongText("Bấm để chuyển vòng kiểu gõ (Telex / VNI / VIQR / Telex + VNI)");
     tray_connections_.emplace_back(
@@ -162,7 +170,8 @@ void ClakEngine::initTrayActions() {
     ui.registerAction("clak-method", &method_action_);
 
     spelling_action_.setCheckable(false);
-    spelling_action_.setShortText("✔ Chính tả");
+    spelling_action_.setIcon("clak-tray-on");
+    spelling_action_.setShortText("Chính tả");
     spelling_action_.setLongText("Ngăn từ sai quy tắc tiếng Việt và tự khôi phục từ tiếng Anh");
     tray_connections_.emplace_back(
         spelling_action_.connect<fcitx::SimpleAction::Activated>([this](fcitx::InputContext* ic) {
@@ -175,7 +184,8 @@ void ClakEngine::initTrayActions() {
     ui.registerAction("clak-spelling", &spelling_action_);
 
     autocorrect_action_.setCheckable(false);
-    autocorrect_action_.setShortText("✔ Tự sửa");
+    autocorrect_action_.setIcon("clak-tray-on");
+    autocorrect_action_.setShortText("Tự sửa");
     autocorrect_action_.setLongText("Tự động sửa lỗi đảo phím khi gõ nhanh");
     tray_connections_.emplace_back(
         autocorrect_action_.connect<fcitx::SimpleAction::Activated>([this](fcitx::InputContext* ic) {
@@ -201,24 +211,21 @@ void ClakEngine::unregisterTrayActions() {
 
 void ClakEngine::syncTrayActions(fcitx::InputContext* ic) {
     std::string app = resolveAppKey(ic);
-    bool vi = isAppEnabled(app);
-    toggle_vi_action_.setShortText(vi ? "✔ Tiếng Việt" : "✖ Tiếng Anh");
-    toggle_vi_action_.update(ic);
+    setToggleActionVisual(toggle_vi_action_, "Tiếng Việt", isAppEnabled(app), ic);
 
     int method = config_ ? clak_config_get_method(config_) : 0;
     if (method < 0 || method >= kMethodCount) {
         method = 0;
     }
+    method_action_.setIcon("clak-tray-keyboard");
     method_action_.setShortText(std::string("Kiểu gõ (") + kMethodNames[method] + ")");
     method_action_.update(ic);
 
     bool spelling = config_ ? clak_config_get_spelling(config_) : true;
-    spelling_action_.setShortText(spelling ? "✔ Chính tả" : "✖ Chính tả");
-    spelling_action_.update(ic);
+    setToggleActionVisual(spelling_action_, "Chính tả", spelling, ic);
 
     bool autocorrect = config_ ? clak_config_get_autocorrect(config_) : true;
-    autocorrect_action_.setShortText(autocorrect ? "✔ Tự sửa" : "✖ Tự sửa");
-    autocorrect_action_.update(ic);
+    setToggleActionVisual(autocorrect_action_, "Tự sửa", autocorrect, ic);
 
     settings_action_.update(ic);
 }
@@ -299,8 +306,7 @@ void ClakEngine::toggleAppEnabled(const std::string& app) {
     }
     utils::clakLog("toggled input state for app '" + app + "' -> " + (next ? "VI" : "EN"));
     if (instance_) {
-        toggle_vi_action_.setShortText(next ? "✔ Tiếng Việt" : "✖ Tiếng Anh");
-        toggle_vi_action_.update(instance_->lastFocusedInputContext());
+        setToggleActionVisual(toggle_vi_action_, "Tiếng Việt", next, instance_->lastFocusedInputContext());
     }
 }
 
@@ -314,8 +320,7 @@ void ClakEngine::setAppEnabled(const std::string& app, bool enabled) {
         global_enabled_ = enabled;
     }
     if (instance_) {
-        toggle_vi_action_.setShortText(enabled ? "✔ Tiếng Việt" : "✖ Tiếng Anh");
-        toggle_vi_action_.update(instance_->lastFocusedInputContext());
+        setToggleActionVisual(toggle_vi_action_, "Tiếng Việt", enabled, instance_->lastFocusedInputContext());
     }
 }
 
