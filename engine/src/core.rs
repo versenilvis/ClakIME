@@ -281,19 +281,8 @@ pub(crate) fn is_informal_or_loanword(s: &str) -> bool {
         let mut chars = lower.chars();
         let c0 = chars.next().unwrap_or('\0');
         let c1 = chars.next().unwrap_or('\0');
-        if matches!(
-            (c0, c1),
-            ('c', 'r')
-                | ('k', 'p')
-                | ('d', 'r')
-                | ('đ', 'r')
-                | ('k', 'l')
-                | ('p', 'l')
-                | ('b', 'l')
-                | ('b', 'r')
-                | ('p', 'r')
-                | ('f', 'r')
-        ) && spelling::is_valid_cvc_with_options(&lower, true)
+        if spelling::is_loanword_onset_allowed(c0, c1, &lower, false)
+            && spelling::is_valid_cvc_with_options(&lower, true)
         {
             return true;
         }
@@ -987,5 +976,10 @@ mod tests {
         assert_eq!(e.transform("speedtest"), "speedtest");
         assert_eq!(e.transform("class"), "class");
         assert_eq!(e.transform("address"), "address");
+        assert_eq!(e.transform("draf"), "draf");
+        assert_eq!(e.transform("draft"), "draft");
+        assert_eq!(e.transform("prof"), "prof");
+        assert_eq!(e.transform("bras"), "bras");
+        assert_eq!(e.transform("fres"), "fres");
     }
 }

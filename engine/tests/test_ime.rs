@@ -1391,4 +1391,12 @@ fn test_typing_informal_abbreviations_and_loanwords() {
         ctx.process_key(ch as u32, &s, false, None, 0, 0);
     }
     assert_eq!(ctx.last_composed, "crông");
+
+    ctx.reset();
+    for ch in "draf".chars() {
+        let s = ch.to_string();
+        ctx.process_key(ch as u32, &s, false, None, 0, 0);
+    }
+    assert_eq!(ctx.last_composed, "draf");
 }
+

@@ -436,6 +436,40 @@ fn split_cvc(s: &str) -> (Vec<char>, Vec<char>, Vec<char>) {
 ///
 /// Returns `true` if `s` can be parsed as a valid Vietnamese syllable.
 /// `s` should already be in composed form (with diacritics applied).
+pub fn has_modified_vn_vowel(s: &str) -> bool {
+    s.chars().any(|c| {
+        matches!(
+            c,
+            'ă' | 'ằ' | 'ắ' | 'ẳ' | 'ẵ' | 'ặ'
+                | 'â' | 'ầ' | 'ấ' | 'ẩ' | 'ẫ' | 'ậ'
+                | 'ê' | 'ề' | 'ế' | 'ể' | 'ễ' | 'ệ'
+                | 'ô' | 'ồ' | 'ố' | 'ổ' | 'ỗ' | 'ộ'
+                | 'ơ' | 'ờ' | 'ớ' | 'ở' | 'ỡ' | 'ợ'
+                | 'ư' | 'ừ' | 'ứ' | 'ử' | 'ữ' | 'ự'
+                | 'Ă' | 'Ằ' | 'Ắ' | 'Ẳ' | 'Ẵ' | 'Ặ'
+                | 'Â' | 'Ầ' | 'Ấ' | 'Ẩ' | 'Ẫ' | 'Ậ'
+                | 'Ê' | 'Ề' | 'Ế' | 'Ể' | 'Ễ' | 'Ệ'
+                | 'Ô' | 'Ồ' | 'Ố' | 'Ổ' | 'Ỗ' | 'Ộ'
+                | 'Ơ' | 'Ờ' | 'Ớ' | 'Ở' | 'Ỡ' | 'Ợ'
+                | 'Ư' | 'Ừ' | 'Ứ' | 'Ử' | 'Ữ' | 'Ự'
+        )
+    })
+}
+
+pub fn is_loanword_onset_allowed(c0: char, c1: char, word: &str, allow_foreign: bool) -> bool {
+    match (c0, c1) {
+        ('k', 'p') | ('đ', 'r') | ('k', 'l') => true,
+        ('c', 'r')
+        | ('d', 'r')
+        | ('p', 'l')
+        | ('b', 'l')
+        | ('b', 'r')
+        | ('p', 'r')
+        | ('f', 'r') => allow_foreign || has_modified_vn_vowel(word),
+        _ => false,
+    }
+}
+
 pub fn is_valid_cvc(s: &str) -> bool {
     is_valid_cvc_with_options(s, false)
 }
@@ -531,19 +565,7 @@ pub fn is_valid_cvc_with_options(s: &str, allow_foreign: bool) -> bool {
         } else {
             let mut m = lookup_mask(FC_ROWS, &fc, !vo.is_empty(), true);
             if m == 0 && fc.len() >= 2 {
-                if matches!(
-                    (fc[0], fc[1]),
-                    ('c', 'r')
-                        | ('k', 'p')
-                        | ('d', 'r')
-                        | ('đ', 'r')
-                        | ('k', 'l')
-                        | ('p', 'l')
-                        | ('b', 'l')
-                        | ('b', 'r')
-                        | ('p', 'r')
-                        | ('f', 'r')
-                ) {
+                if is_loanword_onset_allowed(fc[0], fc[1], s, allow_foreign) {
                     m = 1u16 << 0;
                 } else if fc[0] == 'k'
                     || (fc[0] == 'đ' && fc[1] == 'c')
