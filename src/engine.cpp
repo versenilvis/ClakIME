@@ -209,7 +209,10 @@ void ClakEngine::unregisterTrayActions() {
 
 void ClakEngine::syncTrayActions(fcitx::InputContext* ic) {
   std::string app = resolveAppKey(ic);
-  setToggleActionVisual(toggle_vi_action_, "Tiếng Việt", "clak-tray-vi-on", "clak-tray-vi-off", isAppEnabled(app), ic);
+  bool vi_on = isAppEnabled(app);
+  toggle_vi_action_.setIcon("clak-tray-vi-on");
+  toggle_vi_action_.setShortText(vi_on ? "Tiếng Việt" : "Tiếng Anh");
+  toggle_vi_action_.update(ic);
 
   int method = config_ ? clak_config_get_method(config_) : 0;
   if (method < 0 || method >= kMethodCount) {
@@ -303,7 +306,9 @@ void ClakEngine::toggleAppEnabled(const std::string& app) {
   }
   utils::clakLog("toggled input state for app '" + app + "' -> " + (next ? "VI" : "EN"));
   if (instance_) {
-    setToggleActionVisual(toggle_vi_action_, "Tiếng Việt", "clak-tray-vi-on", "clak-tray-vi-off", next, instance_->lastFocusedInputContext());
+    toggle_vi_action_.setIcon("clak-tray-vi-on");
+    toggle_vi_action_.setShortText(next ? "Tiếng Việt" : "Tiếng Anh");
+    toggle_vi_action_.update(instance_->lastFocusedInputContext());
   }
 }
 
@@ -317,7 +322,9 @@ void ClakEngine::setAppEnabled(const std::string& app, bool enabled) {
     global_enabled_ = enabled;
   }
   if (instance_) {
-    setToggleActionVisual(toggle_vi_action_, "Tiếng Việt", "clak-tray-vi-on", "clak-tray-vi-off", enabled, instance_->lastFocusedInputContext());
+    toggle_vi_action_.setIcon("clak-tray-vi-on");
+    toggle_vi_action_.setShortText(enabled ? "Tiếng Việt" : "Tiếng Anh");
+    toggle_vi_action_.update(instance_->lastFocusedInputContext());
   }
 }
 
