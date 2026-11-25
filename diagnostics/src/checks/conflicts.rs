@@ -29,16 +29,21 @@ pub fn check_conflicts() -> Vec<AppConflict> {
                 let cmd_bytes = fs::read(&cmdline_path).unwrap_or_default();
                 let cmd_str = String::from_utf8_lossy(&cmd_bytes);
 
-                // check ibus daemon conflict
-                if comm == "ibus-daemon" || cmd_str.contains("ibus-daemon") {
+                // check ibus daemon or companion portal/x11 helper conflicts
+                if comm == "ibus-daemon"
+                    || comm == "ibus-portal"
+                    || comm == "ibus-x11"
+                    || comm == "ibus-ui-gtk3"
+                    || cmd_str.contains("ibus-daemon")
+                {
                     conflicts.push(AppConflict {
                         app_name: "IBus Daemon".to_string(),
                         pid,
                         description: format!(
-                            "Tiến trình IBus daemon (PID {}) đang chạy ngầm, gây tranh chấp bắt phím và nuốt chữ với Fcitx5",
-                            pid
+                            "Tiến trình IBus ({}, PID {}) đang chạy ngầm, gây tranh chấp bắt phím và nuốt chữ với Fcitx5",
+                            comm, pid
                         ),
-                        resolution_hint: "Tắt IBus bằng lệnh: ibus exit || systemctl --user stop ibus.service".to_string(),
+                        resolution_hint: "Tắt IBus và ngăn systemd khởi động lại: ibus exit && systemctl --user mask org.freedesktop.IBus.session.GNOME.service ibus.service".to_string(),
                     });
                     continue;
                 }

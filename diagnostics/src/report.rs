@@ -222,6 +222,12 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
             .as_deref()
             .unwrap_or("(không đặt)")
     ));
+    if let Some(ref sdl) = report.environment.sdl_im_module {
+        out.push_str(&format!("- SDL_IM_MODULE: `{}`\n", sdl));
+    }
+    if let Some(ref glfw) = report.environment.glfw_im_module {
+        out.push_str(&format!("- GLFW_IM_MODULE: `{}`\n", glfw));
+    }
     out.push_str(&format!(
         "- File 99-clak-im.conf: {}\n\n",
         if report.environment.env_file_exists {
@@ -334,6 +340,57 @@ pub fn format_markdown(report: &DiagnosticReport) -> String {
             out.push_str(&format!(
                 "  * Hướng khắc phục: `{}`\n",
                 conf.resolution_hint
+            ));
+        }
+        out.push('\n');
+    }
+
+    if !report.sandbox.chromium_wayland_apps.is_empty()
+        || report.sandbox.flatpak_installed
+        || report.sandbox.snap_running_count > 0
+        || !report.sandbox.ibus_systemd_respawn_units.is_empty()
+    {
+        out.push_str("## Sandbox & Cờ Wayland IME\n");
+        for app in &report.sandbox.chromium_wayland_apps {
+            let mode = if !app.ozone_wayland {
+                "XWayland / mặc định"
+            } else if app.has_enable_wayland_ime {
+                if app.has_text_input_v3 {
+                    "Wayland Ozone + --enable-wayland-ime + text-input-v3 (OK)"
+                } else {
+                    "Wayland Ozone + --enable-wayland-ime (OK)"
+                }
+            } else {
+                "Wayland Ozone thiếu --enable-wayland-ime (Cảnh báo)"
+            };
+            out.push_str(&format!("- {} (PID {}): {}\n", app.app_name, app.pid, mode));
+        }
+        if report.sandbox.flatpak_installed {
+            out.push_str(&format!(
+                "- Flatpak: {} ứng dụng đang chạy, override toàn cục: {}, portal: {}\n",
+                report.sandbox.flatpak_running_count,
+                if report.sandbox.flatpak_override.has_fcitx_env_or_dbus {
+                    "đã cấu hình Fcitx"
+                } else {
+                    "chưa cấu hình Fcitx"
+                },
+                if report.sandbox.xdg_desktop_portal_running {
+                    "đang chạy"
+                } else {
+                    "chưa chạy"
+                }
+            ));
+        }
+        if report.sandbox.snap_running_count > 0 {
+            out.push_str(&format!(
+                "- Snap: {} tiến trình đang chạy\n",
+                report.sandbox.snap_running_count
+            ));
+        }
+        if !report.sandbox.ibus_systemd_respawn_units.is_empty() {
+            out.push_str(&format!(
+                "- IBus systemd/wants units: {}\n",
+                report.sandbox.ibus_systemd_respawn_units.join(", ")
             ));
         }
         out.push('\n');

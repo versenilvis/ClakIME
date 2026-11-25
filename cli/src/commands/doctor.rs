@@ -172,6 +172,12 @@ pub fn execute(markdown: bool, json: bool, fix: bool) {
     }
     println!("  • QT_IM_MODULE: {}", qt_str);
     println!("  • XMODIFIERS: {}", xmod_str);
+    if let Some(ref sdl) = report.environment.sdl_im_module {
+        println!("  • SDL_IM_MODULE: {}", sdl);
+    }
+    if let Some(ref glfw) = report.environment.glfw_im_module {
+        println!("  • GLFW_IM_MODULE: {}", glfw);
+    }
     if report.environment.env_file_exists {
         println!("  • File 99-clak-im.conf: \x1b[32m[OK]\x1b[0m Đã cấu hình");
     } else {

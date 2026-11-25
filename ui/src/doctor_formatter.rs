@@ -558,6 +558,32 @@ pub fn format_doctor_lines(report: &DiagnosticReport, time_tag: &str) -> Vec<Doc
         color: if is_xmod_bad { warn_color } else { ok_color },
         bold: is_xmod_bad,
     });
+    if let Some(ref sdl) = report.environment.sdl_im_module {
+        let is_bad = sdl.contains("ibus");
+        lines.push(DoctorLineData {
+            text: format!(
+                "  • SDL_IM_MODULE: [{}] {}",
+                if is_bad { "CẢNH BÁO" } else { "OK" },
+                sdl
+            )
+            .into(),
+            color: if is_bad { warn_color } else { ok_color },
+            bold: is_bad,
+        });
+    }
+    if let Some(ref glfw) = report.environment.glfw_im_module {
+        let is_bad = glfw.contains("ibus");
+        lines.push(DoctorLineData {
+            text: format!(
+                "  • GLFW_IM_MODULE: [{}] {}",
+                if is_bad { "CẢNH BÁO" } else { "OK" },
+                glfw
+            )
+            .into(),
+            color: if is_bad { warn_color } else { ok_color },
+            bold: is_bad,
+        });
+    }
     if report.environment.env_file_exists {
         lines.push(DoctorLineData {
             text: "  • File 99-clak-im.conf: [OK] Đã cấu hình".into(),

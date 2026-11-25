@@ -17,6 +17,9 @@ pub use checks::conflicts::{check_conflicts, AppConflict};
 pub use checks::daemon::{check_daemon, DaemonStatus};
 pub use checks::display::{check_display, DisplayEnvironment, MonitorInfo};
 pub use checks::environment::{check_environment, EnvironmentStatus};
+pub use checks::sandbox::{
+    check_sandbox_status, ChromiumAppImeInfo, FlatpakOverrideAssessment, SandboxStatus,
+};
 pub use checks::frontends::{check_frontends, FrontendStatus};
 pub use checks::latency::{
     check_latency, check_telemetry, LatencyBenchmark, LayerStats, PacingGroupSnapshot,
@@ -60,6 +63,8 @@ pub struct DiagnosticReport {
     pub pacing: PacingRecommendation,
     pub telemetry: PacingTelemetry,
     pub conflicts: Vec<AppConflict>,
+    #[serde(default)]
+    pub sandbox: SandboxStatus,
     pub issues: Vec<DiagnosticIssue>,
     pub warnings: Vec<DiagnosticWarning>,
 }
@@ -85,6 +90,7 @@ pub fn run_diagnostics() -> DiagnosticReport {
     let environment = check_environment();
     let frontends = check_frontends();
     let conflicts = check_conflicts();
+    let sandbox = check_sandbox_status();
     let profile = check_profile();
     let wps = check_wps();
     let jetbrains = check_jetbrains();
@@ -289,6 +295,94 @@ pub fn run_diagnostics() -> DiagnosticReport {
         });
     }
 
+    if !sandbox.ibus_systemd_respawn_units.is_empty() {
+        let units = sandbox.ibus_systemd_respawn_units.join(", ");
+        warnings.push(DiagnosticWarning {
+            title: "IBus systemd/D-Bus có nguy cơ tự khởi động lại".to_string(),
+            message: format!(
+                "Phát hiện unit IBus ({}) có thể tự respawn trên session và tranh chấp bắt phím với Fcitx5",
+                units
+            ),
+            fix_command: Some(
+                "systemctl --user mask org.freedesktop.IBus.session.GNOME.service ibus.service && ibus exit".to_string(),
+            ),
+        });
+    }
+
+    if environment
+        .sdl_im_module
+        .as_deref()
+        .is_some_and(|v| v.contains("ibus"))
+    {
+        warnings.push(DiagnosticWarning {
+            title: "SDL_IM_MODULE đang trỏ tới ibus".to_string(),
+            message: "Biến SDL_IM_MODULE=ibus có thể khiến ứng dụng/game SDL gửi phím qua IBus thay vì Fcitx5".to_string(),
+            fix_command: Some("unset SDL_IM_MODULE || export SDL_IM_MODULE=fcitx".to_string()),
+        });
+    }
+
+    if environment
+        .glfw_im_module
+        .as_deref()
+        .is_some_and(|v| v.contains("ibus"))
+    {
+        warnings.push(DiagnosticWarning {
+            title: "GLFW_IM_MODULE đang trỏ tới ibus".to_string(),
+            message: "Biến GLFW_IM_MODULE=ibus có thể gây sai lệch nhập liệu trên ứng dụng GLFW/Kitty khi đang dùng Fcitx5".to_string(),
+            fix_command: Some("unset GLFW_IM_MODULE".to_string()),
+        });
+    }
+
+    for app in sandbox
+        .chromium_wayland_apps
+        .iter()
+        .filter(|a| a.needs_ime_flag_warning)
+    {
+        warnings.push(DiagnosticWarning {
+            title: format!("{} chạy Wayland thiếu cờ IME", app.app_name),
+            message: format!(
+                "{} (PID {}) đang bật Ozone Wayland nhưng thiếu --enable-wayland-ime nên có thể rớt phím hoặc mất text-input",
+                app.app_name, app.pid
+            ),
+            fix_command: Some(
+                "Thêm --enable-wayland-ime --wayland-text-input-version=3 vào chrome/electron flags".to_string(),
+            ),
+        });
+    }
+
+    if sandbox.flatpak_installed || sandbox.snap_running_count > 0 {
+        if sandbox.flatpak_override.has_ibus_conflict {
+            warnings.push(DiagnosticWarning {
+                title: "Flatpak override đang trỏ về IBus".to_string(),
+                message: "Cấu hình ~/.local/share/flatpak/overrides/global đang đặt biến IM thành ibus".to_string(),
+                fix_command: Some(
+                    "flatpak override --user --env=XMODIFIERS=@im=fcitx --env=QT_IM_MODULE=fcitx".to_string(),
+                ),
+            });
+        } else if sandbox.flatpak_installed
+            && (!sandbox.flatpak_override.has_global_override
+                || (!sandbox.flatpak_override.has_fcitx_env_or_dbus
+                    && !sandbox.flatpak_apps_detected.is_empty()))
+        {
+            warnings.push(DiagnosticWarning {
+                title: "Flatpak thiếu cấu hình override cho Fcitx5".to_string(),
+                message: "Ứng dụng Flatpak có thể không nhận diện được Fcitx5/Clak trong sandbox nếu thiếu socket hoặc biến môi trường IM".to_string(),
+                fix_command: Some(
+                    "flatpak override --user --socket=wayland --talk-name=org.fcitx.Fcitx5 --talk-name=org.freedesktop.portal.Fcitx --env=XMODIFIERS=@im=fcitx --env=QT_IM_MODULE=fcitx".to_string(),
+                ),
+            });
+        }
+        if (sandbox.flatpak_running_count > 0 || sandbox.snap_running_count > 0)
+            && !sandbox.xdg_desktop_portal_running
+        {
+            warnings.push(DiagnosticWarning {
+                title: "Thiếu xdg-desktop-portal cho ứng dụng sandbox".to_string(),
+                message: "Có tiến trình Flatpak/Snap đang chạy nhưng không thấy xdg-desktop-portal hoạt động".to_string(),
+                fix_command: Some("systemctl --user start xdg-desktop-portal".to_string()),
+            });
+        }
+    }
+
     let display = check_display();
     let latency = check_latency();
     let pacing = calculate_pacing(&display, &latency);
@@ -322,6 +416,7 @@ pub fn run_diagnostics() -> DiagnosticReport {
         pacing,
         telemetry: checks::latency::check_telemetry(),
         conflicts,
+        sandbox,
         issues,
         warnings,
     }
@@ -759,6 +854,36 @@ mod tests {
         );
 
         std::env::remove_var("GTK_IM_MODULE");
+    }
+
+    #[test]
+    fn test_sdl_and_glfw_ibus_warn_in_diagnostics() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        let prev_sdl = std::env::var("SDL_IM_MODULE");
+        let prev_glfw = std::env::var("GLFW_IM_MODULE");
+        std::env::set_var("SDL_IM_MODULE", "ibus");
+        std::env::set_var("GLFW_IM_MODULE", "ibus");
+
+        let report = run_diagnostics();
+        let has_sdl_warn = report
+            .warnings
+            .iter()
+            .any(|w| w.title.contains("SDL_IM_MODULE"));
+        let has_glfw_warn = report
+            .warnings
+            .iter()
+            .any(|w| w.title.contains("GLFW_IM_MODULE"));
+        assert!(has_sdl_warn, "must warn when SDL_IM_MODULE=ibus");
+        assert!(has_glfw_warn, "must warn when GLFW_IM_MODULE=ibus");
+
+        match prev_sdl {
+            Ok(v) => std::env::set_var("SDL_IM_MODULE", v),
+            Err(_) => std::env::remove_var("SDL_IM_MODULE"),
+        }
+        match prev_glfw {
+            Ok(v) => std::env::set_var("GLFW_IM_MODULE", v),
+            Err(_) => std::env::remove_var("GLFW_IM_MODULE"),
+        }
     }
 
     #[test]
