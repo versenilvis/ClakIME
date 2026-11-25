@@ -700,6 +700,5 @@ impl ClakSession {
     }
 }
 
-
 #[cfg(test)]
 mod tests;

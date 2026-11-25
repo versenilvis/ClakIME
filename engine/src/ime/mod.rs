@@ -189,9 +189,12 @@ impl ClakContext {
         }
 
         // bracket shortcuts
-        if let Some(bracket_action) =
-            check_bracket_shortcuts(self.bracket_brackets, &self.last_composed, &self.raw_buffer, key_str)
-        {
+        if let Some(bracket_action) = check_bracket_shortcuts(
+            self.bracket_brackets,
+            &self.last_composed,
+            &self.raw_buffer,
+            key_str,
+        ) {
             match bracket_action {
                 BracketAction::UndoPair(del_str, target) => {
                     self.reset();
@@ -573,8 +576,7 @@ impl ClakContext {
         self.uncommit_candidate = None;
         self.just_deleted = false;
 
-        let surr_meta = surrounding_text
-            .map(|text| parse_surrounding_meta(text, cursor, anchor));
+        let surr_meta = surrounding_text.map(|text| parse_surrounding_meta(text, cursor, anchor));
 
         let mut has_autocomplete = false;
         if let Some(text) = surrounding_text {
@@ -669,11 +671,14 @@ impl ClakContext {
                     let (del, added) = compare_and_split(old_word, &transformed);
                     let degrades_to_raw = old_word != seeded_raw && transformed == test_buf;
                     let emits_corrupt_seq = del.chars().count() > 0
-                        && (added.contains("ootj") || added.contains("moot") || added.contains("otoj"));
-                    let old_was_accented = old_word.chars().any(|c| !c.is_ascii());
+                        && (added.contains("ootj")
+                            || added.contains("moot")
+                            || added.contains("otoj"));
+                    let old_was_accented = !old_word.is_ascii();
                     let destroys_accent = old_was_accented
                         && del.chars().count() > 0
-                        && (!crate::spelling::is_valid_cvc(&transformed) || transformed == test_buf);
+                        && (!crate::spelling::is_valid_cvc(&transformed)
+                            || transformed == test_buf);
                     if !degrades_to_raw && !emits_corrupt_seq && !destroys_accent {
                         self.raw_buffer = seeded_raw;
                         self.last_composed = old_word.to_string();
@@ -752,7 +757,11 @@ impl ClakContext {
         let new_word = self.engine.transform(&self.raw_buffer);
         let (deleted_part, added_part) = compare_and_split(&self.last_composed, &new_word);
 
-        if added_part.contains("ootj") || added_part.contains("moot") || added_part.contains("otoj") || added_part.contains("motoj") {
+        if added_part.contains("ootj")
+            || added_part.contains("moot")
+            || added_part.contains("otoj")
+            || added_part.contains("motoj")
+        {
             self.reset();
             return self.forward();
         }

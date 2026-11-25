@@ -798,7 +798,8 @@ fn test_macro_case_capitalized() {
 #[test]
 fn test_macro_case_title_case_multiword() {
     let mut ctx = ClakContext::new(Method::Telex);
-    ctx.macros.insert("hcm".to_string(), "hồ chí minh".to_string());
+    ctx.macros
+        .insert("hcm".to_string(), "hồ chí minh".to_string());
     ctx.process_key(b'H' as u32, "H", false, None, 0, 0);
     ctx.process_key(b'c' as u32, "c", false, None, 1, 1);
     ctx.process_key(b'm' as u32, "m", false, None, 2, 2);
@@ -877,7 +878,6 @@ fn test_zero_width_filtering_surrounding() {
     assert_eq!(extract_word_immediate("\u{200b}"), "");
     assert_eq!(extract_word_immediate("\u{feff}tieng"), "tieng");
 }
-
 
 #[test]
 fn test_macro_enter_trigger() {

@@ -1,10 +1,10 @@
-use std::ffi::{CStr, CString};
-use std::os::raw::c_char;
-use crate::core::{dict, ClakCore, Method};
-use crate::config;
-use crate::session;
 use crate::autofix;
 use crate::charset;
+use crate::config;
+use crate::core::{dict, ClakCore, Method};
+use crate::session;
+use std::ffi::{CStr, CString};
+use std::os::raw::c_char;
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn clak_core_new(method: i32) -> *mut ClakCore {
@@ -665,7 +665,11 @@ pub unsafe extern "C" fn clak_config_get_charset(cfg: *const config::ClakConfig)
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn clak_config_set_charset(cfg: *mut config::ClakConfig, charset: i32) {
     if !cfg.is_null() {
-        let name = if charset == 1 { "decomposed" } else { "unicode" };
+        let name = if charset == 1 {
+            "decomposed"
+        } else {
+            "unicode"
+        };
         unsafe { (*cfg).general.charset = name.to_string() };
     }
 }
@@ -932,4 +936,3 @@ pub unsafe extern "C" fn clak_session_on_timer_fired(
         }
     }
 }
-

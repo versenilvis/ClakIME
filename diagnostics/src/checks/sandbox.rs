@@ -55,7 +55,10 @@ pub fn classify_chromium_binary(exe_name: &str) -> Option<&'static str> {
         .unwrap_or(exe_name)
         .to_ascii_lowercase();
     match base.as_str() {
-        "chrome" | "google-chrome" | "google-chrome-stable" | "google-chrome-beta"
+        "chrome"
+        | "google-chrome"
+        | "google-chrome-stable"
+        | "google-chrome-beta"
         | "google-chrome-unstable" => Some("Google Chrome"),
         "chromium" | "chromium-browser" => Some("Chromium"),
         "brave" | "brave-browser" => Some("Brave"),
@@ -214,7 +217,7 @@ fn scan_proc_apps(on_wayland: bool) -> (Vec<ChromiumAppImeInfo>, usize, usize, b
             if args[0].contains("xdg-desktop-portal") {
                 portal_running = true;
             }
-            if args[0].starts_with("/app/bin/") || (comm == "bwrap" && args.iter().any(|a| *a == "/app")) {
+            if args[0].starts_with("/app/bin/") || (comm == "bwrap" && args.contains(&"/app")) {
                 flatpak_running += 1;
             }
             if args[0].starts_with("/snap/") {
@@ -303,8 +306,12 @@ pub fn check_sandbox_status() -> SandboxStatus {
         .unwrap_or(false)
         || env::var("WAYLAND_DISPLAY").is_ok();
 
-    let (chromium_wayland_apps, flatpak_running_count, snap_running_count, xdg_desktop_portal_running) =
-        scan_proc_apps(on_wayland);
+    let (
+        chromium_wayland_apps,
+        flatpak_running_count,
+        snap_running_count,
+        xdg_desktop_portal_running,
+    ) = scan_proc_apps(on_wayland);
 
     let home = env::var("HOME").unwrap_or_default();
     let user_flatpak_app = PathBuf::from(&home).join(".local/share/flatpak/app");
@@ -314,7 +321,11 @@ pub fn check_sandbox_status() -> SandboxStatus {
     let mut flatpak_installed = false;
     let mut detected_apps = BTreeSet::new();
     if !home.is_empty() {
-        collect_flatpak_apps_in_dir(&user_flatpak_app, &mut detected_apps, &mut flatpak_installed);
+        collect_flatpak_apps_in_dir(
+            &user_flatpak_app,
+            &mut detected_apps,
+            &mut flatpak_installed,
+        );
     }
     collect_flatpak_apps_in_dir(sys_flatpak_app, &mut detected_apps, &mut flatpak_installed);
 
@@ -354,7 +365,11 @@ mod tests {
         // helper process must be skipped
         assert!(inspect_chromium_cmdline(
             100,
-            &["/usr/lib/chromium/chromium", "--type=renderer", "--ozone-platform=wayland"],
+            &[
+                "/usr/lib/chromium/chromium",
+                "--type=renderer",
+                "--ozone-platform=wayland"
+            ],
             false,
             true
         )
@@ -380,7 +395,11 @@ mod tests {
         // electron app using ELECTRON_OZONE_PLATFORM_HINT=auto with --enable-wayland-ime passes cleanly
         let ok_electron = inspect_chromium_cmdline(
             102,
-            &["/usr/bin/obsidian", "--enable-wayland-ime", "--wayland-text-input-version=3"],
+            &[
+                "/usr/bin/obsidian",
+                "--enable-wayland-ime",
+                "--wayland-text-input-version=3",
+            ],
             true,
             true,
         )

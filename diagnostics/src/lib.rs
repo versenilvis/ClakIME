@@ -17,9 +17,6 @@ pub use checks::conflicts::{check_conflicts, AppConflict};
 pub use checks::daemon::{check_daemon, DaemonStatus};
 pub use checks::display::{check_display, DisplayEnvironment, MonitorInfo};
 pub use checks::environment::{check_environment, EnvironmentStatus};
-pub use checks::sandbox::{
-    check_sandbox_status, ChromiumAppImeInfo, FlatpakOverrideAssessment, SandboxStatus,
-};
 pub use checks::frontends::{check_frontends, FrontendStatus};
 pub use checks::latency::{
     check_latency, check_telemetry, LatencyBenchmark, LayerStats, PacingGroupSnapshot,
@@ -28,6 +25,9 @@ pub use checks::latency::{
 pub use checks::memory::{check_memory, MemoryInspection};
 pub use checks::pacing_calc::{calculate_pacing, PacingRecommendation};
 pub use checks::permissions::{check_permissions, fix_input_permissions, PermissionChecks};
+pub use checks::sandbox::{
+    check_sandbox_status, ChromiumAppImeInfo, FlatpakOverrideAssessment, SandboxStatus,
+};
 pub use checks::system::{check_system, SystemInfo};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -354,9 +354,12 @@ pub fn run_diagnostics() -> DiagnosticReport {
         if sandbox.flatpak_override.has_ibus_conflict {
             warnings.push(DiagnosticWarning {
                 title: "Flatpak override đang trỏ về IBus".to_string(),
-                message: "Cấu hình ~/.local/share/flatpak/overrides/global đang đặt biến IM thành ibus".to_string(),
+                message:
+                    "Cấu hình ~/.local/share/flatpak/overrides/global đang đặt biến IM thành ibus"
+                        .to_string(),
                 fix_command: Some(
-                    "flatpak override --user --env=XMODIFIERS=@im=fcitx --env=QT_IM_MODULE=fcitx".to_string(),
+                    "flatpak override --user --env=XMODIFIERS=@im=fcitx --env=QT_IM_MODULE=fcitx"
+                        .to_string(),
                 ),
             });
         } else if (!sandbox.flatpak_apps_detected.is_empty() || sandbox.flatpak_running_count > 0)

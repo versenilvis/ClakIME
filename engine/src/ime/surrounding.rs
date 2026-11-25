@@ -2,11 +2,7 @@ use crate::ime::decomposing::{decompose_to_raw, to_base_ascii};
 use crate::ime::typing_features::{is_word_break, is_zero_width};
 use crate::Method;
 
-pub fn parse_surrounding_meta(
-    text: &str,
-    cursor: usize,
-    anchor: usize,
-) -> (usize, usize, usize) {
+pub fn parse_surrounding_meta(text: &str, cursor: usize, anchor: usize) -> (usize, usize, usize) {
     let mut char_count = 0;
     let mut cur_byte = text.len();
     let mut anch_byte = text.len();
@@ -22,7 +18,7 @@ pub fn parse_surrounding_meta(
     (cur_byte, anch_byte, char_count)
 }
 
-pub fn extract_word_trimmed<'a>(before_cur: &'a str) -> &'a str {
+pub fn extract_word_trimmed(before_cur: &str) -> &str {
     let trimmed = before_cur.trim_end_matches(|c: char| c == ' ' || is_zero_width(c));
     let trimmed = trimmed.trim_start_matches(is_zero_width);
     if let Some(last_break_pos) = trimmed.rfind(|c: char| is_word_break(c as u32)) {
@@ -37,7 +33,7 @@ pub fn extract_word_trimmed<'a>(before_cur: &'a str) -> &'a str {
     }
 }
 
-pub fn extract_word_immediate<'a>(before_cur: &'a str) -> &'a str {
+pub fn extract_word_immediate(before_cur: &str) -> &str {
     let before_cur = before_cur.trim_start_matches(is_zero_width);
     if let Some(last_break_pos) = before_cur.rfind(|c: char| is_word_break(c as u32)) {
         let ch_len = before_cur[last_break_pos..]
@@ -61,6 +57,7 @@ pub fn is_right_ident_separator(after_cursor: &str) -> bool {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn matches_last_composed_or_prefix(
     before_cur: &str,
     word: &str,

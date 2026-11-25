@@ -1,8 +1,8 @@
+use crate::shortcuts::shortcut_display_to_id;
+use crate::{AppRuleData, MacroItemData, MainWindow};
 use clak_engine::config::{ClakConfig, MacroItem};
 use slint::{Model, VecModel};
 use std::rc::Rc;
-use crate::{AppRuleData, MacroItemData, MainWindow};
-use crate::shortcuts::shortcut_display_to_id;
 
 pub fn save_config(
     window: &MainWindow,

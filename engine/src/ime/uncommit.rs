@@ -20,8 +20,7 @@ pub fn try_match_uncommit(
                 matched = true;
             }
         }
-        if !matched
-            && (before_cur.ends_with(&cand_com) || before_cur_trimmed.ends_with(&cand_com))
+        if !matched && (before_cur.ends_with(&cand_com) || before_cur_trimmed.ends_with(&cand_com))
         {
             matched = true;
         }

@@ -1,8 +1,8 @@
-use std::collections::HashSet;
-use std::sync::OnceLock;
 use crate::charset;
 use crate::engine;
 use crate::spelling;
+use std::collections::HashSet;
+use std::sync::OnceLock;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Method {
@@ -480,7 +480,6 @@ pub(crate) fn has_vn_markers(input: &str) -> bool {
         || lower.contains("oww")
         || lower.contains("uww")
 }
-
 
 #[cfg(test)]
 mod tests {

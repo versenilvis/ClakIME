@@ -368,4 +368,3 @@ pub fn fetch_available_versions(
 
     items
 }
-

@@ -1,5 +1,5 @@
-use clak_diagnostics::DiagnosticReport;
 use crate::DoctorLineData;
+use clak_diagnostics::DiagnosticReport;
 
 pub fn format_doctor_lines(report: &DiagnosticReport, time_tag: &str) -> Vec<DoctorLineData> {
     let mut lines = Vec::new();
