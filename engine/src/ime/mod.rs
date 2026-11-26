@@ -48,6 +48,8 @@ pub struct ClakContext {
     pub max_surr_lag_ms: u64,
     pub max_surr_window_chars: usize,
     pub last_macro_expansion: Option<(String, String, std::time::Instant)>,
+    // surrounding text at the moment of macro expansion, used to detect stale surr on undo
+    pre_expand_surr: Option<(String, usize)>,
     pub last_autocorrect: Option<(String, String, std::time::Instant)>,
     dynamic_macros: DynamicMacroStore,
     recent_line: String,
@@ -89,6 +91,7 @@ impl ClakContext {
             max_surr_lag_ms: 200,
             max_surr_window_chars: 8,
             last_macro_expansion: None,
+            pre_expand_surr: None,
             last_autocorrect: None,
             dynamic_macros: DynamicMacroStore::default(),
             recent_line: String::new(),
@@ -259,15 +262,25 @@ impl ClakContext {
             self.last_macro_expansion.take()
         {
             if time.elapsed().as_millis() <= 3000 {
-                let matches_surr = match surrounding_text {
-                    Some(text) => {
-                        let chars: Vec<char> = text.chars().collect();
-                        let cur = std::cmp::min(chars.len(), cursor);
-                        let before_cur: String = chars[..cur].iter().collect();
-                        before_cur.ends_with(&expanded_with_boundary)
+                // surrounding text in browsers (e.g. Chromium URL bar) may not update
+                // after a replace — detect this by comparing with the pre-expand snapshot
+                let surr_is_stale = match (surrounding_text, &self.pre_expand_surr) {
+                    (Some(cur_text), Some((pre_text, pre_cur))) => {
+                        cur_text == pre_text.as_str() && cursor == *pre_cur
                     }
-                    None => true,
+                    _ => false,
                 };
+                let matches_surr = surr_is_stale
+                    || match surrounding_text {
+                        Some(text) => {
+                            let chars: Vec<char> = text.chars().collect();
+                            let cur = std::cmp::min(chars.len(), cursor);
+                            let before_cur: String = chars[..cur].iter().collect();
+                            before_cur.ends_with(&expanded_with_boundary)
+                        }
+                        None => true,
+                    };
+                self.pre_expand_surr = None;
                 if matches_surr {
                     let del_count = expanded_with_boundary.chars().count();
                     self.reset();
@@ -431,6 +444,7 @@ impl ClakContext {
             commit_text.clone(),
             std::time::Instant::now(),
         ));
+        self.pre_expand_surr = surrounding_text.map(|t| (t.to_string(), cursor));
         self.last_autocorrect = None;
         self.just_deleted = false;
         self.stale_surr = None;
@@ -465,6 +479,7 @@ impl ClakContext {
                         replacement.clone(),
                         std::time::Instant::now(),
                     ));
+                    self.pre_expand_surr = surrounding_text.map(|t| (t.to_string(), cursor));
                     self.last_autocorrect = None;
                     self.just_deleted = false;
                     self.stale_surr = None;
@@ -490,6 +505,7 @@ impl ClakContext {
                     commit_text.clone(),
                     std::time::Instant::now(),
                 ));
+                self.pre_expand_surr = surrounding_text.map(|t| (t.to_string(), cursor));
                 self.last_autocorrect = None;
                 self.just_deleted = false;
                 self.stale_surr = None;
@@ -586,6 +602,7 @@ impl ClakContext {
                     commit_text.clone(),
                     std::time::Instant::now(),
                 ));
+                self.pre_expand_surr = surrounding_text.map(|t| (t.to_string(), cursor));
                 self.last_autocorrect = None;
                 self.just_deleted = false;
                 self.stale_surr = None;

@@ -857,7 +857,11 @@ bool ClakState::handleKey(const fcitx::Key& key) {
     int32_t deletion_mode = CLAK_DELETION_SURROUNDING;
     if (currentProfile()->erasesWithCommittedDel()) {
         deletion_mode = CLAK_DELETION_COMMITTED_DEL;
-    } else if (is_address_bar || has_autofill_selection || (isBrowser() && sym == FcitxKey_BackSpace) || shouldUseUinput(use_surrounding, 0, surr)) {
+    } else if (isBrowser() && sym == FcitxKey_BackSpace) {
+        // physical BackSpace is held down on the Wayland seat during a BackSpace undo,
+        // which collides with uinput KEY_BACKSPACE on the seat; forwardKey bypasses the seat merge
+        deletion_mode = CLAK_DELETION_FORWARD_BS;
+    } else if (is_address_bar || has_autofill_selection || shouldUseUinput(use_surrounding, 0, surr)) {
         deletion_mode = CLAK_DELETION_UINPUT;
     } else if (use_surrounding) {
         deletion_mode = CLAK_DELETION_SURROUNDING;
@@ -954,7 +958,9 @@ bool ClakState::handleKey(const fcitx::Key& key) {
     is_address_bar_fix_ = is_address_bar;
     op_group_ = classifyGroup(app, site, is_address_bar, deletion_mode == CLAK_DELETION_UINPUT);
 
-    uint64_t safety_timeout_us = is_selection_deletion_ ? config::kSelectionDeletionTimeoutUs : config::kSafetyTimeoutUs;
+    uint64_t safety_timeout_us = (deletion_mode == CLAK_DELETION_FORWARD_BS)
+                                     ? 20000ULL
+                                     : (is_selection_deletion_ ? config::kSelectionDeletionTimeoutUs : config::kSafetyTimeoutUs);
 
     auto cmds = clak_session_process_key(
         rust_session_,
