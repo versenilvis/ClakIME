@@ -120,6 +120,11 @@ void ClakState::reset(bool force) {
         last_key_time_us_ = 0;
         last_key_interval_us_ = 0;
     }
+    if (bufferedKeysCount() > 0 || !pendingCommitString().empty() || uncommitted_forward_count_ > 0) {
+        utils::clakLog("reset: clearing state (force=" + std::to_string(force ? 1 : 0) +
+                       " fwd=" + std::to_string(uncommitted_forward_count_) +
+                       " buf_len=" + std::to_string(bufferedKeysCount()) + ") app=" + app + " site='" + site + "'");
+    }
     uncommitted_forward_count_ = 0;
     last_text_len_ = 0;
     if (safety_timer_) {
@@ -142,9 +147,6 @@ void ClakState::reset(bool force) {
         profile_->reset();
     }
 
-    if (bufferedKeysCount() > 0 || !pendingCommitString().empty()) {
-        utils::clakLog("reset: clearing state (buf_len=" + std::to_string(bufferedKeysCount()) + ") app=" + app + " site='" + site + "'");
-    }
     is_address_bar_fix_ = false;
     is_selection_deletion_ = false;
     if (force) {
@@ -559,6 +561,8 @@ void ClakState::executeSessionCommands(const ClakSessionCommandList& list) {
                             verifier_.setExpectation(wordBefore, cmd.count, expectedCommit);
                         }
                         ic_->deleteSurroundingText(cmd.offset, cmd.count);
+                        logLatency(op_group_, op_start_us_, "REPLACE", "surrounding");
+                        op_start_us_ = 0;
                     }
                 }
                 break;
