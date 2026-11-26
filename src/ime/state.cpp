@@ -857,7 +857,7 @@ bool ClakState::handleKey(const fcitx::Key& key) {
     int32_t deletion_mode = CLAK_DELETION_SURROUNDING;
     if (currentProfile()->erasesWithCommittedDel()) {
         deletion_mode = CLAK_DELETION_COMMITTED_DEL;
-    } else if (is_address_bar || has_autofill_selection || shouldUseUinput(use_surrounding, 0, surr)) {
+    } else if (is_address_bar || has_autofill_selection || (isBrowser() && sym == FcitxKey_BackSpace) || shouldUseUinput(use_surrounding, 0, surr)) {
         deletion_mode = CLAK_DELETION_UINPUT;
     } else if (use_surrounding) {
         deletion_mode = CLAK_DELETION_SURROUNDING;
