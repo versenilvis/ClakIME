@@ -1081,9 +1081,11 @@ void ClakState::keyEvent(fcitx::KeyEvent& keyEvent) {
     }
 
     bool is_cursor_move = key.isCursorMove() || (sym >= FcitxKey_Home && sym <= FcitxKey_End);
+    bool is_plain_tab = (sym == FcitxKey_Tab || sym == FcitxKey_KP_Tab) && !has_ctrl_alt && !is_shift;
     bool is_special_nav = sym == FcitxKey_Escape ||
                           sym == FcitxKey_Delete || sym == FcitxKey_KP_Delete ||
-                          sym == FcitxKey_Tab || sym == FcitxKey_KP_Tab || sym == FcitxKey_ISO_Left_Tab;
+                          sym == FcitxKey_ISO_Left_Tab ||
+                          ((sym == FcitxKey_Tab || sym == FcitxKey_KP_Tab) && !is_plain_tab);
 
     if ((is_ctrl && !is_alt && (sym == FcitxKey_a || sym == FcitxKey_A)) ||
         (is_shift && is_cursor_move)) {
