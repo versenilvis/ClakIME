@@ -921,8 +921,8 @@ bool ClakState::handleKey(const fcitx::Key& key) {
         pacing.gap_ms = f_gap;
         pacing.hold_us = base_pacing.hold_us;
         pacing_engine_.configureGroup(pgroup, f_delay, f_gap, f_delay, f_gap);
-    } else if (is_address_bar || has_autofill_selection) {
-        pacing = {config::kAddressBarPostDelayMs, 2};
+    } else if (is_address_bar || has_autofill_selection || (isBrowser() && sym == FcitxKey_BackSpace)) {
+        pacing = {config::kAddressBarPostDelayMs, (isBrowser() && sym == FcitxKey_BackSpace) ? 4u : 2u};
     } else if (adaptive_enabled) {
         pacing = pacing_engine_.uinputPacing(pgroup, last_key_interval_us_);
     } else if (modal_handler_.isModalEditor() || config::isTerminalApp(app)) {

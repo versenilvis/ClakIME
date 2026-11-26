@@ -36,10 +36,13 @@ ClakEngine::ClakEngine(fcitx::Instance* instance)
   initTrayActions();
 
   // re-add tray actions whenever any IC gains focus so they don't vanish between windows
+  // use non-template watchEvent overload for compatibility with older Fcitx5 headers (e.g. Ubuntu 24.04)
   event_watchers_.emplace_back(
-    instance_->watchEvent<fcitx::EventType::InputContextFocusIn>(
+    instance_->watchEvent(
+      fcitx::EventType::InputContextFocusIn,
       fcitx::EventWatcherPhase::Default,
-      [this](fcitx::FocusInEvent& e) {
+      [this](fcitx::Event& event) {
+        auto& e = static_cast<fcitx::FocusInEvent&>(event);
         auto* ic = e.inputContext();
         if (!ic) return;
         if (instance_->inputMethodEngine(ic) != this) return;
