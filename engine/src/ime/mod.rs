@@ -396,6 +396,47 @@ impl ClakContext {
         self.forward()
     }
 
+    fn try_expand_colon_macro(
+        &mut self,
+        surrounding_text: Option<&str>,
+        cursor: usize,
+        trailing: &str,
+    ) -> Option<ImeAction> {
+        if !self.macros_enabled {
+            return None;
+        }
+        let surr_before: &str = match surrounding_text {
+            Some(text) => {
+                let (cur_byte, _, _) = parse_surrounding_meta(text, cursor, cursor);
+                &text[..cur_byte]
+            }
+            None => "",
+        };
+        let before_cursor = if !surr_before.is_empty() {
+            surr_before
+        } else {
+            self.recent_line.as_str()
+        };
+        let (full_token, inner) = extract_colon_macro_at_end(before_cursor)?;
+        let replacement = self.dynamic_macros.resolve(inner, &self.colon_macros)?;
+        let del_count = full_token.chars().count();
+        let del_str = full_token.to_string();
+        let mut commit_text = replacement;
+        commit_text.push_str(trailing);
+        let mut raw_with_boundary = del_str.clone();
+        raw_with_boundary.push_str(trailing);
+        self.reset();
+        self.last_macro_expansion = Some((
+            raw_with_boundary,
+            commit_text.clone(),
+            std::time::Instant::now(),
+        ));
+        self.last_autocorrect = None;
+        self.just_deleted = false;
+        self.stale_surr = None;
+        Some(self.replace(del_count, &del_str, &commit_text))
+    }
+
     fn handle_enter_or_tab(
         &mut self,
         key_sym: u32,
@@ -407,28 +448,8 @@ impl ClakContext {
 
         // check :dynamic macro: expansion on Tab before regular single-word macros
         if key_sym == 0xff09 && self.macros_enabled {
-            let before_cursor: &str = match surrounding_text {
-                Some(text) => {
-                    let (cur_byte, _, _) = parse_surrounding_meta(text, cursor, cursor);
-                    &text[..cur_byte]
-                }
-                None => self.recent_line.as_str(),
-            };
-            if let Some((full_token, inner)) = extract_colon_macro_at_end(before_cursor) {
-                if let Some(replacement) = self.dynamic_macros.resolve(inner, &self.colon_macros) {
-                    let del_count = full_token.chars().count();
-                    let del_str = full_token.to_string();
-                    self.reset();
-                    self.last_macro_expansion = Some((
-                        del_str.clone(),
-                        replacement.clone(),
-                        std::time::Instant::now(),
-                    ));
-                    self.last_autocorrect = None;
-                    self.just_deleted = false;
-                    self.stale_surr = None;
-                    return self.replace(del_count, &del_str, &replacement);
-                }
+            if let Some(act) = self.try_expand_colon_macro(surrounding_text, cursor, "") {
+                return act;
             }
 
             // check user macros configured with tab_only = true (expanded without trailing tab)
@@ -546,6 +567,13 @@ impl ClakContext {
                 self.sentence_cap_state = SentenceCapState::ReadyToCapitalize;
             } else {
                 self.sentence_cap_state = SentenceCapState::Normal;
+            }
+        }
+
+        // check :dynamic macro: expansion on Space (works even in apps that intercept Tab for focus)
+        if key_sym == 0x20 {
+            if let Some(act) = self.try_expand_colon_macro(surrounding_text, cursor, " ") {
+                return act;
             }
         }
 

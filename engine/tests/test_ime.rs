@@ -1502,6 +1502,23 @@ fn test_dynamic_colon_macro_tab_and_undo() {
     let mut ctx_code = ClakContext::new(Method::Telex);
     let code_act = ctx_code.process_key(0xff09, "\t", false, Some("std::cout:"), 10, 10);
     assert_eq!(code_act.action_type, ACTION_FORWARD);
+
+    // Space also expands :dynamic: macros (for apps where Tab is intercepted for focus navigation)
+    let mut ctx_sp = ClakContext::new(Method::Telex);
+    for ch in ":tinh 125*38:".chars() {
+        let mut buf = [0u8; 4];
+        let s = ch.encode_utf8(&mut buf);
+        ctx_sp.process_key(ch as u32, s, false, None, 0, 0);
+    }
+    let sp_act = ctx_sp.process_key(0x20, " ", false, None, 0, 0);
+    assert_eq!(sp_act.action_type, ACTION_REPLACE);
+    assert_eq!(sp_act.delete_count, ":tinh 125*38:".chars().count());
+    let sp_commit = unsafe {
+        std::ffi::CStr::from_ptr(sp_act.commit_str)
+            .to_str()
+            .unwrap()
+    };
+    assert_eq!(sp_commit, "4750 ");
 }
 
 #[test]
