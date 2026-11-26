@@ -617,7 +617,13 @@ impl ClakContext {
                 None => false,
             };
 
-            let before_cur = &text[..cur_byte];
+            let effective_cur_byte = if has_autocomplete {
+                sel_start_byte
+            } else {
+                cur_byte
+            };
+            let effective_cursor = if has_autocomplete { sel_start } else { cursor };
+            let before_cur = &text[..effective_cur_byte];
             let word = extract_word_trimmed(before_cur);
 
             let matches_last = matches_last_composed_or_prefix(
@@ -629,7 +635,7 @@ impl ClakContext {
                 self.engine.method(),
                 self.last_replace_time,
                 self.last_replace_cursor,
-                cursor,
+                effective_cursor,
                 self.max_surr_lag_ms,
                 self.max_surr_window_chars,
             );

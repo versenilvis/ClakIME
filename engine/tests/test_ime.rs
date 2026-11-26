@@ -308,6 +308,19 @@ fn test_address_bar_autocomplete_flow() {
 }
 
 #[test]
+fn test_address_bar_reverse_autocomplete_flow() {
+    // wayland text_input_v3 in Ardia/Chromium puts cursor at end of suggestion and anchor at typed prefix
+    let mut ctx = ClakContext::new(Method::Telex);
+    let act1 = ctx.process_key(b'd' as u32, "d", false, Some(""), 0, 0);
+    assert_eq!(act1.action_type, ACTION_FORWARD);
+    let act2 = ctx.process_key(b'd' as u32, "d", false, Some("discord.com"), 11, 1);
+    assert_eq!(act2.action_type, ACTION_ADDRESS_BAR_FIX);
+    assert_eq!(act2.delete_count, 1);
+    let commit = unsafe { CStr::from_ptr(act2.commit_str).to_str().unwrap() };
+    assert_eq!(commit, "đ");
+}
+
+#[test]
 fn test_address_bar_typing_over_selected_url() {
     let mut ctx = ClakContext::new(Method::Telex);
     let act1 = ctx.process_key(
