@@ -13,9 +13,11 @@ export component TabTyping inherits VerticalLayout {
     in-out property <[MacroItemData]> macro_items: [];
     in-out property <string> new_macro_trigger: "";
     in-out property <string> new_macro_replace: "";
+    in-out property <bool> new_macro_tab_only: false;
     in property <bool> is-wide: false;
     callback changed();
-    callback add_macro(string, string);
+    callback add_macro(string, string, bool);
+    callback toggle_macro_tab(int);
     callback remove_macro(int);
 
     spacing: root.is-wide ? 8px : 4px;
@@ -79,9 +81,9 @@ export component TabTyping inherits VerticalLayout {
         spacing: 10px;
 
         LineEdit {
-            placeholder-text: "Từ tắt (vd: vn)";
+            placeholder-text: "Từ tắt (vd: vn hoặc :gui khach:)";
             text <=> root.new_macro_trigger;
-            width: 140px;
+            width: 175px;
             enabled: root.macros_enabled;
         }
 
@@ -92,12 +94,38 @@ export component TabTyping inherits VerticalLayout {
             enabled: root.macros_enabled;
         }
 
+        Rectangle {
+            width: 78px;
+            height: 32px;
+            border-radius: Theme.radius-sm;
+            background: root.new_macro_tab_only ? #1f332c : (tab_opt_ta.has-hover ? #ffffff10 : #16161a);
+            border-width: 1px;
+            border-color: root.new_macro_tab_only ? #61ffca55 : #ffffff18;
+
+            tab_opt_ta := TouchArea {
+                enabled: root.macros_enabled;
+                mouse-cursor: pointer;
+                clicked => {
+                    root.new_macro_tab_only = !root.new_macro_tab_only;
+                }
+            }
+
+            Text {
+                text: root.new_macro_tab_only ? "Chỉ Tab" : "Space/Tab";
+                color: root.new_macro_tab_only ? #61ffca : Theme.text-secondary;
+                font-size: 11px;
+                font-weight: 600;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
         GhostButton {
             is-wide: root.is-wide;
             text: "Thêm";
             clicked => {
                 if root.new_macro_trigger != "" && root.new_macro_replace != "" {
-                    root.add_macro(root.new_macro_trigger, root.new_macro_replace);
+                    root.add_macro(root.new_macro_trigger, root.new_macro_replace, root.new_macro_tab_only);
                     root.new_macro_trigger = "";
                     root.new_macro_replace = "";
                     root.changed();
@@ -177,15 +205,47 @@ export component TabTyping inherits VerticalLayout {
                                 }
                             }
 
-                            VerticalLayout {
+                            HorizontalLayout {
+                                spacing: 8px;
                                 alignment: center;
-                                GhostButton {
-                                    is-wide: root.is-wide;
-                                    text: "Xoá";
-                                    destructive: true;
-                                    clicked => {
-                                        root.remove_macro(idx);
-                                        root.changed();
+
+                                Rectangle {
+                                    width: item.is_dynamic ? 82px : 74px;
+                                    height: 24px;
+                                    border-radius: 5px;
+                                    background: item.is_dynamic ? #182924 : (item.tab_only ? #1f2433 : #1a1a1f);
+                                    border-width: 1px;
+                                    border-color: item.is_dynamic ? #61ffca44 : (item.tab_only ? #7aa2f744 : #ffffff18);
+
+                                    row_tab_ta := TouchArea {
+                                        enabled: !item.is_dynamic;
+                                        mouse-cursor: item.is_dynamic ? default : pointer;
+                                        clicked => {
+                                            root.toggle_macro_tab(idx);
+                                            root.changed();
+                                        }
+                                    }
+
+                                    Text {
+                                        text: item.is_dynamic ? "ĐỘNG · Tab" : (item.tab_only ? "Chỉ Tab" : "Space/Tab");
+                                        color: item.is_dynamic ? #61ffca : (item.tab_only ? #7aa2f7 : Theme.text-secondary);
+                                        font-size: 11px;
+                                        font-weight: 600;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                if !item.is_builtin: VerticalLayout {
+                                    alignment: center;
+                                    GhostButton {
+                                        is-wide: root.is-wide;
+                                        text: "Xoá";
+                                        destructive: true;
+                                        clicked => {
+                                            root.remove_macro(idx);
+                                            root.changed();
+                                        }
                                     }
                                 }
                             }

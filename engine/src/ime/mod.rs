@@ -33,6 +33,8 @@ pub struct ClakContext {
     sentence_cap_state: SentenceCapState,
     macros_enabled: bool,
     pub macros: std::collections::HashMap<String, String>,
+    pub tab_macros: std::collections::HashMap<String, String>,
+    pub colon_macros: std::collections::HashMap<String, String>,
     debug_log: bool,
     last_surr: Option<(String, usize)>,
     pub autocorrect: bool,
@@ -72,6 +74,8 @@ impl ClakContext {
             sentence_cap_state: SentenceCapState::StartOfInput,
             macros_enabled: true,
             macros: std::collections::HashMap::new(),
+            tab_macros: std::collections::HashMap::new(),
+            colon_macros: std::collections::HashMap::new(),
             debug_log: false,
             last_surr: None,
             autocorrect: false,
@@ -117,12 +121,22 @@ impl ClakContext {
         self.autocorrect = cfg.spelling.autocorrect;
         self.debug_log = cfg.advanced.debug_log;
         self.macros_enabled = cfg.macros.enabled;
-        self.macros = cfg
-            .macros
-            .items
-            .iter()
-            .map(|item| (item.trigger.clone(), item.replace.clone()))
-            .collect();
+        self.macros.clear();
+        self.tab_macros.clear();
+        self.colon_macros.clear();
+        for item in &cfg.macros.items {
+            let t = item.trigger.trim();
+            if t.len() >= 3 && t.starts_with(':') && t.ends_with(':') {
+                let inner = t[1..t.len() - 1].trim().to_lowercase();
+                if !inner.is_empty() {
+                    self.colon_macros.insert(inner, item.replace.clone());
+                }
+            } else if item.tab_only {
+                self.tab_macros.insert(t.to_string(), item.replace.clone());
+            } else {
+                self.macros.insert(t.to_string(), item.replace.clone());
+            }
+        }
         self.max_surr_lag_ms = cfg.pacing.max_surr_lag_ms;
         self.max_surr_window_chars = cfg.pacing.max_surr_window_chars;
     }
@@ -401,9 +415,29 @@ impl ClakContext {
                 None => self.recent_line.as_str(),
             };
             if let Some((full_token, inner)) = extract_colon_macro_at_end(before_cursor) {
-                if let Some(replacement) = self.dynamic_macros.resolve(inner) {
+                if let Some(replacement) = self.dynamic_macros.resolve(inner, &self.colon_macros) {
                     let del_count = full_token.chars().count();
                     let del_str = full_token.to_string();
+                    self.reset();
+                    self.last_macro_expansion = Some((
+                        del_str.clone(),
+                        replacement.clone(),
+                        std::time::Instant::now(),
+                    ));
+                    self.last_autocorrect = None;
+                    self.just_deleted = false;
+                    self.stale_surr = None;
+                    return self.replace(del_count, &del_str, &replacement);
+                }
+            }
+
+            // check user macros configured with tab_only = true (expanded without trailing tab)
+            if !self.last_composed.is_empty() && !self.tab_macros.is_empty() {
+                let tab_repl = match_macro(&self.tab_macros, &self.last_composed)
+                    .or_else(|| match_macro(&self.tab_macros, &self.raw_buffer));
+                if let Some(replacement) = tab_repl {
+                    let del_count = self.last_composed.chars().count();
+                    let del_str = self.last_composed.clone();
                     self.reset();
                     self.last_macro_expansion = Some((
                         del_str.clone(),

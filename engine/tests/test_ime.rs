@@ -1503,3 +1503,30 @@ fn test_dynamic_colon_macro_tab_and_undo() {
     let code_act = ctx_code.process_key(0xff09, "\t", false, Some("std::cout:"), 10, 10);
     assert_eq!(code_act.action_type, ACTION_FORWARD);
 }
+
+#[test]
+fn test_tab_only_regular_macro() {
+    let mut cfg = clak_engine::config::ClakConfig::default();
+    cfg.macros.items.push(clak_engine::config::MacroItem {
+        trigger: "dt".to_string(),
+        replace: "điện thoại".to_string(),
+        tab_only: true,
+    });
+    let mut ctx = ClakContext::new(Method::Telex);
+    ctx.apply_config(&cfg);
+
+    // Space must NOT expand a tab_only macro
+    ctx.process_key(b'd' as u32, "d", false, None, 0, 0);
+    ctx.process_key(b't' as u32, "t", false, None, 0, 0);
+    let sp = ctx.process_key(b' ' as u32, " ", false, None, 0, 0);
+    assert_eq!(sp.action_type, ACTION_FORWARD);
+
+    // Tab MUST expand a tab_only macro without trailing tab
+    ctx.process_key(b'd' as u32, "d", false, None, 0, 0);
+    ctx.process_key(b't' as u32, "t", false, None, 0, 0);
+    let tab = ctx.process_key(0xff09, "\t", false, None, 0, 0);
+    assert_eq!(tab.action_type, ACTION_REPLACE);
+    assert_eq!(tab.delete_count, 2);
+    let commit = unsafe { std::ffi::CStr::from_ptr(tab.commit_str).to_str().unwrap() };
+    assert_eq!(commit, "điện thoại");
+}

@@ -44,10 +44,13 @@ pub fn save_config(
     let mut saved_macros = Vec::new();
     for i in 0..macros_model.row_count() {
         if let Some(item) = macros_model.row_data(i) {
-            saved_macros.push(MacroItem {
-                trigger: item.trigger.to_string(),
-                replace: item.replace.to_string(),
-            });
+            if !item.is_builtin {
+                saved_macros.push(MacroItem {
+                    trigger: item.trigger.to_string(),
+                    replace: item.replace.to_string(),
+                    tab_only: item.tab_only,
+                });
+            }
         }
     }
 

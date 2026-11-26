@@ -60,11 +60,38 @@ impl DynamicMacroStore {
         self.cached_path = Some(path);
     }
 
-    /// Resolves `:inner:` to its expanded replacement if valid, or None
-    pub fn resolve(&mut self, inner: &str) -> Option<String> {
+    /// Resolves `:inner:` to its expanded replacement using user config, JSON file, or built-ins
+    pub fn resolve(
+        &mut self,
+        inner: &str,
+        extra_macros: &HashMap<String, String>,
+    ) -> Option<String> {
+        let trimmed = inner.trim();
+        if !trimmed.is_empty() {
+            let lower = trimmed.to_lowercase();
+            if let Some(template) = extra_macros.get(&lower) {
+                return Some(render_template(template));
+            }
+        }
         self.refresh();
         resolve_dynamic_macro(inner, &self.custom_macros)
     }
+}
+
+/// Returns built-in `:command:` dynamic macro entries for UI display
+pub fn builtin_dynamic_macro_docs() -> &'static [(&'static str, &'static str)] {
+    &[
+        (":ngay:", "Ngày hiện tại (dd/mm/yyyy)"),
+        (":ngay iso:", "Ngày chuẩn ISO (yyyy-mm-dd)"),
+        (":ngay +1:", "Ngày cộng/trừ (±N ngày, hoặc :ngay mai:)"),
+        (":ngay chu:", "Ngày dạng chữ (ngày ... tháng ... năm ...)"),
+        (":gio:", "Giờ hiện tại (hh:mm, hoặc :gio s:)"),
+        (":ngay gio:", "Ngày và giờ (dd/mm/yyyy hh:mm)"),
+        (":thu:", "Thứ trong tuần (Thứ Hai..Chủ Nhật)"),
+        (":tinh 1+2:", "Tính biểu thức toán (+ - * / %)"),
+        (":uuid:", "Sinh UUID v4 ngẫu nhiên"),
+        (":pin:", "Mã 6 số ngẫu nhiên (hoặc :rand N:)"),
+    ]
 }
 
 /// Extracts `(full_colon_token, inner_command)` if `before_cursor` ends with a valid `:...:` token

@@ -132,15 +132,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let apps_model = Rc::new(VecModel::from(rules_vec));
     main_window.set_app_rules(apps_model.clone().into());
 
-    let macros_vec: Vec<MacroItemData> = cfg
-        .macros
-        .items
-        .into_iter()
-        .map(|m| MacroItemData {
-            trigger: SharedString::from(m.trigger),
-            replace: SharedString::from(m.replace),
-        })
-        .collect();
+    fn is_colon_dynamic(t: &str) -> bool {
+        t.len() >= 3 && t.starts_with(':') && t.ends_with(':')
+    }
+    fn build_macro_items(items: &[clak_engine::config::MacroItem]) -> Vec<MacroItemData> {
+        let mut vec: Vec<MacroItemData> = items
+            .iter()
+            .map(|m| {
+                let dyn_flag = is_colon_dynamic(m.trigger.trim());
+                MacroItemData {
+                    trigger: SharedString::from(&m.trigger),
+                    replace: SharedString::from(&m.replace),
+                    tab_only: m.tab_only || dyn_flag,
+                    is_dynamic: dyn_flag,
+                    is_builtin: false,
+                }
+            })
+            .collect();
+        for (trig, desc) in clak_engine::ime::dynamic_macro::builtin_dynamic_macro_docs() {
+            vec.push(MacroItemData {
+                trigger: SharedString::from(*trig),
+                replace: SharedString::from(*desc),
+                tab_only: true,
+                is_dynamic: true,
+                is_builtin: true,
+            });
+        }
+        vec
+    }
+
+    let macros_vec = build_macro_items(&cfg.macros.items);
     let macros_model = Rc::new(VecModel::from(macros_vec));
     main_window.set_macro_items(macros_model.clone().into());
 
@@ -187,16 +208,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // macro callbacks
     let macros_model_add = macros_model.clone();
     let win_weak_add_macro = main_window.as_weak();
-    main_window.on_add_macro(move |trigger, replace| {
+    main_window.on_add_macro(move |trigger, replace, tab_only| {
         let t = trigger.trim();
         let r = replace.trim();
         if !t.is_empty() && !r.is_empty() {
-            macros_model_add.push(MacroItemData {
-                trigger: SharedString::from(t),
-                replace: SharedString::from(r),
-            });
+            let dyn_flag = is_colon_dynamic(t);
+            macros_model_add.insert(
+                0,
+                MacroItemData {
+                    trigger: SharedString::from(t),
+                    replace: SharedString::from(r),
+                    tab_only: tab_only || dyn_flag,
+                    is_dynamic: dyn_flag,
+                    is_builtin: false,
+                },
+            );
             if let Some(w) = win_weak_add_macro.upgrade() {
                 w.set_has_changes(true);
+            }
+        }
+    });
+
+    let macros_model_toggle = macros_model.clone();
+    let win_weak_toggle_macro = main_window.as_weak();
+    main_window.on_toggle_macro_tab(move |idx| {
+        if idx >= 0 && (idx as usize) < macros_model_toggle.row_count() {
+            if let Some(mut item) = macros_model_toggle.row_data(idx as usize) {
+                if !item.is_dynamic && !item.is_builtin {
+                    item.tab_only = !item.tab_only;
+                    macros_model_toggle.set_row_data(idx as usize, item);
+                    if let Some(w) = win_weak_toggle_macro.upgrade() {
+                        w.set_has_changes(true);
+                    }
+                }
             }
         }
     });
@@ -205,9 +249,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let win_weak_rm_macro = main_window.as_weak();
     main_window.on_remove_macro(move |idx| {
         if idx >= 0 && (idx as usize) < macros_model_rm.row_count() {
-            macros_model_rm.remove(idx as usize);
-            if let Some(w) = win_weak_rm_macro.upgrade() {
-                w.set_has_changes(true);
+            if let Some(item) = macros_model_rm.row_data(idx as usize) {
+                if !item.is_builtin {
+                    macros_model_rm.remove(idx as usize);
+                    if let Some(w) = win_weak_rm_macro.upgrade() {
+                        w.set_has_changes(true);
+                    }
+                }
             }
         }
     });
@@ -511,11 +559,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         while macros_reset.row_count() > 0 {
             macros_reset.remove(0);
         }
-        for m in default_cfg.macros.items {
-            macros_reset.push(MacroItemData {
-                trigger: m.trigger.into(),
-                replace: m.replace.into(),
-            });
+        for item in build_macro_items(&default_cfg.macros.items) {
+            macros_reset.push(item);
         }
 
         while apps_reset.row_count() > 0 {

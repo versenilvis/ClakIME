@@ -59,6 +59,7 @@ export component MainWindow inherits Window {
     in-out property <[MacroItemData]> macro_items: [];
     in-out property <string> new_macro_trigger: "";
     in-out property <string> new_macro_replace: "";
+    in-out property <bool> new_macro_tab_only: false;
 
     // phim tat
     in-out property <string> toggle_shortcut_text: "Ctrl + Shift";
@@ -151,7 +152,8 @@ export component MainWindow inherits Window {
     callback open_url(string);
     callback add_app_rule(string, string);
     callback remove_app_rule(int);
-    callback add_macro(string, string);
+    callback add_macro(string, string, bool);
+    callback toggle_macro_tab(int);
     callback remove_macro(int);
     callback reset_defaults_requested();
     callback check_update_requested();
@@ -357,8 +359,10 @@ export component MainWindow inherits Window {
                     macro_items <=> root.macro_items;
                     new_macro_trigger <=> root.new_macro_trigger;
                     new_macro_replace <=> root.new_macro_replace;
+                    new_macro_tab_only <=> root.new_macro_tab_only;
                     changed => { root.has_changes = true; }
-                    add_macro(trigger, replace) => { root.add_macro(trigger, replace); }
+                    add_macro(trigger, replace, tab_only) => { root.add_macro(trigger, replace, tab_only); }
+                    toggle_macro_tab(idx) => { root.toggle_macro_tab(idx); }
                     remove_macro(idx) => { root.remove_macro(idx); }
                 }
 

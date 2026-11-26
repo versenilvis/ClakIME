@@ -127,6 +127,8 @@ pub struct MacroConfig {
 pub struct MacroItem {
     pub trigger: String,
     pub replace: String,
+    #[serde(default)]
+    pub tab_only: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

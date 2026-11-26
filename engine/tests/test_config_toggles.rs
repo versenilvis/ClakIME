@@ -52,6 +52,7 @@ fn test_toggle_macro_expansion() {
     cfg_on.macros.items.push(MacroItem {
         trigger: "btw".to_string(),
         replace: "by the way".to_string(),
+        tab_only: false,
     });
 
     let mut cfg_off = cfg_on.clone();
