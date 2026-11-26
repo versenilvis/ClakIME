@@ -1,5 +1,6 @@
 pub mod action;
 pub mod decomposing;
+pub mod dynamic_macro;
 pub mod ffi;
 pub mod surrounding;
 pub mod typing_features;
@@ -7,6 +8,7 @@ pub mod uncommit;
 
 pub use action::*;
 pub use decomposing::*;
+pub use dynamic_macro::*;
 pub use ffi::*;
 pub use surrounding::*;
 pub use typing_features::*;
@@ -45,6 +47,8 @@ pub struct ClakContext {
     pub max_surr_window_chars: usize,
     pub last_macro_expansion: Option<(String, String, std::time::Instant)>,
     pub last_autocorrect: Option<(String, String, std::time::Instant)>,
+    dynamic_macros: DynamicMacroStore,
+    recent_line: String,
 }
 
 impl ClakContext {
@@ -82,6 +86,8 @@ impl ClakContext {
             max_surr_window_chars: 8,
             last_macro_expansion: None,
             last_autocorrect: None,
+            dynamic_macros: DynamicMacroStore::default(),
+            recent_line: String::new(),
         }
     }
 
@@ -147,6 +153,7 @@ impl ClakContext {
         self.current_cursor = cursor;
         if has_ctrl_alt {
             self.reset();
+            self.recent_line.clear();
             self.uncommit_candidate = None;
             self.just_deleted = false;
             self.stale_surr = None;
@@ -156,7 +163,11 @@ impl ClakContext {
 
         // handle backspace
         if key_sym == 0xff08 {
-            return self.handle_backspace(surrounding_text, cursor, anchor);
+            let act = self.handle_backspace(surrounding_text, cursor, anchor);
+            if act.action_type == ACTION_FORWARD {
+                self.pop_recent_line(1);
+            }
+            return act;
         }
 
         // any key other than backspace invalidates pending macro or autocorrect undo
@@ -165,7 +176,7 @@ impl ClakContext {
 
         // handle enter or tab
         if key_sym == 0xff0d || key_sym == 0xff09 {
-            return self.handle_enter_or_tab(key_sym);
+            return self.handle_enter_or_tab(key_sym, surrounding_text, cursor);
         }
 
         // handle navigation and cancel keys
@@ -175,6 +186,7 @@ impl ClakContext {
             || (0xff50..=0xff57).contains(&key_sym)
         {
             self.reset();
+            self.recent_line.clear();
             self.uncommit_candidate = None;
             self.just_deleted = false;
             self.stale_surr = None;
@@ -209,11 +221,15 @@ impl ClakContext {
         }
 
         let key_ch = key_str.chars().next().unwrap_or('\0');
-        if is_word_break(key_ch as u32) {
-            return self.handle_word_break(key_sym, key_str, key_ch, surrounding_text, cursor);
+        let act = if is_word_break(key_ch as u32) {
+            self.handle_word_break(key_sym, key_str, key_ch, surrounding_text, cursor)
+        } else {
+            self.handle_printable(key_str, key_ch, surrounding_text, cursor, anchor)
+        };
+        if act.action_type == ACTION_FORWARD {
+            self.push_recent_line(key_str);
         }
-
-        self.handle_printable(key_str, key_ch, surrounding_text, cursor, anchor)
+        act
     }
 
     fn handle_backspace(
@@ -366,9 +382,41 @@ impl ClakContext {
         self.forward()
     }
 
-    fn handle_enter_or_tab(&mut self, key_sym: u32) -> ImeAction {
+    fn handle_enter_or_tab(
+        &mut self,
+        key_sym: u32,
+        surrounding_text: Option<&str>,
+        cursor: usize,
+    ) -> ImeAction {
         self.uncommit_candidate = None;
         self.sentence_cap_state = SentenceCapState::Normal;
+
+        // check :dynamic macro: expansion on Tab before regular single-word macros
+        if key_sym == 0xff09 && self.macros_enabled {
+            let before_cursor: &str = match surrounding_text {
+                Some(text) => {
+                    let (cur_byte, _, _) = parse_surrounding_meta(text, cursor, cursor);
+                    &text[..cur_byte]
+                }
+                None => self.recent_line.as_str(),
+            };
+            if let Some((full_token, inner)) = extract_colon_macro_at_end(before_cursor) {
+                if let Some(replacement) = self.dynamic_macros.resolve(inner) {
+                    let del_count = full_token.chars().count();
+                    let del_str = full_token.to_string();
+                    self.reset();
+                    self.last_macro_expansion = Some((
+                        del_str.clone(),
+                        replacement.clone(),
+                        std::time::Instant::now(),
+                    ));
+                    self.last_autocorrect = None;
+                    self.just_deleted = false;
+                    self.stale_surr = None;
+                    return self.replace(del_count, &del_str, &replacement);
+                }
+            }
+        }
 
         // check macro expansion on enter or tab
         if self.macros_enabled && !self.last_composed.is_empty() {
@@ -415,6 +463,7 @@ impl ClakContext {
         }
 
         self.reset();
+        self.recent_line.clear();
         self.just_deleted = false;
         self.stale_surr = None;
         self.forward()
@@ -851,7 +900,26 @@ impl ClakContext {
         None
     }
 
+    fn push_recent_line(&mut self, text: &str) {
+        self.recent_line.push_str(text);
+        let char_len = self.recent_line.chars().count();
+        if char_len > 160 {
+            let drop_chars = char_len - 160;
+            if let Some((byte_idx, _)) = self.recent_line.char_indices().nth(drop_chars) {
+                self.recent_line.drain(..byte_idx);
+            }
+        }
+    }
+
+    fn pop_recent_line(&mut self, count: usize) {
+        for _ in 0..count {
+            self.recent_line.pop();
+        }
+    }
+
     fn replace(&mut self, delete_count: usize, deleted_str: &str, text: &str) -> ImeAction {
+        self.pop_recent_line(delete_count);
+        self.push_recent_line(text);
         self.last_replace_time = Some(std::time::Instant::now());
         self.last_replace_cursor = Some(self.current_cursor);
         self.commit_buf = CString::new(text).unwrap_or_default();

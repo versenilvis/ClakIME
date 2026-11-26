@@ -1467,3 +1467,39 @@ fn test_backspace_after_double_tone_un_tone_does_not_swallow_key() {
     assert_eq!(act2.action_type, ACTION_FORWARD);
     assert_eq!(ctx_seed.last_composed, "Messi");
 }
+
+#[test]
+fn test_dynamic_colon_macro_tab_and_undo() {
+    let mut ctx = ClakContext::new(Method::Telex);
+    // type `:tinh 125*38:` without surrounding text, then Tab
+    for ch in ":tinh 125*38:".chars() {
+        let mut buf = [0u8; 4];
+        let s = ch.encode_utf8(&mut buf);
+        ctx.process_key(ch as u32, s, false, None, 0, 0);
+    }
+    let tab_act = ctx.process_key(0xff09, "\t", false, None, 0, 0);
+    assert_eq!(tab_act.action_type, ACTION_REPLACE);
+    assert_eq!(tab_act.delete_count, ":tinh 125*38:".chars().count());
+    let commit = unsafe {
+        std::ffi::CStr::from_ptr(tab_act.commit_str)
+            .to_str()
+            .unwrap()
+    };
+    assert_eq!(commit, "4750");
+
+    // immediate BackSpace must undo back to `:tinh 125*38:`
+    let undo_act = ctx.process_key(0xff08, "", false, None, 0, 0);
+    assert_eq!(undo_act.action_type, ACTION_REPLACE);
+    assert_eq!(undo_act.delete_count, "4750".len());
+    let undo_commit = unsafe {
+        std::ffi::CStr::from_ptr(undo_act.commit_str)
+            .to_str()
+            .unwrap()
+    };
+    assert_eq!(undo_commit, ":tinh 125*38:");
+
+    // C++/Rust scope resolution `std::cout:` + Tab must NOT trigger dynamic macro
+    let mut ctx_code = ClakContext::new(Method::Telex);
+    let code_act = ctx_code.process_key(0xff09, "\t", false, Some("std::cout:"), 10, 10);
+    assert_eq!(code_act.action_type, ACTION_FORWARD);
+}
