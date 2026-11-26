@@ -2,6 +2,53 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.9.3](https://github.com/versenilvis/ClakIME/releases/tag/v0.9.3) - 2026-11-26
+
+### Bug fixes
+
+- Correct open uo cluster to uơ and preserve mid-word short vowels ([f4136d](https://github.com/versenilvis/ClakIME/commit/f4136dd60eeee7663b3cc54e6f1555364f8fdcda))
+- Track cursor on navigation keys in address bar and fix uncommit re-toning ([5f0074](https://github.com/versenilvis/ClakIME/commit/5f0074b5d4607ddf87403ae4f2dd48f138886366))
+- Filter zero-width characters in word boundary extraction ([503cb1](https://github.com/versenilvis/ClakIME/commit/503cb1d1c44b4dc6f9941847c21c5af5c59f0f68))
+- Require modified vowel for English-shared loanword onsets like dr ([f014d1](https://github.com/versenilvis/ClakIME/commit/f014d1c94b7503add23214d1a3323e4650840329))
+- Preserve doubled literal modifier state on backspace and prevent key swallow ([f53c7b](https://github.com/versenilvis/ClakIME/commit/f53c7b9e9f5e6ab0e7e2303248436a08b8a21d5a))
+- Use solid fill for sparkles/gear, thicker stroke for translate/bold-B ([94f216](https://github.com/versenilvis/ClakIME/commit/94f216c9bc2d97610af2ee487ae85fc8b0f752a0))
+- Keyboard icon solid fill white ([fd7a8b](https://github.com/versenilvis/ClakIME/commit/fd7a8b226695b0221f93ee627ec7b60197d9effc))
+- Keyboard icon fill white body with dark key cutouts ([6c2891](https://github.com/versenilvis/ClakIME/commit/6c28914d0465e64bff9b4991d8988eafb9fc38fe))
+- Lang shows Tiếng Anh when off, no icon toggle for lang/method ([81b193](https://github.com/versenilvis/ClakIME/commit/81b193b2bbdab94ba35c884e0eca8d78a5f5e8e1))
+- View-refresh stroke-width 2.5 to match filled icons ([58bc7c](https://github.com/versenilvis/ClakIME/commit/58bc7c28e985767cfb2fcf3cc5597169d4053abd))
+- Re-attach tray actions on InputContextFocusIn so menu items persist ([9037fc](https://github.com/versenilvis/ClakIME/commit/9037fc6e83b549a521115ce8a4edbe9b91bfbe10))
+- Handle reverse cursor/anchor selection in address bar autocomplete ([39f3e7](https://github.com/versenilvis/ClakIME/commit/39f3e7bcc296b19092093a876ca6b3f6126a6328))
+- Allow Space in addition to Tab to expand :dynamic: macros ([8ee1c8](https://github.com/versenilvis/ClakIME/commit/8ee1c8a7b49a8cf06d219bc74cfdc5d27cac172d))
+- Route plain Tab through handleKey for macro expansion ([cea6a2](https://github.com/versenilvis/ClakIME/commit/cea6a2279c75b8cdde936de650a35c86c5ef3cf1))
+- Use uinput for BackSpace undo in browsers to avoid omnibox deleteSurroundingText bug ([f01868](https://github.com/versenilvis/ClakIME/commit/f0186815470da59741500b2496cef063810897fd))
+- Browser BackSpace undo pacing + watchEvent Ubuntu compat ([7b7fab](https://github.com/versenilvis/ClakIME/commit/7b7fab12492c5353bd7030a873dd8660fff049be))
+- Use forwardKey for BackSpace undo in browsers + handle stale pre-expand surr ([e0f1c1](https://github.com/versenilvis/ClakIME/commit/e0f1c10187c4553076400adaab27ff8d35f1b954))
+
+### Features
+
+- Support title case expansion for multi-word replacements ([9dadd1](https://github.com/versenilvis/ClakIME/commit/9dadd1bd712fb2bc5e0411b36702f92e7256b537))
+- Support undoing macro expansion and autocorrect on backspace ([f7c012](https://github.com/versenilvis/ClakIME/commit/f7c0128e390a60a75ebcd21e40d71f13045ca8d3))
+- Preserve detected runtime app quirks across focus switches ([54a154](https://github.com/versenilvis/ClakIME/commit/54a154d25f405819f6af062b53923758e854a6bb))
+- Add Sway and Niri IPC trackers and KDE Wayland AT-SPI fallback ([2b3a13](https://github.com/versenilvis/ClakIME/commit/2b3a1338a2f609895d88ce2f92e6a8fcd98873c1))
+- Detect Chromium Wayland IME flags, Flatpak/Snap sandboxes, and IBus/SDL/GLFW conflicts ([3fef6e](https://github.com/versenilvis/ClakIME/commit/3fef6e730a1b8b6e77f1181b19755ffae76b62da))
+- Add quick toggle actions to Fcitx5 tray menu ([0c9f46](https://github.com/versenilvis/ClakIME/commit/0c9f468bd74fcb41269cdd60f5a19946705d4f68))
+- Replace emoji prefixes with custom SVG icons ([db05b5](https://github.com/versenilvis/ClakIME/commit/db05b502cd9300daf8f84245b10583ce841d9cae))
+- Use distinct Runeicons SVGs for each tray item ([2bddd0](https://github.com/versenilvis/ClakIME/commit/2bddd087df7462cad0ac0d6f04802ad0cb298ade))
+- Update icons to HeroIcons, white=on gray=off, gear for settings ([70044e](https://github.com/versenilvis/ClakIME/commit/70044e2cad6c0c5b6ed82887f21bde4426a03958))
+- Override view-refresh icon for Restart action ([6e8702](https://github.com/versenilvis/ClakIME/commit/6e8702a40f495eafa74a7332409925753f59bce0))
+- Auto-detect unknown Chromium/Gecko browsers at runtime ([9f1947](https://github.com/versenilvis/ClakIME/commit/9f1947b74f08dc7d607960d979b3b35b2418d399))
+- Add :command: + Tab dynamic macros with JSON template support ([654f05](https://github.com/versenilvis/ClakIME/commit/654f051145e94167b53f7e6694899e4e56711ff1))
+- Unify regular/dynamic macros in Typing tab with Tab-only option ([93fafa](https://github.com/versenilvis/ClakIME/commit/93fafa3b3539459e37392db2b860cdfc3280b930))
+
+### Refactors
+
+- Split ime.rs into modular submodules under engine/src/ime ([84cfa5](https://github.com/versenilvis/ClakIME/commit/84cfa5b10e4d5438ce5af99e63ed49b365e1993d))
+- Extract caret tracker, editor context, and hotkey handler from clak state ([7c619e](https://github.com/versenilvis/ClakIME/commit/7c619ed0f4862e04e4e8060aabb79b38a5fac951))
+- Extract core engine and c ffi from lib.rs ([a8c15e](https://github.com/versenilvis/ClakIME/commit/a8c15e4009f8f8d38e9afc6cd94839af5ad82802))
+- Extract doctor formatter, updater, shortcuts, and config sync from main.rs ([143499](https://github.com/versenilvis/ClakIME/commit/1434990492e1bc2a00f5c944ed83b81d056c36f6))
+- Split session module into mod.rs and tests.rs ([8b04d0](https://github.com/versenilvis/ClakIME/commit/8b04d0e6d05815f34dc8d3b3625a54bd66f8056f))
+- Remove unused header ([715d64](https://github.com/versenilvis/ClakIME/commit/715d64daf34104761e5def72187a415bbc797121))
+
 ## [v0.9.2](https://github.com/versenilvis/ClakIME/releases/tag/v0.9.2) - 2026-11-16
 
 ### Bug fixes
