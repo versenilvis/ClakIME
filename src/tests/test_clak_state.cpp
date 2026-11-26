@@ -1467,5 +1467,31 @@ TEST_F(ClakStateTest, GivenTrayActions_WhenActivated_PopulatesMenuAndTogglesSett
     (void)system(rm_cmd.c_str());
 }
 
+TEST_F(ClakStateTest, GivenUnknownChromiumBrowserWithSessionsDir_AutoDetectsBrowserAndStripsTitleSuffix) {
+    std::string tmp_home = "/tmp/clak_test_home_" + std::to_string(getpid());
+    std::string app_name = "customfork_" + std::to_string(getpid());
+    std::string sessions_dir = tmp_home + "/.config/" + app_name + "/Default/Sessions";
+    std::string mkdir_cmd = "mkdir -p " + sessions_dir;
+    ASSERT_EQ(system(mkdir_cmd.c_str()), 0);
+
+    const char* prev_home = std::getenv("HOME");
+    std::string saved_home = prev_home ? prev_home : "";
+    bool had_home = (prev_home != nullptr);
+    setenv("HOME", tmp_home.c_str(), 1);
+
+    EXPECT_TRUE(apps::isBrowserApp(app_name));
+    EXPECT_TRUE(apps::isChromiumApp(app_name));
+    EXPECT_FALSE(apps::isGeckoApp(app_name));
+    EXPECT_EQ(apps::extractDomain(app_name, "New Tab - " + app_name), "New Tab");
+
+    if (had_home) {
+        setenv("HOME", saved_home.c_str(), 1);
+    } else {
+        unsetenv("HOME");
+    }
+    std::string rm_cmd = "rm -rf " + tmp_home;
+    (void)system(rm_cmd.c_str());
+}
+
 } // namespace test
 } // namespace clak

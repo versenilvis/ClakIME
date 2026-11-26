@@ -1,49 +1,232 @@
 #include "apps/browser.h"
 #include "apps/ide.h"
-#include <vector>
+#include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <cstring>
 #include <dirent.h>
+#include <fstream>
+#include <mutex>
 #include <sys/stat.h>
+#include <unordered_map>
+#include <vector>
 
 namespace clak {
 namespace apps {
 
-bool isBrowserApp(const std::string& app) {
-    if (isVSCodeApp(app) || isJetBrainsApp(app)) return false;
-    static const std::vector<std::string> browsers = {
-        "chromium", "chrome", "google-chrome", "brave", "firefox", "zen",
-        "vivaldi", "opera", "microsoft-edge", "edge", "waterfox", "librewolf",
-        "helium", "thorium", "floorp", "cavalry", "qutebrowser", "electron"
-    };
-    for (const auto& b : browsers) {
-        if (app.find(b) != std::string::npos) return true;
+namespace {
+
+enum class BrowserFamily {
+    None,
+    Chromium,
+    Gecko,
+    OtherBrowser,
+};
+
+std::string toLowerAscii(std::string s) {
+    for (char& c : s) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     }
-    return false;
+    return s;
 }
 
-// gecko family: firefox, zen, librewolf, floorp, waterfox
-bool isGeckoApp(const std::string& app) {
+bool dirExists(const std::string& path) {
+    struct stat st{};
+    return stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+bool isKnownGecko(const std::string& lower_app) {
     static const std::vector<std::string> gecko = {
         "firefox", "zen", "librewolf", "floorp", "waterfox", "firefox-esr"
     };
     for (const auto& g : gecko) {
-        if (app.find(g) != std::string::npos) return true;
+        if (lower_app.find(g) != std::string::npos) return true;
     }
     return false;
 }
 
-// chromium family: chrome, brave, helium, edge, vivaldi, opera, thorium
-bool isChromiumApp(const std::string& app) {
+bool isKnownChromium(const std::string& lower_app) {
     static const std::vector<std::string> chromium = {
         "chromium", "chrome", "google-chrome", "brave", "helium", "thorium",
         "vivaldi", "opera", "microsoft-edge", "edge", "cavalry", "electron"
     };
     for (const auto& c : chromium) {
-        if (app.find(c) != std::string::npos) return true;
+        if (lower_app.find(c) != std::string::npos) return true;
     }
     return false;
+}
+
+bool isKnownOtherBrowser(const std::string& lower_app) {
+    static const std::vector<std::string> others = { "qutebrowser" };
+    for (const auto& b : others) {
+        if (lower_app.find(b) != std::string::npos) return true;
+    }
+    return false;
+}
+
+BrowserFamily classifyDesktopEntry(const std::string& exec_val, const std::string& name_val) {
+    std::string combined = toLowerAscii(exec_val + " " + name_val);
+    if (isKnownGecko(combined) || combined.find("gecko") != std::string::npos) {
+        return BrowserFamily::Gecko;
+    }
+    if (isKnownChromium(combined) || combined.find("blink") != std::string::npos) {
+        return BrowserFamily::Chromium;
+    }
+    return BrowserFamily::OtherBrowser;
+}
+
+std::string extractExecBinary(const std::string& exec_val) {
+    std::string trimmed = exec_val;
+    size_t first = trimmed.find_first_not_of(" \t\"'");
+    if (first == std::string::npos) return "";
+    trimmed = trimmed.substr(first);
+    size_t end = trimmed.find_first_of(" \t\"'");
+    std::string token = (end == std::string::npos) ? trimmed : trimmed.substr(0, end);
+    if (token == "env" && end != std::string::npos) {
+        return extractExecBinary(trimmed.substr(end + 1));
+    }
+    size_t slash = token.rfind('/');
+    if (slash != std::string::npos) {
+        token = token.substr(slash + 1);
+    }
+    return toLowerAscii(token);
+}
+
+const std::unordered_map<std::string, BrowserFamily>& getDesktopBrowsers() {
+    static std::unordered_map<std::string, BrowserFamily> desktop_map;
+    static std::once_flag once;
+    std::call_once(once, []() {
+        std::vector<std::string> dirs = { "/usr/share/applications", "/usr/local/share/applications" };
+        if (const char* home = getenv("HOME")) {
+            dirs.push_back(std::string(home) + "/.local/share/applications");
+        }
+        for (const auto& dir : dirs) {
+            DIR* d = opendir(dir.c_str());
+            if (!d) continue;
+            struct dirent* ent;
+            while ((ent = readdir(d)) != nullptr) {
+                std::string fname = ent->d_name;
+                if (fname.size() <= 8 || fname.compare(fname.size() - 8, 8, ".desktop") != 0) continue;
+                std::ifstream in(dir + "/" + fname);
+                if (!in) continue;
+                std::string line, categories, exec_val, wm_class, name_val;
+                bool in_entry = false;
+                while (std::getline(in, line)) {
+                    if (!line.empty() && line.front() == '[') {
+                        in_entry = (line == "[Desktop Entry]");
+                        continue;
+                    }
+                    if (!in_entry) continue;
+                    if (line.rfind("Categories=", 0) == 0) categories = line.substr(11);
+                    else if (line.rfind("Exec=", 0) == 0) exec_val = line.substr(5);
+                    else if (line.rfind("StartupWMClass=", 0) == 0) wm_class = line.substr(15);
+                    else if (line.rfind("Name=", 0) == 0) name_val = line.substr(5);
+                }
+                if (categories.find("WebBrowser") == std::string::npos) continue;
+                BrowserFamily fam = classifyDesktopEntry(exec_val, name_val);
+                std::string stem = toLowerAscii(fname.substr(0, fname.size() - 8));
+                if (!stem.empty()) desktop_map.emplace(stem, fam);
+                std::string bin = extractExecBinary(exec_val);
+                if (!bin.empty()) desktop_map.emplace(bin, fam);
+                std::string wm = toLowerAscii(wm_class);
+                if (!wm.empty()) desktop_map.emplace(wm, fam);
+            }
+            closedir(d);
+        }
+    });
+    return desktop_map;
+}
+
+BrowserFamily detectFromProc(const std::string& lower_app) {
+    DIR* proc_dir = opendir("/proc");
+    if (!proc_dir) return BrowserFamily::None;
+    struct dirent* ent;
+    BrowserFamily found = BrowserFamily::None;
+    while ((ent = readdir(proc_dir)) != nullptr) {
+        if (ent->d_name[0] < '0' || ent->d_name[0] > '9') continue;
+        std::string base = std::string("/proc/") + ent->d_name;
+        std::ifstream cmd_in(base + "/cmdline", std::ios::binary);
+        if (!cmd_in) continue;
+        std::string cmdline((std::istreambuf_iterator<char>(cmd_in)), std::istreambuf_iterator<char>());
+        if (cmdline.empty()) continue;
+        for (char& c : cmdline) {
+            if (c == '\0') c = ' ';
+        }
+        std::string lower_cmd = toLowerAscii(cmdline);
+        if (lower_cmd.find(lower_app) == std::string::npos) continue;
+        if (lower_cmd.find("/chrome") != std::string::npos ||
+            lower_cmd.find("chromium") != std::string::npos ||
+            lower_cmd.find("--type=renderer") != std::string::npos) {
+            found = BrowserFamily::Chromium;
+            break;
+        }
+        if (lower_cmd.find("firefox") != std::string::npos ||
+            lower_cmd.find("libxul") != std::string::npos) {
+            found = BrowserFamily::Gecko;
+            break;
+        }
+    }
+    closedir(proc_dir);
+    return found;
+}
+
+BrowserFamily detectBrowserFamily(const std::string& app) {
+    if (app.empty()) return BrowserFamily::None;
+    std::string lower_app = toLowerAscii(app);
+    if (isVSCodeApp(lower_app) || isJetBrainsApp(lower_app)) {
+        return BrowserFamily::None;
+    }
+    if (isKnownGecko(lower_app)) return BrowserFamily::Gecko;
+    if (isKnownChromium(lower_app)) return BrowserFamily::Chromium;
+    if (isKnownOtherBrowser(lower_app)) return BrowserFamily::OtherBrowser;
+
+    static std::mutex cache_mu;
+    static std::unordered_map<std::string, BrowserFamily> cache;
+    {
+        std::lock_guard<std::mutex> lock(cache_mu);
+        auto it = cache.find(lower_app);
+        if (it != cache.end()) {
+            return it->second;
+        }
+    }
+
+    BrowserFamily detected = BrowserFamily::None;
+    if (const char* home = getenv("HOME")) {
+        if (dirExists(std::string(home) + "/.config/" + lower_app + "/Default/Sessions") ||
+            dirExists(std::string(home) + "/.config/" + app + "/Default/Sessions")) {
+            detected = BrowserFamily::Chromium;
+        }
+    }
+    if (detected == BrowserFamily::None) {
+        const auto& desktop_map = getDesktopBrowsers();
+        auto it = desktop_map.find(lower_app);
+        if (it != desktop_map.end()) {
+            detected = it->second;
+        }
+    }
+    if (detected == BrowserFamily::None) {
+        detected = detectFromProc(lower_app);
+    }
+
+    std::lock_guard<std::mutex> lock(cache_mu);
+    cache[lower_app] = detected;
+    return detected;
+}
+
+} // namespace
+
+bool isBrowserApp(const std::string& app) {
+    return detectBrowserFamily(app) != BrowserFamily::None;
+}
+
+// gecko family: firefox, zen, librewolf, floorp, waterfox
+bool isGeckoApp(const std::string& app) {
+    return detectBrowserFamily(app) == BrowserFamily::Gecko;
+}
+
+// chromium family: chrome, brave, helium, edge, vivaldi, opera, thorium, and auto-detected chromium forks
+bool isChromiumApp(const std::string& app) {
+    return detectBrowserFamily(app) == BrowserFamily::Chromium;
 }
 
 std::string detectRunningBrowserApp() {
@@ -115,6 +298,9 @@ static std::string extractSessionDomain(const std::string& app) {
     } else if (app == "brave") {
         session_dirs.push_back(std::string(home) + "/.config/BraveSoftware/Brave-Browser/Default/Sessions");
     } else {
+        if (!app.empty()) {
+            session_dirs.push_back(std::string(home) + "/.config/" + app + "/Default/Sessions");
+        }
         session_dirs.push_back(std::string(home) + "/.config/net.imput.helium/Default/Sessions");
         session_dirs.push_back(std::string(home) + "/.config/google-chrome/Default/Sessions");
         session_dirs.push_back(std::string(home) + "/.config/chromium/Default/Sessions");
@@ -207,11 +393,19 @@ std::string extractDomain(const std::string& app, const std::string& title) {
         " \xe2\x80\x94 Firefox", " \xe2\x80\x94 Floorp", " \xe2\x80\x94 Waterfox",
         " \xe2\x80\x94 Librewolf"
     };
+    bool stripped_suffix = false;
     for (const auto& suffix : browser_suffixes) {
         if (clean_title.size() >= suffix.size() &&
             clean_title.compare(clean_title.size() - suffix.size(), suffix.size(), suffix) == 0) {
             clean_title = clean_title.substr(0, clean_title.size() - suffix.size());
+            stripped_suffix = true;
             break;
+        }
+    }
+    if (!stripped_suffix && !lower_app.empty()) {
+        size_t sep = clean_title.rfind(" - ");
+        if (sep != std::string::npos && toLowerAscii(clean_title.substr(sep + 3)) == lower_app) {
+            clean_title = clean_title.substr(0, sep);
         }
     }
 
