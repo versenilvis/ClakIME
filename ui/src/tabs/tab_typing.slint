@@ -210,7 +210,7 @@ export component TabTyping inherits VerticalLayout {
                                 alignment: center;
 
                                 Rectangle {
-                                    width: item.is_dynamic ? 104px : 74px;
+                                    width: item.is_dynamic ? 82px : 74px;
                                     height: 24px;
                                     border-radius: 5px;
                                     background: item.is_dynamic ? #182924 : (item.tab_only ? #1f2433 : #1a1a1f);
@@ -227,7 +227,7 @@ export component TabTyping inherits VerticalLayout {
                                     }
 
                                     Text {
-                                        text: item.is_dynamic ? "ĐỘNG · Space/Tab" : (item.tab_only ? "Chỉ Tab" : "Space/Tab");
+                                        text: item.is_dynamic ? "ĐỘNG · Tab" : (item.tab_only ? "Chỉ Tab" : "Space/Tab");
                                         color: item.is_dynamic ? #61ffca : (item.tab_only ? #7aa2f7 : Theme.text-secondary);
                                         font-size: 11px;
                                         font-weight: 600;

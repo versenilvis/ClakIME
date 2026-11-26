@@ -570,13 +570,6 @@ impl ClakContext {
             }
         }
 
-        // check :dynamic macro: expansion on Space (works even in apps that intercept Tab for focus)
-        if key_sym == 0x20 {
-            if let Some(act) = self.try_expand_colon_macro(surrounding_text, cursor, " ") {
-                return act;
-            }
-        }
-
         // check macro expansion before resetting
         if self.macros_enabled && !self.last_composed.is_empty() {
             if let Some(replacement) = self.lookup_macro() {
